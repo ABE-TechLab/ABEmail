@@ -85,7 +85,7 @@ See `docs/product/commercial-mvp.md` and `docs/architecture/tenant-boundaries.md
 
 ## Shared design system and themes
 
-ABEmail consumes the pinned `@abe-techlab/abe-techlab-design-system@0.1.0` package for its official theme palettes and accessible React palette selector. The workspace defaults to the Supabase-inspired green palette; the Appearance settings page lets you select any of the ten shared palettes and choose Light, Dark, or System mode. Palette and mode preferences are stored in cookies so the root page can render the selected appearance on the server.
+ABEmail consumes the pinned `@abe-techlab/abe-techlab-design-system@0.1.0` package for its official theme palettes and accessible React palette selector. The workspace defaults to the Supabase-inspired green palette; the Appearance settings page lets you select any of the ten shared palettes and choose Light, Dark, or System mode. Palette and explicit Light/Dark mode preferences are stored in cookies so the root page can render saved choices on the server. System mode follows the device preference after client initialization.
 
 ### Local package access
 
