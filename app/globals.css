@@ -969,3 +969,105 @@ html.dark .settings-theme-choice.selected {
 .mail-app :is(.contacts-company-chip, .mail-search, .mail-list-toolbar, .mail-list-heading, .contacts-list-heading) {
   background-color: var(--muted, var(--surface-muted));
 }
+
+
+/* Last-mile theme overrides: keep the whole mailbox/settings workspace token-driven. */
+html[data-theme] {
+  background: var(--background);
+  color: var(--foreground);
+}
+html[data-theme] body {
+  background: var(--background);
+  color: var(--foreground);
+}
+html[data-theme] .mail-app {
+  background: var(--background);
+  color: var(--foreground);
+}
+html[data-theme] .mail-app .mail-sidebar {
+  background: var(--sidebar, var(--card, var(--surface)));
+  color: var(--sidebar-foreground, var(--foreground));
+  border-color: var(--sidebar-border, var(--border));
+}
+html[data-theme] .mail-app .mail-sidebar :is(.mail-nav-item, .mail-nav-label, .mail-nav-icon) {
+  color: var(--sidebar-foreground, var(--muted-foreground));
+}
+html[data-theme] .mail-app .mail-sidebar .mail-nav-item.active {
+  background: var(--sidebar-accent, var(--accent));
+  color: var(--sidebar-accent-foreground, var(--accent-foreground));
+}
+html[data-theme] .mail-app .mail-sidebar .mail-nav-item.active .mail-nav-icon {
+  color: var(--sidebar-accent-foreground, var(--accent-foreground));
+}
+html[data-theme] .mail-app :is(
+  .mail-list-pane, .mail-detail-pane, .mail-topbar, .settings-navigation,
+  .settings-panel, .contacts-workspace, .contacts-list-pane, .contacts-detail-pane,
+  .contacts-detail, .preview-panel, .capability-card, .mail-compose-modal,
+  .mail-profile-menu
+) {
+  background: var(--card, var(--surface));
+  color: var(--card-foreground, var(--foreground));
+  border-color: var(--border);
+}
+html[data-theme] .mail-app :is(
+  .mail-list-heading, .mail-list-toolbar, .mail-search, .mail-message-row,
+  .mail-contact-row, .contacts-list-heading, .settings-invite-form,
+  .settings-theme-choice, .settings-domain-icon, .settings-table th,
+  .mail-compose-header, .mail-compose-footer, .settings-info-banner
+) {
+  background: var(--muted, var(--surface-muted));
+  color: var(--foreground);
+  border-color: var(--border);
+}
+html[data-theme] .mail-app :is(
+  .mail-brand, .mail-breadcrumb strong, .mail-list-heading h1,
+  .mail-subject-line h2, .mail-contact-profile h2, .contacts-profile h2,
+  .settings-page-heading h1, .settings-panel-heading h2, .settings-subheading,
+  .settings-section-summary strong, .settings-row-copy strong,
+  .settings-table td strong, .settings-radio-row strong, .contacts-row-copy strong,
+  .contacts-info-item strong, .mail-copy strong, .mail-message-subject
+) {
+  color: var(--foreground);
+}
+html[data-theme] .mail-app :is(
+  .mail-breadcrumb, .mail-list-subtitle, .mail-overline, .mail-nav-label,
+  .mail-nav-item:not(.active), .mail-workspace-copy small, .mail-message-preview,
+  .mail-message-meta, .settings-muted, .settings-field, .settings-field small,
+  .settings-table td, .settings-table th, .settings-row-copy p,
+  .settings-section-summary p, .settings-radio-row small, .contacts-row-copy small,
+  .contacts-row-copy em, .contacts-info-item small, .contacts-profile p,
+  .settings-form-footer > span, .settings-panel-heading p
+) {
+  color: var(--muted-foreground, var(--ink-soft));
+}
+html[data-theme] .mail-app :is(.mail-compose-button, .mail-primary-action, .primary-link) {
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border-color: var(--primary);
+}
+html[data-theme] .mail-app :is(.mail-compose-button, .mail-primary-action, .primary-link):hover {
+  background: var(--accent-foreground, var(--primary));
+  border-color: var(--accent-foreground, var(--primary));
+}
+html[data-theme] .mail-app :is(.settings-nav-link.active, .contacts-row.selected, .mail-message-row.selected) {
+  background: var(--accent);
+  color: var(--accent-foreground);
+  border-color: var(--border);
+}
+html[data-theme] .mail-app :is(.mail-secondary-action, .mail-toolbar-button, .mail-icon-button) {
+  background: var(--card);
+  color: var(--muted-foreground);
+  border-color: var(--border);
+}
+html[data-theme] .mail-app :is(
+  input:not([type="checkbox"]):not([type="radio"]), textarea, select
+) {
+  background: var(--input, var(--card));
+  color: var(--foreground);
+  border-color: var(--border);
+}
+html[data-theme] .mail-app .settings-theme-choice.selected {
+  background: var(--accent);
+  color: var(--accent-foreground);
+  border-color: var(--ring, var(--primary));
+}
