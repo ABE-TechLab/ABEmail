@@ -108,7 +108,7 @@ export default function SettingsWorkspace({ section }: { section: SettingsSectio
     <main className="mail-app">
       <aside className="mail-sidebar">
         <Link className="mail-brand" href="/" aria-label="ABEmail inbox"><span className="mail-brand-mark">A</span><span>AB<span>Email</span></span></Link>
-        <Link className="mail-compose-button workspace-compose-link" href="/?compose=1"><span className="compose-plus">＋</span><span className="mail-compose-label">Compose</span></Link>
+        <Link className="mail-compose-button workspace-compose-link" href="/"><span className="compose-plus">↖</span><span className="mail-compose-label">Open inbox</span></Link>
         <div className="mail-nav-section">
           <div className="mail-nav-label">WORKSPACE</div>
           <nav className="mail-nav" aria-label="Workspace navigation">
