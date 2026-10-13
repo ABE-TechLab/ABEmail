@@ -146,3 +146,31 @@
   .wordmark { margin-bottom: 24px; }
   .card { padding: 23px 19px; }
 }
+
+
+.switchMode {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--primary, #26764b);
+  font: inherit;
+  font-weight: 800;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.accountSummary {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin-bottom: 20px;
+  padding: 14px;
+  border: 1px solid var(--border, #dfe7dd);
+  border-radius: 10px;
+  background: var(--muted, #f8faf7);
+}
+.accountSummary > strong { overflow-wrap: anywhere; font-size: 13px; }
+.accountLabel { color: var(--muted-foreground, #758076); font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .6px; }
+.providerList { display: flex; flex-wrap: wrap; gap: 6px; }
+.providerPill { padding: 5px 8px; border-radius: 6px; background: var(--accent, #e7f2e8); color: var(--accent-foreground, #26764b); font-size: 10px; font-weight: 700; }
+.accountSectionHeading h2 { margin: 0 0 5px; font-family: "Manrope", sans-serif; font-size: 17px; letter-spacing: -.4px; }
+.accountSectionHeading p { margin: 0 0 3px; color: var(--muted-foreground, #68756a); font-size: 11px; line-height: 1.6; }
