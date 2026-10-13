@@ -45,6 +45,7 @@ export default async function RootLayout({
     <html
       lang="en"
       data-theme={initialTheme}
+      data-appearance-mode={initialMode}
       className={initialMode === "dark" ? "dark" : undefined}
     >
       <body>
