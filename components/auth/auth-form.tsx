@@ -179,7 +179,7 @@ export default function AuthForm({ mode, nextPath = "/dashboard", initialError =
                 onChange={(event) => setEmail(event.target.value)}
                 placeholder="you@company.com"
                 required
-                disabled={busy || mode === "update-password"}
+                disabled={busy}
               />
             </label>
           )}
