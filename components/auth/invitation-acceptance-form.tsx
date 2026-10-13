@@ -42,10 +42,8 @@ export default function InvitationAcceptanceForm({ token }: { token: string }) {
         return;
       }
       setCurrentEmail(user.email ?? "");
-      if ((user.email ?? "").toLowerCase() !== (details?.invite_email ?? "").toLowerCase()) {
-        setError(`This invitation is for ${details?.invite_email}. Sign out and use that account to accept it.`);
-        return;
-      }
+      // The database validates either the exact invited email or an active
+      // business-mailbox alias already assigned to this same user.
 
       const { error: acceptError } = await supabase.rpc("accept_organization_invitation", {
         p_token: token,
