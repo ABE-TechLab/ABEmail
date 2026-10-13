@@ -90,10 +90,20 @@ export default function InvitationAcceptanceForm({ token }: { token: string }) {
   }, [token]);
 
   useEffect(() => {
-    if (!loading && details && !currentEmail && !error) {
-      void acceptForCurrentUser();
+    let cancelled = false;
+    async function checkCurrentSession() {
+      if (loading || !details) return;
+      try {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!cancelled && user) setCurrentEmail(user.email ?? "");
+      } catch {
+        // A missing session is expected for a new invitee; show the sign-in form.
+      }
     }
-  }, [acceptForCurrentUser, currentEmail, details, error, loading]);
+    void checkCurrentSession();
+    return () => { cancelled = true; };
+  }, [details, loading]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
