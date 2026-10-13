@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 
 type Folder = "Inbox" | "Sent" | "Drafts" | "Scheduled" | "Archive" | "Trash";
 type View = Folder | "Starred" | "Contacts";
@@ -64,6 +64,12 @@ function initials(name: string) {
 export default function HomePage() {
   const [messages, setMessages] = useState<Mail[]>(DEMO_MAIL);
   const [activeView, setActiveView] = useState<View>("Inbox");
+
+  useEffect(() => {
+    const requestedView = new URLSearchParams(window.location.search).get("view");
+    const matchingFolder = FOLDERS.find((folder) => folder.name === requestedView);
+    if (matchingFolder) setActiveView(matchingFolder.name);
+  }, []);
   const [selectedId, setSelectedId] = useState<string | null>("m1");
   const [selectedContactId, setSelectedContactId] = useState("c1");
   const [query, setQuery] = useState("");
@@ -98,6 +104,11 @@ export default function HomePage() {
     setActiveView(view);
     setSelectedId(null);
     setQuery("");
+    window.history.replaceState(
+      null,
+      "",
+      view === "Inbox" ? "/" : `/?view=${encodeURIComponent(view)}`,
+    );
   }
 
   function openMessage(message: Mail) {
