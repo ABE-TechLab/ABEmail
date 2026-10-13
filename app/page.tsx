@@ -165,7 +165,8 @@ export default function HomePage() {
         <div className="mail-nav-section">
           <div className="mail-nav-label">WORKSPACE</div>
           <nav className="mail-nav" aria-label="Workspace navigation">
-            <button className={activeView === "Contacts" ? "mail-nav-item active" : "mail-nav-item"} onClick={() => openView("Contacts")} type="button"><span className="mail-nav-icon" aria-hidden="true">♙</span><span>Contacts</span></button>
+            <Link className="mail-nav-item" href="/contacts"><span className="mail-nav-icon" aria-hidden="true">♙</span><span>Contacts</span></Link>
+            <Link className="mail-nav-item" href="/settings"><span className="mail-nav-icon" aria-hidden="true">⚙</span><span>Settings</span></Link>
           </nav>
         </div>
 
