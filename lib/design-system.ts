@@ -1,19 +1,21 @@
-export const DESIGN_THEME_IDS = [
-  "claude",
-  "discord",
-  "supabase",
-  "vercel",
-  "mono",
-  "notebook",
-  "light-green",
-  "zen",
-  "astro-vista",
-  "whatsapp",
+export const DESIGN_THEMES = [
+  { name: "Claude", value: "claude" },
+  { name: "Discord", value: "discord" },
+  { name: "Supabase", value: "supabase" },
+  { name: "Vercel", value: "vercel" },
+  { name: "Mono", value: "mono" },
+  { name: "Notebook", value: "notebook" },
+  { name: "Light Green", value: "light-green" },
+  { name: "Zen", value: "zen" },
+  { name: "Astro Vista", value: "astro-vista" },
+  { name: "WhatsApp", value: "whatsapp" },
 ] as const;
 
-export type DesignThemeId = (typeof DESIGN_THEME_IDS)[number];
+export const DESIGN_THEME_IDS = DESIGN_THEMES.map((theme) => theme.value);
 
-// Keep the initial HTML data-theme value validated before the client provider hydrates.
+export type DesignThemeId = (typeof DESIGN_THEMES)[number]["value"];
+
+// Keep the initial HTML data-theme value validated before the client hydrates.
 export const DEFAULT_DESIGN_THEME: DesignThemeId = "supabase";
 
 export function isDesignThemeId(value: string | undefined): value is DesignThemeId {
