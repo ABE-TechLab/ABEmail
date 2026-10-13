@@ -1,8 +1,9 @@
 "use client";
 
-import { ThemeSelector } from "@abe-techlab/abe-techlab-design-system/react";
 import Link from "next/link";
 import { useAppearanceMode, type AppearanceMode } from "@/components/appearance-provider";
+import { useDesignTheme } from "@/components/design-theme-provider";
+import { DESIGN_THEMES, type DesignThemeId } from "@/lib/design-system";
 import { useState, type FormEvent, type ReactNode } from "react";
 
 export type SettingsSection = "general" | "appearance" | "mail" | "notifications" | "team" | "domains" | "mailboxes" | "security";
@@ -54,6 +55,7 @@ export default function SettingsWorkspace({ section }: { section: SettingsSectio
   const [timezone, setTimezone] = useState("Africa/Lagos");
   const [language, setLanguage] = useState("en");
   const { mode, setMode } = useAppearanceMode();
+  const { theme: activeDesignTheme, setTheme: setDesignTheme } = useDesignTheme();
   const [font, setFont] = useState("sans");
   const [signature, setSignature] = useState("Best regards,\nAyo");
   const [replyStyle, setReplyStyle] = useState("reply");
@@ -158,7 +160,7 @@ export default function SettingsWorkspace({ section }: { section: SettingsSectio
               {section === "appearance" && <form onSubmit={savePreview}>
                 <div className="settings-choice-group"><p className="settings-subheading">Light and dark mode</p><p className="settings-muted">Choose whether ABEmail follows your preference or your device setting.</p><div className="settings-theme-options">{APPEARANCE_MODES.map((item) => <button key={item.id} type="button" aria-pressed={mode === item.id} className={mode === item.id ? "settings-theme-choice selected" : "settings-theme-choice"} onClick={() => setMode(item.id)}><span className="settings-theme-preview">{item.glyph}</span><span>{item.label}</span>{mode === item.id && <b>✓</b>}</button>)}</div></div>
                 <div className="settings-divider" />
-                <div className="settings-choice-group"><p className="settings-subheading">Design system palette</p><p className="settings-muted">Choose one of the shared ABE TechLab Design System palettes. Your choice is saved in this browser.</p><ThemeSelector label={<span>Color palette</span>} labelClassName="settings-field settings-palette-field" selectClassName="settings-palette-select" /></div>
+                <div className="settings-choice-group"><p className="settings-subheading">Design system palette</p><p className="settings-muted">Choose one of the shared ABE TechLab Design System palettes. Your choice is saved in this browser.</p><label className="settings-field settings-palette-field"><span>Color palette</span><select className="settings-palette-select" value={activeDesignTheme} onChange={(event) => setDesignTheme(event.target.value as DesignThemeId)}>{DESIGN_THEMES.map((option) => <option key={option.value} value={option.value}>{option.name}</option>)}</select></label></div>
                 <div className="settings-divider" />
                 <SettingRow title="Compact message list" description="Show more message rows in the mailbox list."><Toggle checked={false} onChange={() => notify("Compact density preview is not wired to the mailbox yet.")} label="Compact message list" /></SettingRow>
                 <div className="settings-form-footer"><span>Appearance mode and palette are stored in browser cookies.</span><button className="mail-primary-action" type="submit">Save preferences</button></div>
