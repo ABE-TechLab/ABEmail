@@ -18,8 +18,8 @@ export default function WorkspaceSidebar() {
         <span className="mail-brand-mark">A</span>
         <span>AB<span>Email</span></span>
       </Link>
-      <Link className="mail-compose-button workspace-compose-link" href="/?compose=1">
-        <span className="compose-plus">＋</span><span className="mail-compose-label">Compose</span>
+      <Link className="mail-compose-button workspace-compose-link" href="/">
+        <span className="compose-plus">↖</span><span className="mail-compose-label">Open inbox</span>
       </Link>
 
       <div className="mail-nav-section">
