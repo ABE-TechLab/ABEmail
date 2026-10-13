@@ -69,7 +69,7 @@ npm run typecheck
 npm run build
 ```
 
-The current screen is a visual development foundation. Authentication, database connectivity, tenant authorization, and email transport are intentionally not configured yet. Do not use this build with customer data or live email credentials.
+The root route opens directly into a mailbox-first development workspace with sample messages and contacts. The original landing screen is preserved at `/welcome`. Inbox search, message selection, stars, archive/trash actions, contact viewing, and draft saving are interactive in the browser only. Authentication, database connectivity, tenant authorization, persistent storage, and email transport are intentionally not configured yet. Do not use this build with customer data or live email credentials.
 
 ## Initial delivery milestones
 
