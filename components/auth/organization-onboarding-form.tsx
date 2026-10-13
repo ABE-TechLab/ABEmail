@@ -78,7 +78,7 @@ export default function OrganizationOnboardingForm({ email }: { email: string })
           {error && <p className={styles.error} role="alert">{error}</p>}
           <button className={styles.submit} type="submit" disabled={busy}>{busy ? "Creating workspace…" : "Create workspace"}</button>
         </form>
-        <nav className={styles.links}><a href="/auth/sign-out">Sign out</a></nav>
+        <nav className={styles.links}><SignOutButton className="auth-signout-control" /></nav>
       </section>
     </main>
   );
