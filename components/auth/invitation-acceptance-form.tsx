@@ -57,7 +57,7 @@ export default function InvitationAcceptanceForm({ token }: { token: string }) {
     } finally {
       setBusy(false);
     }
-  }, [details?.invite_email, router, token]);
+  }, [details, router, token]);
 
   useEffect(() => {
     let cancelled = false;
@@ -189,7 +189,7 @@ export default function InvitationAcceptanceForm({ token }: { token: string }) {
           <h1>Join a workspace</h1>
           {loading ? <p>Checking your invitation…</p> : details ? (
             <p>You have been invited to <strong>{details.organization_name}</strong> as an <strong>{details.invite_role}</strong>. Accept with the invited sign-in email below.</p>
-          ) : <p>We couldn't validate this invitation link.</p>}
+          ) : <p>We couldn&apos;t validate this invitation link.</p>}
         </div>
 
         {details && !currentEmail && (
