@@ -1,5 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
+import { cookies } from "next/headers";
+import { AppearanceProvider, type AppearanceMode } from "@/components/appearance-provider";
+import { DesignThemeProvider } from "@/components/design-theme-provider";
+import { DEFAULT_DESIGN_THEME, isDesignThemeId } from "@/lib/design-system";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -23,14 +27,31 @@ export const viewport: Viewport = {
   themeColor: "#101713",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: ReactNode;
 }>) {
+  const cookieStore = await cookies();
+  const savedTheme = cookieStore.get("active_theme")?.value;
+  const initialTheme = isDesignThemeId(savedTheme) ? savedTheme : DEFAULT_DESIGN_THEME;
+  const savedMode = cookieStore.get("appearance_mode")?.value;
+  const initialMode: AppearanceMode =
+    savedMode === "dark" || savedMode === "system" || savedMode === "light"
+      ? savedMode
+      : "light";
+
   return (
-    <html lang="en">
-      <body>{children}</body>
+    <html
+      lang="en"
+      data-theme={initialTheme}
+      className={initialMode === "dark" ? "dark" : undefined}
+    >
+      <body>
+        <DesignThemeProvider initialTheme={initialTheme}>
+          <AppearanceProvider initialMode={initialMode}>{children}</AppearanceProvider>
+        </DesignThemeProvider>
+      </body>
     </html>
   );
 }

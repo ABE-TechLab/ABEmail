@@ -1,17 +1,17 @@
 @import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap");
+@import "@abe-techlab/abe-techlab-design-system/styles.css";
 
 :root {
   color-scheme: light;
-  --page: #f5f7f4;
-  --surface: #ffffff;
-  --surface-muted: #f0f4ef;
-  --ink: #17231b;
-  --ink-soft: #455249;
-  --muted: #7a877d;
-  --line: #e1e8e0;
-  --green: #26764b;
-  --green-strong: #1a5f39;
-  --green-pale: #e6f3e9;
+  --page: var(--background, #f5f7f4);
+  --surface: var(--card, #ffffff);
+  --surface-muted: var(--muted, #f0f4ef);
+  --ink: var(--foreground, #17231b);
+  --ink-soft: var(--muted-foreground, #455249);
+  --line: var(--border, #e1e8e0);
+  --green: var(--primary, #26764b);
+  --green-strong: var(--accent-foreground, #1a5f39);
+  --green-pale: var(--accent, #e6f3e9);
   --shadow: 0 18px 55px rgba(23, 42, 28, 0.08);
 }
 
@@ -159,7 +159,7 @@ h1 {
 
 .primary-link:hover { background: var(--green-strong); transform: translateY(-1px); }
 .primary-link:focus-visible { outline: 3px solid #8cc8a0; outline-offset: 3px; }
-.plain-note { color: var(--muted); font-size: 11px; }
+.plain-note { color: var(--muted-foreground, #7a877d); font-size: 11px; }
 
 .preview-panel {
   overflow: hidden;
@@ -288,18 +288,18 @@ h1 {
 
 /* Mailbox-first workspace */
 .mail-app {
-  --mail-green: #28774c;
-  --mail-green-dark: #1d603b;
-  --mail-ink: #1a261e;
-  --mail-muted: #778278;
-  --mail-line: #e5ebe4;
-  --mail-pale: #edf5ee;
+  --mail-green: var(--primary, #28774c);
+  --mail-green-dark: var(--accent-foreground, #1d603b);
+  --mail-ink: var(--foreground, #1a261e);
+  --mail-muted: var(--muted-foreground, #778278);
+  --mail-line: var(--border, #e5ebe4);
+  --mail-pale: var(--accent, #edf5ee);
   display: flex;
   width: 100%;
   min-height: 100vh;
-  background: #f8faf7;
+  background: var(--background, #f8faf7);
   color: var(--mail-ink);
-  font-family: "DM Sans", Arial, sans-serif;
+  font-family: var(--font-sans, "DM Sans", Arial, sans-serif);
   font-size: 13px;
   text-align: left;
 }
@@ -728,4 +728,168 @@ h1 {
   .contacts-form-grid { grid-template-columns: minmax(0,1fr); gap: 0; }
   .contacts-add-modal form { padding-right: 14px; padding-left: 14px; }
   .contacts-toast { right: 12px; bottom: 12px; }
+}
+
+
+/* ABE TechLab Design System integration.
+   Keep the existing ABEmail layouts while sourcing shared colors and modes from the
+   official theme palette. The library stylesheet defines each palette on [data-theme]. */
+html {
+  color-scheme: light;
+  background: var(--page);
+}
+html.dark {
+  color-scheme: dark;
+}
+body {
+  background: var(--page);
+  color: var(--ink);
+}
+.mail-app {
+  background: var(--page);
+  color: var(--ink);
+}
+.mail-sidebar,
+.mail-main,
+.mail-list-pane,
+.mail-detail-pane,
+.mail-topbar,
+.settings-panel,
+.settings-navigation,
+.contacts-workspace,
+.contacts-list-pane,
+.contacts-detail-pane,
+.contacts-detail,
+.preview-panel,
+.capability-card {
+  border-color: var(--line);
+}
+.mail-sidebar,
+.mail-list-pane,
+.mail-detail-pane,
+.mail-topbar,
+.settings-panel,
+.settings-navigation,
+.contacts-workspace,
+.contacts-list-pane,
+.contacts-detail-pane,
+.contacts-detail,
+.preview-panel,
+.capability-card {
+  background: var(--surface);
+}
+.mail-compose-button,
+.mail-primary-action,
+.primary-link {
+  background: var(--primary, var(--green));
+  color: var(--primary-foreground, #fff);
+}
+.mail-compose-button:hover,
+.mail-primary-action:hover,
+.primary-link:hover {
+  background: var(--accent-foreground, var(--green-strong));
+}
+.mail-nav-item.active,
+.settings-nav-link.active,
+.contacts-row.selected {
+  background: var(--accent, var(--green-pale));
+  color: var(--accent-foreground, var(--green-strong));
+}
+.mail-nav-item.active .mail-nav-icon {
+  color: var(--accent-foreground, var(--green-strong));
+}
+.mail-search,
+.mail-list-heading,
+.mail-list-toolbar,
+.settings-invite-form,
+.settings-domain-icon,
+.settings-theme-choice,
+.contacts-list-heading {
+  background: var(--surface-muted);
+  border-color: var(--line);
+}
+.mail-search input,
+.settings-field input,
+.settings-field select,
+.settings-field textarea,
+.mail-app input:not([type="checkbox"]):not([type="radio"]),
+.mail-app textarea,
+.mail-app select {
+  color: var(--ink);
+  border-color: var(--line);
+}
+.settings-palette-field {
+  max-width: 380px;
+  margin-top: 18px;
+}
+.settings-palette-select {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--ink);
+}
+html.dark body {
+  background: var(--page);
+  color: var(--ink);
+}
+html.dark .mail-app :is(
+  .mail-sidebar, .mail-list-pane, .mail-detail-pane, .mail-topbar,
+  .settings-panel, .settings-navigation, .contacts-workspace,
+  .contacts-list-pane, .contacts-detail-pane, .contacts-detail,
+  .preview-panel, .capability-card, .mail-profile-menu
+) {
+  background: var(--surface);
+  border-color: var(--line);
+}
+html.dark .mail-app :is(
+  .mail-list-heading, .mail-list-toolbar, .mail-search,
+  .settings-invite-form, .settings-theme-choice, .settings-domain-icon,
+  .contacts-list-heading, .contacts-row, .settings-security-card,
+  .settings-info-banner, .settings-radio-row, .settings-form-footer
+) {
+  background: var(--surface-muted);
+  border-color: var(--line);
+}
+html.dark .mail-app :is(
+  h1, h2, h3, strong, .mail-brand, .mail-breadcrumb strong,
+  .mail-copy > span, .mail-copy strong, .mail-workspace-copy strong,
+  .settings-panel-heading h2, .settings-row-copy strong,
+  .settings-section-summary strong, .contacts-profile h2,
+  .contacts-row-copy strong, .contacts-info-item strong,
+  .settings-table td strong, .settings-radio-row strong
+) {
+  color: var(--ink);
+}
+html.dark .mail-app :is(
+  p, small, label, .mail-breadcrumb, .mail-nav-item,
+  .mail-list-subtitle, .mail-copy small, .mail-muted,
+  .settings-row-copy p, .settings-table td, .contacts-row-copy small,
+  .contacts-row-copy em, .contacts-info-item small, .contacts-profile p,
+  .settings-page-heading > div > p:last-child
+) {
+  color: var(--ink-soft);
+}
+html.dark .mail-app :is(
+  .mail-nav-item.active, .settings-nav-link.active,
+  .contacts-row.selected
+) {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+html.dark .mail-app :is(input, textarea, select) {
+  background: var(--surface);
+  color: var(--ink);
+  border-color: var(--line);
+}
+html.dark .mail-app :is(.mail-secondary-action, .mail-icon-button, .settings-role-pill) {
+  border-color: var(--line);
+  color: var(--ink-soft);
+}
+html.dark .settings-theme-choice.selected {
+  border-color: var(--ring);
+  background: var(--accent);
+  color: var(--accent-foreground);
 }

@@ -12,8 +12,8 @@
 - [x] Start the application at the mailbox workspace instead of the landing page; preserve the landing page at `/welcome`.
 - [x] Add separately routed, responsive Contacts and Settings pages.
 - [x] Add initial Settings sections for general preferences, appearance, mail, notifications, team/access, domains, mailboxes, and security (preview interactions only).
-- [ ] Integrate shared design-system package tokens and visual consistency.
-- [ ] Validate the current multi-page work with lint, type-check, and production build before merge.
+- [x] Integrate the shared ABE TechLab Design System package, theme tokens, palette selector, and persistent light/dark/system mode.
+- [x] Validate the current multi-page work with lint, type-check, and production build before merge; GitHub Actions passed on this branch.
 - [ ] Implement Supabase Auth session handling with server-side identity verification.
 - [ ] Create organizations, memberships, invitations, and mailbox access schema.
 - [ ] Implement organization context selection backed by an active membership check.
