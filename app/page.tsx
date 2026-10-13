@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 
 type Folder = "Inbox" | "Sent" | "Drafts" | "Scheduled" | "Archive" | "Trash";
 type View = Folder | "Starred" | "Contacts";
@@ -73,6 +73,14 @@ export default function HomePage() {
   const [composeBody, setComposeBody] = useState("");
   const [toast, setToast] = useState("");
   const [profileOpen, setProfileOpen] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("compose") === "1") {
+      setComposeOpen(true);
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
 
   const unreadCount = messages.filter((message) => message.folder === "Inbox" && message.unread).length;
   const draftCount = messages.filter((message) => message.folder === "Drafts").length;
@@ -165,7 +173,8 @@ export default function HomePage() {
         <div className="mail-nav-section">
           <div className="mail-nav-label">WORKSPACE</div>
           <nav className="mail-nav" aria-label="Workspace navigation">
-            <button className={activeView === "Contacts" ? "mail-nav-item active" : "mail-nav-item"} onClick={() => openView("Contacts")} type="button"><span className="mail-nav-icon" aria-hidden="true">♙</span><span>Contacts</span></button>
+            <Link className="mail-nav-item" href="/contacts"><span className="mail-nav-icon" aria-hidden="true">♙</span><span>Contacts</span></Link>
+            <Link className="mail-nav-item" href="/settings"><span className="mail-nav-icon" aria-hidden="true">⚙</span><span>Settings</span></Link>
           </nav>
         </div>
 
