@@ -1102,7 +1102,8 @@ html[data-theme] .mail-app .settings-theme-choice.selected {
 .mail-app a.mail-nav-item,
 .mail-app a.mail-nav-item:visited,
 .mail-app a.mail-nav-item:hover,
-.mail-app a.mail-nav-item:active {
+.mail-app a.mail-nav-item:active,
+.mail-app a.mail-compose-button {
   text-decoration: none;
 }
 html[data-appearance-mode="light"] {
