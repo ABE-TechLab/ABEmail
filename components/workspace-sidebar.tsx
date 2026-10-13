@@ -3,11 +3,20 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const mainLinks = [
-  { href: "/", label: "Inbox", icon: "▤" },
+const mailboxLinks = [
+  { view: "Inbox", href: "/", label: "Inbox", icon: "▤" },
+  { view: "Starred", href: "/?view=Starred", label: "Starred", icon: "☆" },
+  { view: "Sent", href: "/?view=Sent", label: "Sent", icon: "↗" },
+  { view: "Drafts", href: "/?view=Drafts", label: "Drafts", icon: "▧" },
+  { view: "Scheduled", href: "/?view=Scheduled", label: "Scheduled", icon: "◷" },
+  { view: "Archive", href: "/?view=Archive", label: "Archive", icon: "▱" },
+  { view: "Trash", href: "/?view=Trash", label: "Trash", icon: "⌫" },
+] as const;
+
+const workspaceLinks = [
   { href: "/contacts", label: "Contacts", icon: "♙" },
   { href: "/settings", label: "Settings", icon: "⚙" },
-];
+] as const;
 
 export default function WorkspaceSidebar() {
   const pathname = usePathname();
@@ -23,12 +32,22 @@ export default function WorkspaceSidebar() {
       </Link>
 
       <div className="mail-nav-section">
+        <div className="mail-nav-label">MAILBOX</div>
+        <nav className="mail-nav" aria-label="Mailbox navigation">
+          {mailboxLinks.map((item) => (
+            <Link className="mail-nav-item" href={item.href} key={item.view}>
+              <span className="mail-nav-icon" aria-hidden="true">{item.icon}</span>
+              <span>{item.label}</span>
+            </Link>
+          ))}
+        </nav>
+      </div>
+
+      <div className="mail-nav-section">
         <div className="mail-nav-label">WORKSPACE</div>
         <nav className="mail-nav" aria-label="Workspace navigation">
-          {mainLinks.map((item) => {
-            const active = item.href === "/"
-              ? pathname === "/"
-              : pathname === item.href || pathname.startsWith(`${item.href}/`);
+          {workspaceLinks.map((item) => {
+            const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
             return (
               <Link
                 className={active ? "mail-nav-item active" : "mail-nav-item"}
