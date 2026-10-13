@@ -1,12 +1,11 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import styles from "./auth-form.module.css";
 import { createClient } from "@/lib/supabase/client";
 
 export default function AccountMethods({ primaryEmail }: { primaryEmail: string }) {
-  const router = useRouter();
   const [providers, setProviders] = useState<string[]>([]);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -77,7 +76,7 @@ export default function AccountMethods({ primaryEmail }: { primaryEmail: string 
 
   return (
     <main className={styles.page}>
-      <a className={styles.wordmark} href="/dashboard"><span className={styles.mark}>A</span><span>AB<span>Email</span></span></a>
+      <Link className={styles.wordmark} href="/dashboard"><span className={styles.mark}>A</span><span>AB<span>Email</span></span></Link>
       <section className={styles.card}>
         <div className={styles.heading}>
           <p className={styles.eyebrow}>ACCOUNT SECURITY</p>
@@ -114,7 +113,7 @@ export default function AccountMethods({ primaryEmail }: { primaryEmail: string 
           {notice && <p className={styles.notice} role="status">{notice}</p>}
           <button className={styles.submit} type="submit" disabled={busy}>{busy ? "Saving…" : "Save password"}</button>
         </form>
-        <nav className={styles.links}><a href="/dashboard">Back to workspace</a><a href="/settings/team">Manage team access</a><a href="/auth/sign-out">Sign out</a></nav>
+        <nav className={styles.links}><Link href="/dashboard">Back to workspace</Link><Link href="/settings/team">Manage team access</Link><Link href="/auth/sign-out">Sign out</Link></nav>
       </section>
       <p className={styles.footer}>Alternate business-email sign-in only works after an administrator assigns an active mailbox as your login alias. Google OAuth and identity linking must also be enabled in the Supabase project settings.</p>
     </main>
