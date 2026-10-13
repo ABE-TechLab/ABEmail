@@ -1094,3 +1094,23 @@ html[data-theme] .mail-app .settings-theme-choice.selected {
   outline: 2px solid var(--ring, var(--primary, #26764b));
   outline-offset: 3px;
 }
+
+/* Shared navigation must look identical whether rendered as a link or a button. */
+.mail-app .mail-nav-item {
+  text-decoration: none;
+}
+.mail-app a.mail-nav-item,
+.mail-app a.mail-nav-item:visited,
+.mail-app a.mail-nav-item:hover,
+.mail-app a.mail-nav-item:active {
+  text-decoration: none;
+}
+html[data-appearance-mode="light"] {
+  color-scheme: light;
+}
+html[data-appearance-mode="dark"] {
+  color-scheme: dark;
+}
+html[data-appearance-mode="system"] {
+  color-scheme: light dark;
+}
