@@ -148,7 +148,7 @@ export default function HomePage() {
     <main className="mail-app">
       <aside className="mail-sidebar">
         <Link className="mail-brand" href="/" aria-label="ABEmail inbox"><span className="mail-brand-mark">A</span><span>AB<span>Email</span></span></Link>
-        <button className="mail-compose-button" onClick={() => compose()} type="button"><span className="compose-plus">＋</span> Compose</button>
+        <button className="mail-compose-button" onClick={() => compose()} type="button"><span className="compose-plus">＋</span><span className="mail-compose-label">Compose</span></button>
 
         <div className="mail-nav-section">
           <div className="mail-nav-label">MAILBOX</div>
