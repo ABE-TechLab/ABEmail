@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import styles from "./auth-form.module.css";
 import { createClient } from "@/lib/supabase/client";
@@ -182,7 +183,7 @@ export default function InvitationAcceptanceForm({ token }: { token: string }) {
 
   return (
     <main className={styles.page}>
-      <a className={styles.wordmark} href="/welcome"><span className={styles.mark}>A</span><span>AB<span>Email</span></span></a>
+      <Link className={styles.wordmark} href="/welcome"><span className={styles.mark}>A</span><span>AB<span>Email</span></span></Link>
       <section className={styles.card}>
         <div className={styles.heading}>
           <p className={styles.eyebrow}>TEAM INVITATION</p>
