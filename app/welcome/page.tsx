@@ -48,9 +48,11 @@ export default function HomePage() {
             built in from the beginning.
           </p>
           <div className="hero-actions">
-            <a className="primary-link" href="#foundation">
-              Explore the foundation <span aria-hidden="true">↘</span>
-            </a>
+            <Link className="primary-link" href="/auth/sign-in">
+              Sign in to ABEmail <span aria-hidden="true">→</span>
+            </Link>
+            <Link className="plain-note" href="/auth/sign-up">Create an account</Link>
+            <a className="plain-note" href="#foundation">Explore the foundation <span aria-hidden="true">↘</span></a>
             <span className="plain-note">Early development · Email is not connected</span>
           </div>
         </div>

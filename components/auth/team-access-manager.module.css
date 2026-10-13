@@ -1,0 +1,61 @@
+.page { min-height: 100vh; padding: 0 26px 52px; background: var(--background, #f5f7f4); color: var(--foreground, #17231b); }
+.header { height: 74px; display: flex; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid var(--border, #dfe7dd); }
+.wordmark { display: inline-flex; align-items: center; gap: 9px; color: var(--foreground, #17231b); font: 800 20px "Manrope", sans-serif; letter-spacing: -.6px; text-decoration: none; }
+.wordmark > span:last-child > span { color: var(--primary, #26764b); }
+.mark { display: grid; width: 31px; height: 31px; place-items: center; border-radius: 9px; background: var(--primary, #26764b); color: #fff; }
+.header nav { display: flex; gap: 19px; flex-wrap: wrap; }
+.header nav a { color: var(--muted-foreground, #647267); font-size: 12px; font-weight: 700; text-decoration: none; }
+.header nav a:hover { color: var(--primary, #26764b); }
+.intro { max-width: 780px; margin: 44px 0 28px; }
+.eyebrow { margin: 0 0 10px; color: var(--primary, #26764b); font-size: 10px; font-weight: 800; letter-spacing: 1.25px; }
+.intro h1 { margin: 0 0 12px; font: 700 clamp(30px, 4vw, 42px)/1.12 "Manrope", sans-serif; letter-spacing: -1.5px; }
+.intro > p:last-child { max-width: 720px; margin: 0; color: var(--muted-foreground, #68756a); font-size: 13px; line-height: 1.7; }
+.grid { display: grid; grid-template-columns: minmax(0, 1.04fr) minmax(310px, .96fr); gap: 18px; align-items: start; }
+.panel { min-width: 0; padding: 23px; border: 1px solid var(--border, #dfe7dd); border-radius: 14px; background: var(--card, #fff); }
+.panelHeading { display: flex; align-items: center; justify-content: space-between; gap: 15px; margin-bottom: 22px; }
+.panelHeading .eyebrow { margin-bottom: 7px; }
+.panelHeading h2 { margin: 0; font: 700 20px "Manrope", sans-serif; letter-spacing: -.6px; }
+.expiry, .count { padding: 5px 8px; border-radius: 6px; background: var(--muted, #f1f5f0); color: var(--muted-foreground, #68756a); font-size: 10px; font-weight: 700; white-space: nowrap; }
+.form { display: flex; flex-direction: column; gap: 17px; }
+.form > label, .inviteLink label, .orgPicker { display: flex; flex-direction: column; gap: 7px; }
+.form label > span, .inviteLink label > span, .orgPicker > span { color: var(--foreground, #243229); font-size: 12px; font-weight: 700; }
+.form input:not([type=checkbox]), .form select, .inviteLink input, .orgPicker select { width: 100%; min-height: 42px; padding: 9px 11px; border: 1px solid var(--border, #dfe7dd); border-radius: 8px; background: var(--input, #fff); color: var(--foreground, #17231b); font: inherit; font-size: 12px; }
+.orgPicker { max-width: 500px; margin: 0 0 19px; }
+.mailboxSection { display: flex; flex-direction: column; gap: 12px; padding: 15px; border: 1px solid var(--border, #e3e9e2); border-radius: 10px; background: var(--muted, #f8faf7); }
+.mailboxSection > div:first-child strong { font-size: 12px; }
+.mailboxSection > div:first-child p { margin: 5px 0 0; color: var(--muted-foreground, #68756a); font-size: 11px; line-height: 1.55; }
+.mailboxItem { padding-top: 10px; border-top: 1px solid var(--border, #e2e9e1); }
+.checkboxRow { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; }
+.checkboxRow input, .aliasRow input { margin: 3px 0 0; accent-color: var(--primary, #26764b); }
+.checkboxRow > span { display: flex; min-width: 0; flex-direction: column; gap: 4px; }
+.checkboxRow strong { overflow-wrap: anywhere; font-size: 12px; }
+.checkboxRow small { color: var(--muted-foreground, #758076); font-size: 11px; }
+.aliasRow { display: flex; align-items: flex-start; gap: 8px; margin: 10px 0 0 26px; cursor: pointer; }
+.aliasRow > span { color: var(--muted-foreground, #59685c) !important; font-size: 11px !important; font-weight: 500 !important; line-height: 1.5; }
+.emptyMailboxes { margin: 0; color: var(--muted-foreground, #738074); font-size: 11px; line-height: 1.6; }
+.primary, .secondary { min-height: 42px; padding: 10px 14px; border-radius: 8px; font-size: 12px; font-weight: 800; cursor: pointer; }
+.primary { border: 1px solid var(--primary, #26764b); background: var(--primary, #26764b); color: var(--primary-foreground, #fff); }
+.primary:disabled, .secondary:disabled { opacity: .65; cursor: wait; }
+.secondary { border: 1px solid var(--border, #dfe7dd); background: var(--card, #fff); color: var(--foreground, #243229); }
+.inviteLink { display: flex; flex-direction: column; gap: 10px; margin-top: 19px; padding: 14px; border: 1px solid var(--border, #dfe7dd); border-radius: 9px; background: var(--muted, #f8faf7); }
+.inviteLink input { font-family: ui-monospace, monospace; font-size: 10px; }
+.disclaimer { margin: 17px 0 0; color: var(--muted-foreground, #7a857a); font-size: 10px; line-height: 1.6; }
+.invitationList { display: flex; flex-direction: column; }
+.invitationRow { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 7px 10px; padding: 14px 0; border-top: 1px solid var(--border, #e4eae3); }
+.invitationRow > div { min-width: 0; }
+.invitationRow > div strong { overflow-wrap: anywhere; font-size: 12px; }
+.invitationRow > div p { margin: 5px 0 0; color: var(--muted-foreground, #758076); font-size: 10px; line-height: 1.5; }
+.status, .pending { align-self: start; padding: 4px 6px; border-radius: 5px; background: var(--muted, #f1f5f0); color: var(--muted-foreground, #657266); font-size: 9px; font-weight: 800; white-space: nowrap; }
+.pending { background: #edf6ef; color: #277044; }
+.revoke { grid-column: 1 / -1; justify-self: start; padding: 4px 0; border: 0; background: transparent; color: #a34239; font-size: 10px; font-weight: 700; cursor: pointer; }
+.error, .notice { margin: 14px 0; padding: 10px 12px; border-radius: 8px; font-size: 12px; line-height: 1.55; }
+.error { border: 1px solid #f1c8c4; background: #fff4f2; color: #a32f28; }
+.notice { border: 1px solid #cce5d0; background: #f0f9f1; color: #24643b; }
+@media (max-width: 900px) { .grid { grid-template-columns: minmax(0,1fr); } }
+@media (max-width: 560px) {
+  .page { padding: 0 14px 32px; }
+  .header { height: auto; min-height: 66px; align-items: flex-start; flex-direction: column; padding: 14px 0; }
+  .header nav { gap: 14px; }
+  .intro { margin-top: 30px; }
+  .panel { padding: 17px; }
+}

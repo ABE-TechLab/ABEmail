@@ -1,0 +1,42 @@
+.page { min-height: 100vh; padding: 0 28px 50px; background: var(--background, #f5f7f4); color: var(--foreground, #17231b); }
+.header { display: flex; min-height: 74px; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid var(--border, #dfe7dd); }
+.wordmark { display: inline-flex; align-items: center; gap: 9px; color: var(--foreground, #17231b); font: 800 20px "Manrope", sans-serif; letter-spacing: -.6px; text-decoration: none; }
+.wordmark > span:last-child > span { color: var(--primary, #26764b); }
+.mark, .orgMark { display: grid; place-items: center; background: var(--primary, #26764b); color: #fff; font-weight: 800; }
+.mark { width: 31px; height: 31px; border-radius: 9px; }
+.header nav { display: flex; flex-wrap: wrap; gap: 18px; }
+.header nav a { color: var(--muted-foreground, #68756a); font-size: 12px; font-weight: 700; text-decoration: none; }
+.header nav a:hover { color: var(--primary, #26764b); }
+.intro { max-width: 760px; margin: 48px 0 27px; }
+.eyebrow { margin: 0 0 10px; color: var(--primary, #26764b); font-size: 10px; font-weight: 800; letter-spacing: 1.25px; }
+.intro h1 { margin: 0 0 12px; font: 700 clamp(31px, 4.5vw, 44px)/1.12 "Manrope", sans-serif; letter-spacing: -1.5px; }
+.intro > p:last-child { margin: 0; color: var(--muted-foreground, #68756a); font-size: 13px; line-height: 1.7; }
+.organizations { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 16px; }
+.card { min-width: 0; padding: 24px; border: 1px solid var(--border, #dfe7dd); border-radius: 14px; background: var(--card, #fff); }
+.organizations .card { box-shadow: 0 12px 35px rgba(28, 55, 35, .04); }
+.orgMark { width: 42px; height: 42px; margin-bottom: 17px; border-radius: 11px; background: var(--accent, #e7f2e8); color: var(--accent-foreground, #26764b); font-size: 16px; }
+.card h1 { font: 700 25px "Manrope", sans-serif; }
+.card h2 { margin: 0 0 7px; font: 700 20px "Manrope", sans-serif; letter-spacing: -.6px; overflow-wrap: anywhere; }
+.card p { color: var(--muted-foreground, #68756a); font-size: 12px; line-height: 1.65; }
+.slug { margin: 0 0 18px; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 21px; }
+.meta span { padding: 5px 8px; border-radius: 6px; background: var(--muted, #f1f5f0); color: var(--muted-foreground, #68756a); font-size: 10px; font-weight: 700; text-transform: capitalize; }
+.actions { display: flex; flex-wrap: wrap; gap: 15px; padding-top: 16px; border-top: 1px solid var(--border, #e2e8e1); }
+.actions a, .card > a { color: var(--primary, #26764b); font-size: 11px; font-weight: 800; text-decoration: none; }
+.note { margin-top: 20px; padding: 18px 20px; border: 1px solid var(--border, #dfe7dd); border-radius: 12px; background: var(--card, #fff); }
+.note strong { font-size: 12px; }
+.note p { max-width: 800px; margin: 6px 0 0; color: var(--muted-foreground, #68756a); font-size: 11px; line-height: 1.6; }
+@media (max-width: 560px) { .page { padding: 0 14px 32px; } .header { align-items: flex-start; flex-direction: column; padding: 14px 0; } .intro { margin-top: 32px; } }
+
+.mailboxes { margin: 3px 0 18px; padding-top: 16px; border-top: 1px solid var(--border, #e2e8e1); }
+.mailboxHeading { margin: 0 0 10px !important; color: var(--foreground, #17231b) !important; font-size: 11px !important; font-weight: 800; }
+.mailboxList { display: grid; gap: 9px; margin: 0; padding: 0; list-style: none; }
+.mailboxRow { display: grid; gap: 2px; min-width: 0; }
+.mailboxDisplayName { color: var(--foreground, #17231b); font-size: 12px; font-weight: 700; overflow-wrap: anywhere; }
+.mailboxAddress { color: var(--muted-foreground, #68756a); font-size: 11px; overflow-wrap: anywhere; }
+.mutedMessage { margin: 0 !important; font-size: 11px !important; }
+.detailGrid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(280px, .9fr); align-items: start; gap: 16px; }
+.detailGrid h2 { margin: 0 0 8px; font: 700 20px "Manrope", sans-serif; letter-spacing: -.6px; }
+.detailGrid .note { margin-top: 0; }
+.selectedLabel { display: inline-flex; margin-bottom: 13px; padding: 6px 9px; border-radius: 7px; background: var(--accent, #e7f2e8); color: var(--accent-foreground, #26764b); font-size: 10px; font-weight: 800; }
+@media (max-width: 740px) { .detailGrid { grid-template-columns: 1fr; } }
