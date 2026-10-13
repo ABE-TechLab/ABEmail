@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 const capabilities = [
   {
     number: "01",
@@ -26,10 +28,10 @@ export default function HomePage() {
   return (
     <main className="site-shell">
       <header className="topbar">
-        <a className="wordmark" href="/" aria-label="ABEmail home">
+        <Link className="wordmark" href="/" aria-label="ABEmail home">
           <span className="wordmark-mark" aria-hidden="true">A</span>
           <span>AB<span className="wordmark-accent">Email</span></span>
-        </a>
+        </Link>
         <div className="environment-tag">
           <span className="environment-dot" aria-hidden="true" />
           Development workspace
