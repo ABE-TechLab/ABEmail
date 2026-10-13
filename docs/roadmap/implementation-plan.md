@@ -9,7 +9,8 @@
 - [x] Create a runnable Next.js application scaffold with pinned direct dependencies, responsive foundation UI, readiness endpoint, and automated lint/type-check/build workflow. (Build result will be recorded after CI completes.)
 
 ## Phase 1 — Secure multi-tenant foundation
-- [x] Add the initial app shell and visual foundation; shared design-system package integration remains to be completed.
+- [x] Start the application at the mailbox workspace instead of the landing page; preserve the landing page at `/welcome`.
+- [ ] Integrate shared design-system package tokens and visual consistency.
 - [ ] Implement Supabase Auth session handling with server-side identity verification.
 - [ ] Create organizations, memberships, invitations, and mailbox access schema.
 - [ ] Implement organization context selection backed by an active membership check.
