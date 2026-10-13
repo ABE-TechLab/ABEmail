@@ -50,6 +50,27 @@ The provider, application, and data layers must be independently configurable so
 7. Mail sending is rate-limited and guarded by organization/domain authorization, quotas, and abuse controls.
 8. Do not point development or preview environments at live customer data or production email credentials.
 
+## Development
+
+Requirements: Node.js 22 or newer and npm.
+
+```bash
+npm install
+npm run dev
+```
+
+The development server runs at `http://localhost:3000`. The non-sensitive application readiness endpoint is available at `/health`.
+
+Validation commands:
+
+```bash
+npm run lint
+npm run typecheck
+npm run build
+```
+
+The current screen is a visual development foundation. Authentication, database connectivity, tenant authorization, and email transport are intentionally not configured yet. Do not use this build with customer data or live email credentials.
+
 ## Initial delivery milestones
 
 1. Product requirements and tenant/security architecture.
