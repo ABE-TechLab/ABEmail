@@ -68,6 +68,7 @@ export default function HomePage() {
   useEffect(() => {
     const requestedView = new URLSearchParams(window.location.search).get("view");
     const matchingFolder = FOLDERS.find((folder) => folder.name === requestedView);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Read route intent after hydration to avoid a server/client mismatch.
     if (matchingFolder) setActiveView(matchingFolder.name);
   }, []);
   const [selectedId, setSelectedId] = useState<string | null>("m1");
