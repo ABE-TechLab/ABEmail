@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import SignOutButton from "@/components/auth/sign-out-button";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import styles from "./dashboard.module.css";
@@ -19,7 +20,7 @@ export default async function DashboardPage() {
     .eq("status", "active");
 
   if (membershipError) {
-    return <main className={styles.page}><section className={styles.card}><h1>Workspace access is not ready</h1><p>The organization database migration may not have been applied yet.</p><Link href="/auth/sign-out">Sign out</Link></section></main>;
+    return <main className={styles.page}><section className={styles.card}><h1>Workspace access is not ready</h1><p>The organization database migration may not have been applied yet.</p><SignOutButton className="auth-signout-control" /></section></main>;
   }
 
   if (!memberships?.length) redirect("/onboarding");
@@ -31,7 +32,7 @@ export default async function DashboardPage() {
     .eq("status", "active");
 
   if (error || !organizations?.length) {
-    return <main className={styles.page}><section className={styles.card}><h1>No active workspace found</h1><p>Your membership may have been suspended. Contact the organization administrator.</p><Link href="/auth/sign-out">Sign out</Link></section></main>;
+    return <main className={styles.page}><section className={styles.card}><h1>No active workspace found</h1><p>Your membership may have been suspended. Contact the organization administrator.</p><SignOutButton className="auth-signout-control" /></section></main>;
   }
 
   return (
