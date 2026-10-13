@@ -30,7 +30,9 @@ function applyAppearanceMode(mode: AppearanceMode) {
     mode === "dark" ||
     (mode === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
 
+  document.documentElement.dataset.appearanceMode = mode;
   document.documentElement.classList.toggle("dark", prefersDark);
+  document.documentElement.style.colorScheme = mode === "system" ? "light dark" : prefersDark ? "dark" : "light";
 }
 
 export function AppearanceProvider({
