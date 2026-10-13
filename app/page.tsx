@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import WorkspaceSidebar from "@/components/workspace-sidebar";
 
 type Folder = "Inbox" | "Sent" | "Drafts" | "Scheduled" | "Archive" | "Trash";
 type View = Folder | "Starred" | "Contacts";
@@ -158,38 +158,18 @@ export default function HomePage() {
 
   return (
     <main className="mail-app">
-      <aside className="mail-sidebar">
-        <Link className="mail-brand" href="/" aria-label="ABEmail inbox"><span className="mail-brand-mark">A</span><span>AB<span>Email</span></span></Link>
-        <button className="mail-compose-button" onClick={() => compose()} type="button"><span className="compose-plus">＋</span><span className="mail-compose-label">Compose</span></button>
-
-        <div className="mail-nav-section">
-          <div className="mail-nav-label">MAILBOX</div>
-          <nav className="mail-nav" aria-label="Mailbox navigation">
-            {FOLDERS.map((item) => {
-              const count = item.name === "Inbox" ? unreadCount : item.name === "Drafts" ? draftCount : 0;
-              return <button className={activeView === item.name ? "mail-nav-item active" : "mail-nav-item"} key={item.name} onClick={() => openView(item.name)} type="button">
-                <span className="mail-nav-icon" aria-hidden="true">{item.icon}</span><span>{item.name}</span>{count > 0 && <span className="mail-nav-count">{count}</span>}
-              </button>;
-            })}
-          </nav>
-        </div>
-
-        <div className="mail-nav-section">
-          <div className="mail-nav-label">WORKSPACE</div>
-          <nav className="mail-nav" aria-label="Workspace navigation">
-            <Link className="mail-nav-item" href="/contacts"><span className="mail-nav-icon" aria-hidden="true">♙</span><span>Contacts</span></Link>
-            <Link className="mail-nav-item" href="/settings"><span className="mail-nav-icon" aria-hidden="true">⚙</span><span>Settings</span></Link>
-          </nav>
-        </div>
-
-        <div className="mail-sidebar-bottom">
-          <div className="mail-sidebar-divider" />
-          <button className="mail-workspace-switcher" onClick={() => setProfileOpen((open) => !open)} type="button" aria-expanded={profileOpen}>
-            <span className="mail-workspace-avatar">A</span><span className="mail-workspace-copy"><strong>Acme Studio</strong><small>Sample workspace</small></span><span className="mail-chevron">⌄</span>
-          </button>
-          {profileOpen && <div className="mail-profile-menu"><strong>Sample workspace</strong><p>This is illustrative data, not a connected account.</p><button type="button" onClick={() => { setProfileOpen(false); notify("Workspace settings will follow authentication and membership controls."); }}>Workspace settings</button></div>}
-        </div>
-      </aside>
+      <WorkspaceSidebar
+        activeView={activeView}
+        mailboxCounts={{ Inbox: unreadCount, Drafts: draftCount }}
+        onMailboxNavigate={openView}
+        onCompose={() => compose()}
+        profileOpen={profileOpen}
+        onWorkspaceToggle={() => setProfileOpen((open) => !open)}
+        onWorkspaceSettings={() => {
+          setProfileOpen(false);
+          notify("Workspace settings will follow authentication and membership controls.");
+        }}
+      />
 
       <section className="mail-main">
         <header className="mail-topbar">
