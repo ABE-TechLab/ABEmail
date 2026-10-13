@@ -47,7 +47,7 @@ export default async function DashboardPage() {
     <main className={styles.page}>
       <header className={styles.header}>
         <Link className={styles.wordmark} href="/welcome"><span className={styles.mark}>A</span><span>AB<span>Email</span></span></Link>
-        <nav><Link href="/settings/account">Account</Link><Link href="/settings/team">Team access</Link><Link href="/auth/sign-out">Sign out</Link></nav>
+        <nav><Link href="/settings/account">Account</Link><Link href="/settings/team">Team access</Link><SignOutButton className="auth-signout-control" /></nav>
       </header>
       <section className={styles.intro}>
         <p className={styles.eyebrow}>YOUR ABEMAIL</p>
