@@ -45,7 +45,16 @@ export function AppearanceProvider({
   );
 
   const setMode = useCallback((nextMode: AppearanceMode) => {
-    if (isAppearanceMode(nextMode)) setModeState(nextMode);
+    if (!isAppearanceMode(nextMode)) return;
+
+    // Apply changes in the click handler so the page responds immediately,
+    // rather than waiting for the effect below to run after React commits.
+    setModeState(nextMode);
+    if (typeof window !== "undefined") {
+      applyAppearanceMode(nextMode);
+      const secure = window.location.protocol === "https:" ? "; Secure" : "";
+      document.cookie = `${MODE_COOKIE}=${nextMode}; Path=/; Max-Age=${MODE_MAX_AGE}; SameSite=Lax${secure}`;
+    }
   }, []);
 
   useEffect(() => {
