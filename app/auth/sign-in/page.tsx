@@ -12,8 +12,8 @@ function safeNextPath(value?: string) {
 export default async function SignInPage({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string }>;
+  searchParams: Promise<{ next?: string; error?: string }>;
 }) {
   const params = await searchParams;
-  return <AuthForm mode="sign-in" nextPath={safeNextPath(params.next)} />;
+  return <AuthForm mode="sign-in" nextPath={safeNextPath(params.next)} initialError={params.error ? "Authentication could not be completed. Please sign in and try again." : ""} />;
 }
