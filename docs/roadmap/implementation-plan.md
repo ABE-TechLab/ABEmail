@@ -6,10 +6,10 @@
 - [x] Define commercial product scope and tenant-boundary principles.
 - [x] Define the email provider adapter boundary.
 - [ ] Confirm the commercial Supabase/Vercel resources and environment plan before provisioning.
-- [ ] Create a runnable application scaffold with pinned dependencies and an automated production build.
+- [x] Create a runnable Next.js application scaffold with pinned direct dependencies, responsive foundation UI, readiness endpoint, and automated lint/type-check/build workflow. (Build result will be recorded after CI completes.)
 
 ## Phase 1 — Secure multi-tenant foundation
-- [ ] Add the app shell and shared design-system tokens.
+- [x] Add the initial app shell and visual foundation; shared design-system package integration remains to be completed.
 - [ ] Implement Supabase Auth session handling with server-side identity verification.
 - [ ] Create organizations, memberships, invitations, and mailbox access schema.
 - [ ] Implement organization context selection backed by an active membership check.
