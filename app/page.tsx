@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 
 type Folder = "Inbox" | "Sent" | "Drafts" | "Scheduled" | "Archive" | "Trash";
 type View = Folder | "Starred" | "Contacts";
@@ -73,14 +73,6 @@ export default function HomePage() {
   const [composeBody, setComposeBody] = useState("");
   const [toast, setToast] = useState("");
   const [profileOpen, setProfileOpen] = useState(false);
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("compose") === "1") {
-      setComposeOpen(true);
-      window.history.replaceState({}, "", window.location.pathname);
-    }
-  }, []);
 
   const unreadCount = messages.filter((message) => message.folder === "Inbox" && message.unread).length;
   const draftCount = messages.filter((message) => message.folder === "Drafts").length;
