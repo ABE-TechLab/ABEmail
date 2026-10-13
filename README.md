@@ -2,7 +2,7 @@
 
 **ABEmail is ABE TechLab's commercial business email workspace.** It is being built as a multi-organization Software as a Service (SaaS) product, not as a deployment dedicated to a single customer.
 
-> **Status:** Foundation work. This repository is private and is not yet a customer-ready service.
+> **Status:** Foundation work. This repository is public, but the software remains proprietary under the root `LICENSE` file and is not yet a customer-ready service.
 
 ## Product direction
 
