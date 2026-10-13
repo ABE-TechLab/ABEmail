@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import styles from "./team-access-manager.module.css";
 import { createClient } from "@/lib/supabase/client";
@@ -15,6 +16,7 @@ type Invitation = {
   accepted_at: string | null;
   revoked_at: string | null;
   created_at: string;
+  expired: boolean;
 };
 
 function createInviteToken() {
@@ -105,7 +107,7 @@ export default function TeamAccessManager() {
     if (mailboxResult.error) throw mailboxResult.error;
     if (invitationResult.error) throw invitationResult.error;
     setMailboxes(mailboxResult.data ?? []);
-    setInvitations(invitationResult.data ?? []);
+    setInvitations((invitationResult.data ?? []).map((invitation) => ({ ...invitation, expired: new Date(invitation.expires_at).getTime() < Date.now() })));
     setSelectedMailboxIds([]);
     setAliasMailboxIds([]);
   }, []);
@@ -226,14 +228,14 @@ export default function TeamAccessManager() {
   return (
     <main className={styles.page}>
       <header className={styles.header}>
-        <a className={styles.wordmark} href="/dashboard"><span className={styles.mark}>A</span><span>AB<span>Email</span></span></a>
-        <nav><a href="/dashboard">Workspace</a><a href="/settings/account">Account</a><a href="/auth/sign-out">Sign out</a></nav>
+        <Link className={styles.wordmark} href="/dashboard"><span className={styles.mark}>A</span><span>AB<span>Email</span></span></Link>
+        <nav><Link href="/dashboard">Workspace</Link><Link href="/settings/account">Account</Link><Link href="/auth/sign-out">Sign out</Link></nav>
       </header>
 
       <section className={styles.intro}>
         <p className={styles.eyebrow}>WORKSPACE ADMINISTRATION</p>
         <h1>Team and mailbox access</h1>
-        <p>Invite people using an email address they can access, then assign their ABEmail mailbox separately. An invite never grants access to mailboxes you haven't selected.</p>
+        <p>Invite people using an email address they can access, then assign their ABEmail mailbox separately. An invite never grants access to mailboxes you haven&apos;t selected.</p>
       </section>
 
       {error && <p className={styles.error} role="alert">{error}</p>}
@@ -299,7 +301,7 @@ export default function TeamAccessManager() {
           {invitations.length ? (
             <div className={styles.invitationList}>
               {invitations.map((invitation) => {
-                const expired = new Date(invitation.expires_at).getTime() < Date.now();
+                const expired = invitation.expired;
                 const status = invitation.accepted_at ? "Accepted" : invitation.revoked_at ? "Revoked" : expired ? "Expired" : "Pending";
                 return (
                   <article className={styles.invitationRow} key={invitation.id}>
