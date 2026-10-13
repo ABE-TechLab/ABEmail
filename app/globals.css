@@ -1115,3 +1115,21 @@ html[data-appearance-mode="dark"] {
 html[data-appearance-mode="system"] {
   color-scheme: light dark;
 }
+
+
+/* Authentication controls share the surrounding navigation/link treatment. */
+.auth-signout-control { display: inline-flex; align-items: center; }
+.auth-signout-control > button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--primary, #26764b);
+  font: inherit;
+  font-size: inherit;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+.auth-signout-control > button:hover { text-decoration: underline; }
+.auth-signout-control > button:disabled { opacity: .65; cursor: wait; }
+.auth-signout-control [role="alert"] { margin-left: 8px; color: #a32f28; font-size: 10px; }
