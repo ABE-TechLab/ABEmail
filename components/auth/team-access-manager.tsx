@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
+import SignOutButton from "@/components/auth/sign-out-button";
 import { useRouter } from "next/navigation";
 import styles from "./team-access-manager.module.css";
 import { createClient } from "@/lib/supabase/client";
@@ -229,7 +230,7 @@ export default function TeamAccessManager() {
     <main className={styles.page}>
       <header className={styles.header}>
         <Link className={styles.wordmark} href="/dashboard"><span className={styles.mark}>A</span><span>AB<span>Email</span></span></Link>
-        <nav><Link href="/dashboard">Workspace</Link><Link href="/settings/account">Account</Link><Link href="/auth/sign-out">Sign out</Link></nav>
+        <nav><Link href="/dashboard">Workspace</Link><Link href="/settings/account">Account</Link><SignOutButton className="auth-signout-control" /></nav>
       </header>
 
       <section className={styles.intro}>
