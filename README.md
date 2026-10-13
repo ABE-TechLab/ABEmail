@@ -82,3 +82,19 @@ The root route opens directly into a mailbox-first development workspace with sa
 7. Preview validation, security tests, operational runbooks, and controlled launch.
 
 See `docs/product/commercial-mvp.md` and `docs/architecture/tenant-boundaries.md` for the working specifications.
+
+## Shared design system and themes
+
+ABEmail consumes the pinned `@abe-techlab/abe-techlab-design-system@0.1.0` package for its official theme palettes and accessible React palette selector. The workspace defaults to the Supabase-inspired green palette; the Appearance settings page lets you select any of the ten shared palettes and choose Light, Dark, or System mode. Palette and mode preferences are stored in cookies so the root page can render the selected appearance on the server.
+
+### Local package access
+
+The design-system package is hosted on GitHub Packages. Configure a GitHub Packages read token for local installs:
+
+1. Copy `.npmrc.example` to `.npmrc` in the repository root.
+2. Set `GITHUB_PACKAGES_TOKEN` in your shell to a GitHub personal access token (classic) with `read:packages` and the necessary package/repository access.
+3. Run `npm install`.
+
+Never commit `.npmrc` or a real token. GitHub Actions uses `GITHUB_PACKAGES_TOKEN` when configured, with the repository's `GITHUB_TOKEN` as a fallback; the package must grant the ABEmail repository read access for that fallback to work. For a Vercel deployment, add `GITHUB_PACKAGES_TOKEN` as a sensitive environment variable for the environments that build the app.
+
+The design system supplies tokens and theme controls only; ABEmail-specific layouts and components remain in this repository.
