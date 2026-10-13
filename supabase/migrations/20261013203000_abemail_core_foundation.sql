@@ -235,4 +235,10 @@ create policy user_preferences_delete_own
 
 -- The existing event-trigger function is callable only by PostgreSQL event
 -- triggers. Remove unnecessary direct API grants that caused Supabase warnings.
-revoke execute on function public.rls_auto_enable() from public, anon, authenticated;
+do $block$
+begin
+  if to_regprocedure('public.rls_auto_enable()') is not null then
+    execute 'revoke execute on function public.rls_auto_enable() from public, anon, authenticated';
+  end if;
+end;
+$block$;
