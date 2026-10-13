@@ -8,7 +8,6 @@ on:
 
 permissions:
   contents: read
-  packages: read
 
 concurrency:
   group: app-ci-${{ github.workflow }}-${{ github.ref }}
@@ -23,16 +22,12 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
 
-      - name: Set up Node.js and GitHub Packages registry
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-          registry-url: https://npm.pkg.github.com
-          scope: "@abe-techlab"
 
       - name: Install dependencies
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
         run: npm install --no-audit --no-fund
 
       - name: Lint

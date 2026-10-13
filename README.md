@@ -35,7 +35,7 @@ The Waste2Light deployment is a working reference for product behavior, not the 
 - **Data:** Supabase Postgres with Row Level Security (RLS) on all exposed tenant data.
 - **Email:** provider adapter with Resend as the first planned driver.
 - **Hosting:** Vercel after a separate commercial project/environment is provisioned.
-- **Design:** `@abe-techlab/abe-techlab-design-system`.
+- **Design:** ABE TechLab Design System theme tokens, vendored with license and third-party notices.
 
 The provider, application, and data layers must be independently configurable so that transport, hosting, or user interface choices are not embedded in tenant/business rules.
 
@@ -85,16 +85,8 @@ See `docs/product/commercial-mvp.md` and `docs/architecture/tenant-boundaries.md
 
 ## Shared design system and themes
 
-ABEmail consumes the pinned `@abe-techlab/abe-techlab-design-system@0.1.0` package for its official CSS theme palettes. The Appearance settings page provides an accessible native palette selector over the ten shared theme IDs and lets you choose Light, Dark, or System mode. Palette and explicit Light/Dark mode preferences are stored in cookies so the root page can render saved choices on the server. System mode follows the device preference after client initialization.
+ABEmail includes a locally vendored snapshot of the ABE TechLab Design System's ten official CSS theme palettes under `styles/vendor/`. This removes the private GitHub Packages authentication requirement during local setup and CI while preserving the upstream MIT license and third-party notices alongside the stylesheet. Palette IDs are maintained in `lib/design-system.ts` and remain aligned with the upstream catalogue.
 
-### Local package access
+The Appearance settings page provides a native palette selector for Claude, Discord, Supabase, Vercel, Mono, Notebook, Light Green, Zen, Astro Vista, and WhatsApp. You can also choose Light, Dark, or System mode. Palette and explicit Light/Dark mode preferences are stored in browser cookies so the root page can render saved choices on the server. System mode follows the device preference after client initialization.
 
-The design-system package is hosted on GitHub Packages. Configure a GitHub Packages read token for local installs:
-
-1. Copy `.npmrc.example` to `.npmrc` in the repository root.
-2. Set `GITHUB_PACKAGES_TOKEN` in your shell to a GitHub personal access token (classic) with `read:packages` and the necessary package/repository access.
-3. Run `npm install`.
-
-Never commit `.npmrc` or a real token. GitHub Actions uses `GITHUB_PACKAGES_TOKEN` when configured, with the repository's `GITHUB_TOKEN` as a fallback; the package must grant the ABEmail repository read access for that fallback to work. For a Vercel deployment, add `GITHUB_PACKAGES_TOKEN` as a sensitive environment variable for the environments that build the app.
-
-The design system supplies tokens and theme controls only; ABEmail-specific layouts and components remain in this repository.
+To synchronize palettes after an upstream design-system release, copy the theme CSS from [ABE TechLab Design System](https://github.com/ABE-TechLab/ABE-TechLab-Design-System/tree/main/styles/themes) into the vendored stylesheet and retain its license/notice files. ABEmail-specific layouts and components remain in this repository.
