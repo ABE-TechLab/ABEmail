@@ -1,8 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { cookies } from "next/headers";
-import { ActiveThemeProvider } from "@abe-techlab/abe-techlab-design-system/react";
 import { AppearanceProvider, type AppearanceMode } from "@/components/appearance-provider";
+import { DesignThemeProvider } from "@/components/design-theme-provider";
 import { DEFAULT_DESIGN_THEME, isDesignThemeId } from "@/lib/design-system";
 import "./globals.css";
 
@@ -48,9 +48,9 @@ export default async function RootLayout({
       className={initialMode === "dark" ? "dark" : undefined}
     >
       <body>
-        <ActiveThemeProvider initialTheme={initialTheme} storage="cookie">
+        <DesignThemeProvider initialTheme={initialTheme}>
           <AppearanceProvider initialMode={initialMode}>{children}</AppearanceProvider>
-        </ActiveThemeProvider>
+        </DesignThemeProvider>
       </body>
     </html>
   );
