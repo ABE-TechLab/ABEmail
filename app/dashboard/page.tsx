@@ -38,7 +38,7 @@ export default async function DashboardPage() {
   return (
     <main className={styles.page}>
       <header className={styles.header}>
-        <a className={styles.wordmark} href="/welcome"><span className={styles.mark}>A</span><span>AB<span>Email</span></span></a>
+        <Link className={styles.wordmark} href="/welcome"><span className={styles.mark}>A</span><span>AB<span>Email</span></span></Link>
         <nav><Link href="/settings/account">Account</Link><Link href="/settings/team">Team access</Link><Link href="/auth/sign-out">Sign out</Link></nav>
       </header>
       <section className={styles.intro}>
