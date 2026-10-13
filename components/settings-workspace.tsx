@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useAppearanceMode, type AppearanceMode } from "@/components/appearance-provider";
+import WorkspaceSidebar from "@/components/workspace-sidebar";
 import { useDesignTheme } from "@/components/design-theme-provider";
 import { DESIGN_THEMES, type DesignThemeId } from "@/lib/design-system";
 import { useState, type FormEvent, type ReactNode } from "react";
@@ -116,19 +117,7 @@ export default function SettingsWorkspace({ section }: { section: SettingsSectio
 
   return (
     <main className="mail-app">
-      <aside className="mail-sidebar">
-        <Link className="mail-brand" href="/" aria-label="ABEmail inbox"><span className="mail-brand-mark">A</span><span>AB<span>Email</span></span></Link>
-        <Link className="mail-compose-button workspace-compose-link" href="/"><span className="compose-plus">↖</span><span className="mail-compose-label">Open inbox</span></Link>
-        <div className="mail-nav-section">
-          <div className="mail-nav-label">WORKSPACE</div>
-          <nav className="mail-nav" aria-label="Workspace navigation">
-            <Link className="mail-nav-item" href="/"><span className="mail-nav-icon" aria-hidden="true">▤</span><span>Inbox</span></Link>
-            <Link className="mail-nav-item" href="/contacts"><span className="mail-nav-icon" aria-hidden="true">♙</span><span>Contacts</span></Link>
-            <Link className="mail-nav-item active" href="/settings" aria-current="page"><span className="mail-nav-icon" aria-hidden="true">⚙</span><span>Settings</span></Link>
-          </nav>
-        </div>
-        <div className="mail-sidebar-bottom"><div className="mail-sidebar-divider" /><div className="mail-workspace-switcher workspace-sample-switcher"><span className="mail-workspace-avatar">A</span><span className="mail-workspace-copy"><strong>Acme Studio</strong><small>Sample workspace</small></span></div><p className="workspace-sidebar-note">Preview mode · not connected</p></div>
-      </aside>
+      <WorkspaceSidebar />
 
       <section className="mail-main">
         <header className="mail-topbar">
