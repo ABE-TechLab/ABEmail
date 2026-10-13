@@ -56,7 +56,7 @@ export default function InvitationAcceptanceForm({ token }: { token: string }) {
     } finally {
       setBusy(false);
     }
-  }, [details, router, token]);
+  }, [router, token]);
 
   useEffect(() => {
     let cancelled = false;
