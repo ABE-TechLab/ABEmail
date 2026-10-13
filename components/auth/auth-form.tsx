@@ -11,6 +11,7 @@ type AuthMode = "sign-in" | "sign-up" | "forgot-password" | "update-password";
 type AuthFormProps = {
   mode: AuthMode;
   nextPath?: string;
+  initialError?: string;
 };
 
 function callbackUrl(nextPath: string) {
@@ -41,13 +42,13 @@ const COPY: Record<AuthMode, { title: string; description: string; submit: strin
   },
 };
 
-export default function AuthForm({ mode, nextPath = "/dashboard" }: AuthFormProps) {
+export default function AuthForm({ mode, nextPath = "/dashboard", initialError = "" }: AuthFormProps) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(initialError);
   const [notice, setNotice] = useState("");
   const copy = COPY[mode];
 
