@@ -50,6 +50,12 @@ The provider, application, and data layers must be independently configurable so
 7. Mail sending is rate-limited and guarded by organization/domain authorization, quotas, and abuse controls.
 8. Do not point development or preview environments at live customer data or production email credentials.
 
+## Multi-organization access and authentication
+
+One ABEmail identity can belong to multiple organizations. Membership roles are scoped per organization, and each organization can grant access to different mailbox addresses. After sign-in, the dashboard is the organization chooser; it lists active organizations and only the mailboxes visible through the authenticated user's organization role or mailbox grants. Opening an organization verifies active membership server-side, and Postgres RLS remains the authority for data access. Owning one organization does not grant access to another.
+
+The initial rollout uses email and password. Google sign-in and account linking remain available in code but are hidden unless `NEXT_PUBLIC_ENABLE_GOOGLE_AUTH=true` is explicitly set after Google OAuth and redirect URLs are configured in Supabase Auth. Keep the flag false for the email/password-only launch. Domain verification, mailbox provisioning, and real message transport still require separate implementation and configuration.
+
 ## Development
 
 Requirements: Node.js 22 or newer and npm.

@@ -27,3 +27,16 @@
 .note strong { font-size: 12px; }
 .note p { max-width: 800px; margin: 6px 0 0; color: var(--muted-foreground, #68756a); font-size: 11px; line-height: 1.6; }
 @media (max-width: 560px) { .page { padding: 0 14px 32px; } .header { align-items: flex-start; flex-direction: column; padding: 14px 0; } .intro { margin-top: 32px; } }
+
+.mailboxes { margin: 3px 0 18px; padding-top: 16px; border-top: 1px solid var(--border, #e2e8e1); }
+.mailboxHeading { margin: 0 0 10px !important; color: var(--foreground, #17231b) !important; font-size: 11px !important; font-weight: 800; }
+.mailboxList { display: grid; gap: 9px; margin: 0; padding: 0; list-style: none; }
+.mailboxRow { display: grid; gap: 2px; min-width: 0; }
+.mailboxDisplayName { color: var(--foreground, #17231b); font-size: 12px; font-weight: 700; overflow-wrap: anywhere; }
+.mailboxAddress { color: var(--muted-foreground, #68756a); font-size: 11px; overflow-wrap: anywhere; }
+.mutedMessage { margin: 0 !important; font-size: 11px !important; }
+.detailGrid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(280px, .9fr); align-items: start; gap: 16px; }
+.detailGrid h2 { margin: 0 0 8px; font: 700 20px "Manrope", sans-serif; letter-spacing: -.6px; }
+.detailGrid .note { margin-top: 0; }
+.selectedLabel { display: inline-flex; margin-bottom: 13px; padding: 6px 9px; border-radius: 7px; background: var(--accent, #e7f2e8); color: var(--accent-foreground, #26764b); font-size: 10px; font-weight: 800; }
+@media (max-width: 740px) { .detailGrid { grid-template-columns: 1fr; } }

@@ -35,6 +35,14 @@ export default async function DashboardPage() {
     return <main className={styles.page}><section className={styles.card}><h1>No active workspace found</h1><p>Your membership may have been suspended. Contact the organization administrator.</p><SignOutButton className="auth-signout-control" /></section></main>;
   }
 
+  const { data: mailboxRows, error: mailboxError } = await supabase
+    .from("mailboxes")
+    .select("id, organization_id, address, display_name")
+    .in("organization_id", organizations.map((organization) => organization.id))
+    .eq("status", "active")
+    .order("address");
+  const mailboxes = mailboxRows ?? [];
+
   return (
     <main className={styles.page}>
       <header className={styles.header}>
@@ -49,13 +57,36 @@ export default async function DashboardPage() {
       <div className={styles.organizations}>
         {organizations.map((organization) => {
           const membership = memberships.find((item) => item.organization_id === organization.id);
+          const role = membership?.role ?? "member";
+          const organizationMailboxes = mailboxes.filter((mailbox) => mailbox.organization_id === organization.id);
           return (
             <article className={styles.card} key={organization.id}>
               <div className={styles.orgMark}>{organization.name.slice(0, 1).toUpperCase()}</div>
               <h2>{organization.name}</h2>
               <p className={styles.slug}>{organization.slug}.abemail workspace</p>
-              <div className={styles.meta}><span>{membership?.role ?? "member"}</span><span>Active organization</span></div>
-              <div className={styles.actions}><Link href="/settings/team">Manage team</Link><Link href="/settings/account">Sign-in methods</Link></div>
+              <div className={styles.meta}><span>{role}</span><span>Active organization</span></div>
+              <div className={styles.mailboxes}>
+                <p className={styles.mailboxHeading}>{role === "owner" || role === "admin" ? "Mailboxes available to you" : "Assigned mailboxes"}</p>
+                {mailboxError ? (
+                  <p className={styles.mutedMessage}>Mailbox access is being configured for this environment.</p>
+                ) : organizationMailboxes.length ? (
+                  <ul className={styles.mailboxList}>
+                    {organizationMailboxes.map((mailbox) => (
+                      <li className={styles.mailboxRow} key={mailbox.id}>
+                        <span className={styles.mailboxDisplayName}>{mailbox.display_name || mailbox.address}</span>
+                        <span className={styles.mailboxAddress}>{mailbox.address}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className={styles.mutedMessage}>No active mailbox addresses are currently available to this account.</p>
+                )}
+              </div>
+              <div className={styles.actions}>
+                <Link href={`/dashboard/${organization.id}`}>Open workspace</Link>
+                <Link href="/settings/team">Manage team</Link>
+                <Link href="/settings/account">Sign-in methods</Link>
+              </div>
             </article>
           );
         })}

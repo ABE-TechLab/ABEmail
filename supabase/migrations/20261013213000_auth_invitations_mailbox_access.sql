@@ -425,6 +425,14 @@ begin
     raise exception 'This invitation is invalid, expired, revoked, or already used';
   end if;
 
+  if not exists (
+    select 1 from public.organizations as organization_row
+    where organization_row.id = v_invitation.organization_id
+      and organization_row.status = 'active'
+  ) then
+    raise exception 'This organization is not accepting invitations';
+  end if;
+
   if lower(v_user_email) <> v_invitation.invite_email
     and not exists (
       select 1
@@ -472,6 +480,14 @@ begin
   )
   on conflict (organization_id, user_id) do update
     set role = excluded.role, status = 'active', joined_at = now(), updated_at = now();
+
+  -- A removed or suspended membership can leave old grants behind. Revoke
+  -- those grants first, then apply only the mailbox list from this invitation.
+  update public.mailbox_memberships
+  set status = 'removed', updated_at = now()
+  where organization_id = v_invitation.organization_id
+    and user_id = (select auth.uid())
+    and status <> 'removed';
 
   for v_mailbox in
     select invitation_mailboxes.mailbox_id, invitation_mailboxes.use_as_login_alias

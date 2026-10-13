@@ -194,11 +194,15 @@ export default function InvitationAcceptanceForm({ token }: { token: string }) {
         {details && !currentEmail && (
           <>
             <p className={styles.notice}>Invitation for <strong>{details.invite_email}</strong></p>
-            <button className={styles.googleButton} type="button" onClick={googleSignIn} disabled={busy}>
-              <span className={styles.googleG} aria-hidden="true">G</span>
-              Continue with Google
-            </button>
-            <div className={styles.separator}><span />or use email and password<span /></div>
+            {process.env.NEXT_PUBLIC_ENABLE_GOOGLE_AUTH === "true" && (
+              <>
+                <button className={styles.googleButton} type="button" onClick={googleSignIn} disabled={busy}>
+                  <span className={styles.googleG} aria-hidden="true">G</span>
+                  Continue with Google
+                </button>
+                <div className={styles.separator}><span />or use email and password<span /></div>
+              </>
+            )}
             <div className={styles.links}>
               <span>
                 <button type="button" className={styles.switchMode} onClick={() => { setMode(mode === "sign-in" ? "create-account" : "sign-in"); setError(""); }}>

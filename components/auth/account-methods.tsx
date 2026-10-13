@@ -95,7 +95,7 @@ export default function AccountMethods({ primaryEmail }: { primaryEmail: string 
           </div>
         </div>
 
-        {!providers.includes("google") && (
+        {process.env.NEXT_PUBLIC_ENABLE_GOOGLE_AUTH === "true" && !providers.includes("google") && (
           <button className={styles.googleButton} type="button" onClick={connectGoogle} disabled={busy}>
             <span className={styles.googleG} aria-hidden="true">G</span>
             Connect Google account

@@ -52,6 +52,7 @@ export default function AuthForm({ mode, nextPath = "/dashboard", initialError =
   const [error, setError] = useState(initialError);
   const [notice, setNotice] = useState("");
   const copy = COPY[mode];
+  const googleAuthEnabled = process.env.NEXT_PUBLIC_ENABLE_GOOGLE_AUTH === "true";
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -158,7 +159,7 @@ export default function AuthForm({ mode, nextPath = "/dashboard", initialError =
           <p>{copy.description}</p>
         </div>
 
-        {(mode === "sign-in" || mode === "sign-up") && (
+        {googleAuthEnabled && (mode === "sign-in" || mode === "sign-up") && (
           <>
             <button className={styles.googleButton} type="button" onClick={continueWithGoogle} disabled={busy}>
               <span className={styles.googleG} aria-hidden="true">G</span>
