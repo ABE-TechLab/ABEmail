@@ -160,9 +160,11 @@ grant select, insert, update, delete on table public.mailbox_memberships to auth
 grant select, insert, update, delete on table public.organization_invitations to authenticated;
 grant select, insert, delete on table public.organization_invitation_mailboxes to authenticated;
 
-create policy organization_domains_read_members
+-- DNS verification tokens are administrative secrets; ordinary members do not
+-- need to read them merely to access an organization.
+create policy organization_domains_read_admin
   on public.organization_domains for select to authenticated
-  using (private.is_org_member(organization_id));
+  using (private.has_org_role(organization_id, array['owner', 'admin']::text[]));
 
 create policy organization_domains_insert_admin
   on public.organization_domains for insert to authenticated
@@ -183,6 +185,8 @@ create policy organization_domains_delete_admin_pending
 create policy mailboxes_read_authorized
   on public.mailboxes for select to authenticated
   using (
+    status = 'active'
+    and (
     private.has_org_role(organization_id, array['owner', 'admin']::text[])
     or exists (
       select 1
@@ -192,7 +196,7 @@ create policy mailboxes_read_authorized
         and grant_row.user_id = (select auth.uid())
         and grant_row.status = 'active'
         and grant_row.can_read
-    )
+    ))
   );
 
 create policy mailboxes_insert_admin_pending
@@ -450,6 +454,16 @@ begin
     where invitation_mailboxes.organization_id = v_invitation.organization_id
       and invitation_mailboxes.invitation_id = v_invitation.id
   loop
+    if not exists (
+      select 1
+      from public.mailboxes as mailbox_row
+      where mailbox_row.organization_id = v_invitation.organization_id
+        and mailbox_row.id = v_mailbox.mailbox_id
+        and mailbox_row.status = 'active'
+    ) then
+      raise exception 'An assigned mailbox is no longer active';
+    end if;
+
     insert into public.mailbox_memberships (
       organization_id, mailbox_id, user_id, can_read, can_send, can_manage, status, granted_by
     )
