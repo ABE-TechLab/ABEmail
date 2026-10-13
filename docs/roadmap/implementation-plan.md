@@ -6,11 +6,14 @@
 - [x] Define commercial product scope and tenant-boundary principles.
 - [x] Define the email provider adapter boundary.
 - [ ] Confirm the commercial Supabase/Vercel resources and environment plan before provisioning.
-- [x] Create a runnable Next.js application scaffold with pinned direct dependencies, responsive foundation UI, readiness endpoint, and automated lint/type-check/build workflow. (Build result will be recorded after CI completes.)
+- [x] Create a runnable Next.js application scaffold with pinned direct dependencies, readiness endpoint, and automated lint/type-check/build workflow; CI passed.
 
 ## Phase 1 — Secure multi-tenant foundation
 - [x] Start the application at the mailbox workspace instead of the landing page; preserve the landing page at `/welcome`.
+- [x] Add separately routed, responsive Contacts and Settings pages.
+- [x] Add initial Settings sections for general preferences, appearance, mail, notifications, team/access, domains, mailboxes, and security (preview interactions only).
 - [ ] Integrate shared design-system package tokens and visual consistency.
+- [ ] Validate the current multi-page work with lint, type-check, and production build before merge.
 - [ ] Implement Supabase Auth session handling with server-side identity verification.
 - [ ] Create organizations, memberships, invitations, and mailbox access schema.
 - [ ] Implement organization context selection backed by an active membership check.
