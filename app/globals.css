@@ -1071,3 +1071,26 @@ html[data-theme] .mail-app .settings-theme-choice.selected {
   color: var(--accent-foreground);
   border-color: var(--ring, var(--primary));
 }
+
+
+/* Ensure the appearance controls remain directly interactive at all breakpoints. */
+.settings-theme-options {
+  position: relative;
+  z-index: 1;
+}
+.settings-theme-choice,
+.settings-palette-select {
+  pointer-events: auto;
+  touch-action: manipulation;
+}
+.settings-theme-choice {
+  cursor: pointer;
+}
+.settings-palette-select {
+  cursor: pointer;
+}
+.settings-theme-choice:focus-visible,
+.settings-palette-select:focus-visible {
+  outline: 2px solid var(--ring, var(--primary, #26764b));
+  outline-offset: 3px;
+}
