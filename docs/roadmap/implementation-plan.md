@@ -1,7 +1,7 @@
 # Commercial ABEmail Implementation Plan
 
 ## Phase 0 — Repository and architecture foundation
-- [x] Initialize the dedicated private commercial repository.
+- [x] Initialize the dedicated commercial repository under `ABE-TechLab`; repository visibility is public and the source remains proprietary under `LICENSE`.
 - [x] Establish strict separation from the Waste2Light reference deployment.
 - [x] Define commercial product scope and tenant-boundary principles.
 - [x] Define the email provider adapter boundary.
