@@ -1,5 +1,6 @@
 "use client";
 
+import { persistUserPreferences } from "@/lib/supabase/preferences";
 import {
   createContext,
   useCallback,
@@ -50,6 +51,7 @@ export function DesignThemeProvider({
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
+    void persistUserPreferences({ design_theme: theme }).catch(() => undefined);
     const secure = window.location.protocol === "https:" ? "; Secure" : "";
     document.cookie = `${THEME_COOKIE}=${theme}; Path=/; Max-Age=${THEME_MAX_AGE}; SameSite=Lax${secure}`;
   }, [theme]);
