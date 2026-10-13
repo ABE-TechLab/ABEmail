@@ -1,6 +1,8 @@
 "use client";
 
+import { ThemeSelector } from "@abe-techlab/abe-techlab-design-system/react";
 import Link from "next/link";
+import { useAppearanceMode, type AppearanceMode } from "@/components/appearance-provider";
 import { useState, type FormEvent, type ReactNode } from "react";
 
 export type SettingsSection = "general" | "appearance" | "mail" | "notifications" | "team" | "domains" | "mailboxes" | "security";
@@ -29,6 +31,12 @@ const sectionInfo: Record<SettingsSection, { title: string; description: string 
 
 type LocalMember = { name: string; email: string; role: string; status: "Active" | "Invitation pending" };
 
+const APPEARANCE_MODES: { id: AppearanceMode; label: string; glyph: string }[] = [
+  { id: "light", label: "Light", glyph: "☼" },
+  { id: "dark", label: "Dark", glyph: "☾" },
+  { id: "system", label: "System", glyph: "◐" },
+];
+
 function SettingRow({ title, description, children }: { title: string; description: string; children: ReactNode }) {
   return <div className="settings-row"><div className="settings-row-copy"><strong>{title}</strong><p>{description}</p></div><div className="settings-row-control">{children}</div></div>;
 }
@@ -45,7 +53,7 @@ export default function SettingsWorkspace({ section }: { section: SettingsSectio
   const [displayName, setDisplayName] = useState("Acme Studio");
   const [timezone, setTimezone] = useState("Africa/Lagos");
   const [language, setLanguage] = useState("en");
-  const [theme, setTheme] = useState("light");
+  const { mode, setMode } = useAppearanceMode();
   const [font, setFont] = useState("sans");
   const [signature, setSignature] = useState("Best regards,\nAyo");
   const [replyStyle, setReplyStyle] = useState("reply");
@@ -148,10 +156,12 @@ export default function SettingsWorkspace({ section }: { section: SettingsSectio
               </form>}
 
               {section === "appearance" && <form onSubmit={savePreview}>
-                <div className="settings-choice-group"><p className="settings-subheading">Theme</p><p className="settings-muted">Choose your preferred appearance.</p><div className="settings-theme-options">{[{id:"light",label:"Light",glyph:"☼"},{id:"dark",label:"Dark",glyph:"☾"},{id:"system",label:"System",glyph:"◐"}].map((item) => <button key={item.id} type="button" className={theme === item.id ? "settings-theme-choice selected" : "settings-theme-choice"} onClick={() => setTheme(item.id)}><span className="settings-theme-preview">{item.glyph}</span><span>{item.label}</span>{theme === item.id && <b>✓</b>}</button>)}</div></div>
+                <div className="settings-choice-group"><p className="settings-subheading">Light and dark mode</p><p className="settings-muted">Choose whether ABEmail follows your preference or your device setting.</p><div className="settings-theme-options">{APPEARANCE_MODES.map((item) => <button key={item.id} type="button" aria-pressed={mode === item.id} className={mode === item.id ? "settings-theme-choice selected" : "settings-theme-choice"} onClick={() => setMode(item.id)}><span className="settings-theme-preview">{item.glyph}</span><span>{item.label}</span>{mode === item.id && <b>✓</b>}</button>)}</div></div>
+                <div className="settings-divider" />
+                <div className="settings-choice-group"><p className="settings-subheading">Design system palette</p><p className="settings-muted">Choose one of the shared ABE TechLab Design System palettes. Your choice is saved in this browser.</p><ThemeSelector label="Color palette" labelClassName="settings-field settings-palette-field" selectClassName="settings-palette-select" /></div>
                 <div className="settings-divider" />
                 <SettingRow title="Compact message list" description="Show more message rows in the mailbox list."><Toggle checked={false} onChange={() => notify("Compact density preview is not wired to the mailbox yet.")} label="Compact message list" /></SettingRow>
-                <div className="settings-form-footer"><span>Appearance preferences are not stored yet.</span><button className="mail-primary-action" type="submit">Save preferences</button></div>
+                <div className="settings-form-footer"><span>Appearance mode and palette are stored in browser cookies.</span><button className="mail-primary-action" type="submit">Save preferences</button></div>
               </form>}
 
               {section === "mail" && <form onSubmit={savePreview}>
