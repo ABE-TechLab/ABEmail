@@ -523,7 +523,26 @@ set search_path = ''
 as $function$
   select users.email::text
   from private.user_login_aliases as aliases
-  join auth.users as users on users.id = aliases.user_id
+  join auth.users as users
+    on users.id = aliases.user_id
+   and users.email_confirmed_at is not null
+  join public.organizations as organizations
+    on organizations.id = aliases.organization_id
+   and organizations.status = 'active'
+  join public.organization_memberships as memberships
+    on memberships.organization_id = aliases.organization_id
+   and memberships.user_id = aliases.user_id
+   and memberships.status = 'active'
+  join public.mailboxes as mailboxes
+    on mailboxes.organization_id = aliases.organization_id
+   and mailboxes.id = aliases.mailbox_id
+   and mailboxes.status = 'active'
+  join public.mailbox_memberships as grants
+    on grants.organization_id = aliases.organization_id
+   and grants.mailbox_id = aliases.mailbox_id
+   and grants.user_id = aliases.user_id
+   and grants.status = 'active'
+   and (grants.can_read or grants.can_send)
   where aliases.login_email = lower(btrim(coalesce(p_login_email, '')))
     and aliases.status = 'active'
     and aliases.verified_at is not null
