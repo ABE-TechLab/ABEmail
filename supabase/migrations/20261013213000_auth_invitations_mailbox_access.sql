@@ -425,8 +425,33 @@ begin
     raise exception 'This invitation is invalid, expired, revoked, or already used';
   end if;
 
-  if lower(v_user_email) <> v_invitation.invite_email then
-    raise exception 'Sign in with the verified email address this invitation was sent to';
+  if lower(v_user_email) <> v_invitation.invite_email
+    and not exists (
+      select 1
+      from private.user_login_aliases as aliases
+      join public.organizations as organizations
+        on organizations.id = aliases.organization_id
+       and organizations.status = 'active'
+      join public.organization_memberships as memberships
+        on memberships.organization_id = aliases.organization_id
+       and memberships.user_id = aliases.user_id
+       and memberships.status = 'active'
+      join public.mailboxes as mailboxes
+        on mailboxes.organization_id = aliases.organization_id
+       and mailboxes.id = aliases.mailbox_id
+       and mailboxes.status = 'active'
+      join public.mailbox_memberships as grants
+        on grants.organization_id = aliases.organization_id
+       and grants.mailbox_id = aliases.mailbox_id
+       and grants.user_id = aliases.user_id
+       and grants.status = 'active'
+       and (grants.can_read or grants.can_send)
+      where aliases.login_email = v_invitation.invite_email
+        and aliases.user_id = (select auth.uid())
+        and aliases.status = 'active'
+        and aliases.verified_at is not null
+    ) then
+    raise exception 'Sign in with the verified invited email or a business-email login alias already assigned to your account';
   end if;
 
   if exists (
