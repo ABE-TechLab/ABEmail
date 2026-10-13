@@ -16,8 +16,7 @@
   "dependencies": {
     "next": "16.2.12",
     "react": "19.2.3",
-    "react-dom": "19.2.3",
-    "@abe-techlab/abe-techlab-design-system": "0.1.0"
+    "react-dom": "19.2.3"
   },
   "devDependencies": {
     "@types/node": "22.18.6",
