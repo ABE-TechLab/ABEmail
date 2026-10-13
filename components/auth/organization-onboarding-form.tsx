@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import SignOutButton from "@/components/auth/sign-out-button";
 import styles from "./auth-form.module.css";
 import { createClient } from "@/lib/supabase/client";
 
