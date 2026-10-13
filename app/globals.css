@@ -1,5 +1,5 @@
 @import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap");
-@import "@abe-techlab/abe-techlab-design-system/styles.css";
+@import "../styles/vendor/abe-techlab-design-system.css";
 
 :root {
   color-scheme: light;
@@ -892,4 +892,80 @@ html.dark .settings-theme-choice.selected {
   border-color: var(--ring);
   background: var(--accent);
   color: var(--accent-foreground);
+}
+
+
+/* Apply the selected design-system tokens to legacy ABEmail components too. */
+.mail-app,
+.mail-app .mail-main {
+  background: var(--background, var(--page));
+  color: var(--foreground, var(--ink));
+}
+.mail-app :is(
+  .mail-brand, .mail-workspace-copy strong, .mail-breadcrumb strong,
+  .mail-list-heading h1, .mail-subject-line h2, .mail-contact-profile h2,
+  .contacts-profile h2, .settings-panel-heading h2, .settings-section-summary strong,
+  .settings-row-copy strong, .settings-table td strong, .settings-radio-row strong,
+  .contacts-row-copy strong, .contacts-info-item strong, .mail-copy strong,
+  .mail-message-subject, .mail-message-body, .settings-subheading
+) {
+  color: var(--foreground, var(--ink));
+}
+.mail-app :is(
+  .mail-nav-label, .mail-nav-item, .mail-nav-icon, .mail-breadcrumb,
+  .mail-list-subtitle, .mail-muted, .mail-workspace-copy small,
+  .mail-overline, .mail-copy small, .mail-message-preview, .mail-message-meta,
+  .settings-muted, .settings-field, .settings-field small, .settings-table td,
+  .settings-table th, .settings-row-copy p, .settings-section-summary p,
+  .settings-radio-row small, .contacts-row-copy small, .contacts-row-copy em,
+  .contacts-info-item small, .contacts-profile p, .settings-form-footer > span
+) {
+  color: var(--muted-foreground, var(--ink-soft));
+}
+.mail-app :is(
+  .mail-sidebar, .mail-list-pane, .mail-detail-pane, .mail-topbar,
+  .settings-navigation, .settings-panel, .contacts-workspace,
+  .contacts-list-pane, .contacts-detail-pane, .contacts-detail,
+  .mail-compose-modal, .mail-profile-menu
+) {
+  background: var(--card, var(--surface));
+  border-color: var(--border, var(--line));
+}
+.mail-app :is(
+  .mail-list-heading, .mail-list-toolbar, .mail-search, .mail-message-row,
+  .mail-contact-row, .contacts-list-heading, .settings-invite-form,
+  .settings-theme-choice, .settings-domain-icon, .settings-table th,
+  .mail-compose-header, .mail-compose-footer, .settings-info-banner,
+  .settings-security-card
+) {
+  background: var(--muted, var(--surface-muted));
+  border-color: var(--border, var(--line));
+}
+.mail-app :is(
+  .mail-nav-item.active, .settings-nav-link.active, .contacts-row.selected,
+  .mail-message-row.selected
+) {
+  background: var(--accent, var(--green-pale));
+  color: var(--accent-foreground, var(--green-strong));
+  border-color: var(--border, var(--line));
+}
+.mail-app :is(input:not([type="checkbox"]):not([type="radio"]), textarea, select) {
+  background-color: var(--input, var(--card, var(--surface)));
+  color: var(--foreground, var(--ink));
+  border-color: var(--border, var(--line));
+}
+.mail-app :is(.mail-secondary-action, .mail-toolbar-button, .mail-icon-button) {
+  color: var(--muted-foreground, var(--ink-soft));
+  border-color: var(--border, var(--line));
+}
+.mail-app .settings-theme-choice.selected {
+  background: var(--accent, var(--green-pale));
+  color: var(--accent-foreground, var(--green-strong));
+  border-color: var(--ring, var(--primary, var(--green)));
+}
+.mail-app :is(.settings-form-footer, .settings-divider, .settings-row, .settings-table td, .contacts-information, .contacts-info-item) {
+  border-color: var(--border, var(--line));
+}
+.mail-app :is(.contacts-company-chip, .mail-search, .mail-list-toolbar, .mail-list-heading, .contacts-list-heading) {
+  background-color: var(--muted, var(--surface-muted));
 }
