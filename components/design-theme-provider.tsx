@@ -36,7 +36,16 @@ export function DesignThemeProvider({
   );
 
   const setTheme = useCallback((nextTheme: DesignThemeId) => {
-    if (isDesignThemeId(nextTheme)) setThemeState(nextTheme);
+    if (!isDesignThemeId(nextTheme)) return;
+
+    // Apply the palette during the change event so the UI responds immediately,
+    // then keep React state and the server-readable cookie in sync.
+    setThemeState(nextTheme);
+    if (typeof document !== "undefined") {
+      document.documentElement.setAttribute("data-theme", nextTheme);
+      const secure = window.location.protocol === "https:" ? "; Secure" : "";
+      document.cookie = `${THEME_COOKIE}=${nextTheme}; Path=/; Max-Age=${THEME_MAX_AGE}; SameSite=Lax${secure}`;
+    }
   }, []);
 
   useEffect(() => {
