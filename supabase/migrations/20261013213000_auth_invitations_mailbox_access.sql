@@ -20,7 +20,7 @@ create table public.organization_domains (
   updated_at timestamptz not null default now(),
   unique (domain),
   unique (organization_id, id),
-  check ((status = 'verified') = (verified_at is not null))
+  check (status <> 'verified' or verified_at is not null)
 );
 
 create index organization_domains_org_status_idx
@@ -469,6 +469,14 @@ begin
 
       if v_address is null then
         raise exception 'A login alias must point to an active mailbox';
+      end if;
+
+      if exists (
+        select 1 from auth.users as other_user
+        where lower(other_user.email) = lower(v_address)
+          and other_user.id <> (select auth.uid())
+      ) then
+        raise exception 'This mailbox address is already a sign-in email for another account';
       end if;
 
       insert into private.user_login_aliases (
