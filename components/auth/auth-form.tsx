@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import styles from "./auth-form.module.css";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
@@ -146,10 +147,10 @@ export default function AuthForm({ mode, nextPath = "/dashboard", initialError =
 
   return (
     <main className={styles.page}>
-      <a className={styles.wordmark} href="/welcome" aria-label="ABEmail home">
+      <Link className={styles.wordmark} href="/welcome" aria-label="ABEmail home">
         <span className={styles.mark}>A</span>
         <span>AB<span>Email</span></span>
-      </a>
+      </Link>
       <section className={styles.card}>
         <div className={styles.heading}>
           <p className={styles.eyebrow}>ABE TECHLAB · BUSINESS EMAIL</p>
@@ -157,7 +158,7 @@ export default function AuthForm({ mode, nextPath = "/dashboard", initialError =
           <p>{copy.description}</p>
         </div>
 
-        {mode === "sign-in" && (
+        {(mode === "sign-in" || mode === "sign-up") && (
           <>
             <button className={styles.googleButton} type="button" onClick={continueWithGoogle} disabled={busy}>
               <span className={styles.googleG} aria-hidden="true">G</span>
@@ -226,13 +227,13 @@ export default function AuthForm({ mode, nextPath = "/dashboard", initialError =
         <nav className={styles.links} aria-label="Authentication">
           {mode === "sign-in" && (
             <>
-              <a href="/auth/forgot-password">Forgot password?</a>
-              <span>New to ABEmail? <a href="/auth/sign-up">Create an account</a></span>
+              <Link href="/auth/forgot-password">Forgot password?</Link>
+              <span>New to ABEmail? <Link href="/auth/sign-up">Create an account</Link></span>
             </>
           )}
-          {mode === "sign-up" && <span>Already have an account? <a href="/auth/sign-in">Sign in</a></span>}
-          {mode === "forgot-password" && <a href="/auth/sign-in">Back to sign in</a>}
-          {mode === "update-password" && <a href="/dashboard">Back to workspace</a>}
+          {mode === "sign-up" && <span>Already have an account? <Link href="/auth/sign-in">Sign in</Link></span>}
+          {mode === "forgot-password" && <Link href="/auth/sign-in">Back to sign in</Link>}
+          {mode === "update-password" && <Link href="/dashboard">Back to workspace</Link>}
         </nav>
       </section>
       <p className={styles.footer}>Your login identity and business mailbox are separate. Access is granted by organization and mailbox permissions.</p>
