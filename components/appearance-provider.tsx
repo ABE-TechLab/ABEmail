@@ -1,5 +1,6 @@
 "use client";
 
+import { persistUserPreferences } from "@/lib/supabase/preferences";
 import {
   createContext,
   useCallback,
@@ -67,6 +68,7 @@ export function AppearanceProvider({
     };
 
     applyAndPersist();
+    void persistUserPreferences({ appearance_mode: mode }).catch(() => undefined);
 
     if (mode !== "system") return;
 
