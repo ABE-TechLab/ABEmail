@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
+import SignOutButton from "@/components/auth/sign-out-button";
 import styles from "./auth-form.module.css";
 import { createClient } from "@/lib/supabase/client";
 
@@ -113,7 +114,7 @@ export default function AccountMethods({ primaryEmail }: { primaryEmail: string 
           {notice && <p className={styles.notice} role="status">{notice}</p>}
           <button className={styles.submit} type="submit" disabled={busy}>{busy ? "Saving…" : "Save password"}</button>
         </form>
-        <nav className={styles.links}><Link href="/dashboard">Back to workspace</Link><Link href="/settings/team">Manage team access</Link><Link href="/auth/sign-out">Sign out</Link></nav>
+        <nav className={styles.links}><Link href="/dashboard">Back to workspace</Link><Link href="/settings/team">Manage team access</Link><SignOutButton className="auth-signout-control" /></nav>
       </section>
       <p className={styles.footer}>Alternate business-email sign-in only works after an administrator assigns an active mailbox as your login alias. Google OAuth and identity linking must also be enabled in the Supabase project settings.</p>
     </main>
