@@ -10,7 +10,7 @@
 7. For delivery: `.forge/workflows/GIT.md` and `.forge/policies/AI-EFFICIENCY.md`.
 
 ## Verified baseline
-Snapshot 2026-10-14; last observed main baseline before FORGE work was `4f9f5a12ebcd0b067dfa0f0c251fed599d9e30ab`. PR #13 and PR #14 were merged. Baseline CI passed lint, type-check, build, and tenant isolation. Re-check live state.
+Snapshot 2026-10-14. PR #13 (tenant/invitation security), PR #14 (auth-first entry route), and PR #17 (full FORGE integration) are merged. Current main includes merge commit `a7a45aa2a88f89ead3fa72b398d3cb7dfb00d321`. FORGE validation passed in [run 38601261300](https://github.com/ABE-TechLab/ABEmail/actions/runs/38601261300); application lint, type-check, production build, isolated database startup, and tenant-isolation tests passed on the PR head in [run 38601261239](https://github.com/ABE-TechLab/ABEmail/actions/runs/38601261239). Re-check live state before acting.
 
 Commercial Supabase project ref: `jwtfrmzykevfwmjvratb`; four foundation migrations are already applied. Do not reapply them. Vercel `abemail` previously had a Ready deployment at `https://abemail.vercel.app`; re-check first.
 
