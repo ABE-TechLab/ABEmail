@@ -14,7 +14,8 @@ Secure multi-tenant foundation. Authentication and organization access code exis
 - Vercel public Supabase URL and publishable key are configured for Production, Preview, and Development, but all currently point to one Supabase project.
 - The last checked deployment was Ready at `https://abemail.vercel.app`; re-check current deployments before calling it latest.
 - Email/password auth, callbacks, reset/update, sign-out, onboarding, workspace selection, invitations, roles/membership checks, and mailbox grants exist in code. Google OAuth remains disabled.
-- Full FORGE 0.7.0 framework source is pinned to `976a19af7ade19551f464c218e6d5535735f6c29` on this integration branch.
+- The complete FORGE 0.7.0 portable framework is merged into `main` by [PR #17](https://github.com/ABE-TechLab/ABEmail/pull/17), merge commit `a7a45aa2a88f89ead3fa72b398d3cb7dfb00d321`, pinned to upstream source commit `976a19af7ade19551f464c218e6d5535735f6c29`.
+- FORGE validation passed in [run 38601261300](https://github.com/ABE-TechLab/ABEmail/actions/runs/38601261300). Application CI, including isolated tenant authorization SQL tests, passed on the PR head in [run 38601261239](https://github.com/ABE-TechLab/ABEmail/actions/runs/38601261239).
 
 ## Product routes
 - `/`: directs signed-out users to sign-in and signed-in users to dashboard when Supabase is configured.

@@ -7,7 +7,7 @@
 - PR #14 routes configured visits through sign-in/workspace selection and moves static sample messages to `/demo`.
 - Last checked Vercel production deployment was Ready at `https://abemail.vercel.app`; re-check current state.
 - Vercel Production, Preview, and Development have the public Supabase URL/key but share one Supabase project. Preview/Development are not isolated.
-- Full gODtECH FORGE 0.7.0 integration is in progress under issue #15 and branch `feat/forge-orchestration-issue-15`; mark complete only after strict validation and CI pass and the PR is merged.
+- Full gODtECH FORGE 0.7.0 integration is merged through [PR #17](https://github.com/ABE-TechLab/ABEmail/pull/17); strict framework validation passed in run 38601261300, and application CI including tenant-isolation tests passed in run 38601261239.
 
 ## Phase 0 — Repository and architecture foundation
 
@@ -17,7 +17,7 @@
 - [x] Create the runnable Next.js application and lint/type-check/build CI.
 - [x] Provision commercial Supabase/Vercel and configure the public Supabase values.
 - [ ] Separate Preview/Development data from Production; targets currently use the same Supabase project.
-- [ ] Vendor and strictly validate the full gODtECH FORGE framework, agent contract, MCP entry, handover, and context-aware CI.
+- [x] Vendor and strictly validate the full gODtECH FORGE framework, agent contract, MCP entry, handover, and context-aware CI.
 
 ## Phase 1 — Authentication and secure multi-tenant foundation
 
