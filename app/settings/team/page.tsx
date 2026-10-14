@@ -39,7 +39,7 @@ export default async function TeamAccessPage() {
   }
 
   return (
-    <main className="mail-app">
+    <div className="mail-app">
       <WorkspaceSidebar
         activeView=""
         disabledMailFeatures
@@ -70,6 +70,6 @@ export default async function TeamAccessPage() {
           <TeamAccessManager embedded />
         </div>
       </section>
-    </main>
+    </div>
   );
 }
