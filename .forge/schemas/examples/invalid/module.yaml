@@ -1,0 +1,20 @@
+module:
+  id: Security Module
+  name: ""
+  version: latest
+  status: unknown
+  capability: everything
+  purpose: ""
+  scope:
+    included: []
+    excluded: []
+  triggers: []
+  inputs: []
+  procedure: []
+  tools: []
+  outputs: []
+  exit_conditions: []
+  failure_modes: []
+  efficiency_notes: []
+  security_considerations: []
+  dependencies: []
