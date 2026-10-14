@@ -100,15 +100,17 @@ select is((select count(*)::integer from public.organization_memberships), 1, 'm
 select is((select count(*)::integer from public.organization_memberships where organization_id = '20000000-0000-4000-8000-000000000002'), 0, 'membership rows from another tenant are hidden');
 select is((select count(*)::integer from public.contacts where organization_id = '20000000-0000-4000-8000-000000000001'), 1, 'member can read contacts in their organization');
 select is((select count(*)::integer from public.contacts where organization_id = '20000000-0000-4000-8000-000000000002'), 0, 'member cannot read another tenant contacts');
-select is((with changed as (
+with changed as (
   update public.contacts set name = 'Cross-tenant modification'
   where id = '40000000-0000-4000-8000-000000000002'
   returning id
-) select count(*)::integer from changed), 0, 'member cannot update another tenant contact');
-select is((with deleted as (
+)
+select is((select count(*)::integer from changed), 0, 'member cannot update another tenant contact');
+with deleted as (
   delete from public.contacts where id = '40000000-0000-4000-8000-000000000002'
   returning id
-) select count(*)::integer from deleted), 0, 'member cannot delete another tenant contact');
+)
+select is((select count(*)::integer from deleted), 0, 'member cannot delete another tenant contact');
 select is((select count(*)::integer from public.mailboxes), 1, 'member sees only their assigned mailbox');
 select is((select address from public.mailboxes), 'team@tenant-a.example.com', 'assigned mailbox address is the one shown to the member');
 select is((select count(*)::integer from public.organization_domains), 0, 'regular members cannot read DNS verification details');
@@ -154,12 +156,13 @@ select throws_ok(
   null,
   'organization administrator cannot grant administrator role'
 );
-select is((with changed as (
+with changed as (
   update public.organization_invitations
   set revoked_at = now()
   where id = '50000000-0000-4000-8000-000000000003'
   returning id
-) select count(*)::integer from changed), 0, 'administrator cannot revoke an owner-created administrator invitation');
+)
+select is((select count(*)::integer from changed), 0, 'administrator cannot revoke an owner-created administrator invitation');
 
 -- Owners can still assign administrators in their own organization.
 select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001', true);
