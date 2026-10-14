@@ -17,7 +17,7 @@ jobs:
   validate:
     name: Lint, typecheck, and build
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - name: Check out source
         uses: actions/checkout@v4
@@ -38,3 +38,14 @@ jobs:
 
       - name: Production build
         run: npm run build
+
+      - name: Set up Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.120.0
+
+      - name: Start isolated local database
+        run: supabase db start
+
+      - name: Run tenant isolation and authorization tests
+        run: supabase test db
