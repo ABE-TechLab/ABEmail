@@ -181,7 +181,7 @@ export default function WorkspaceSidebar({
             <button type="button" onClick={onWorkspaceSettings}>Workspace settings</button>
           </div>
         )}
-        <p className="workspace-sidebar-note">Preview mode · not connected</p>
+        <p className="workspace-sidebar-note">{disabledMailFeatures ? "Email setup required" : "Preview mode · not connected"}</p>
       </div>
     </aside>
   );
