@@ -10,6 +10,30 @@ import styles from "./team-access-page.module.css";
 export const metadata: Metadata = { title: "Team and mailbox access" };
 export const dynamic = "force-dynamic";
 
+const settingGroups = [
+  {
+    group: "PREFERENCES",
+    items: [
+      { id: "general", label: "General", icon: "⚙", href: "/settings" },
+      { id: "appearance", label: "Appearance", icon: "◐", href: "/settings/appearance" },
+      { id: "mail", label: "Mail & compose", icon: "✉", href: "/settings/mail" },
+      { id: "notifications", label: "Notifications", icon: "♧", href: "/settings/notifications" },
+    ],
+  },
+  {
+    group: "WORKSPACE",
+    items: [
+      { id: "team", label: "Team & access", icon: "♙", href: "/settings/team" },
+      { id: "domains", label: "Domains", icon: "◎", href: "/settings/domains" },
+      { id: "mailboxes", label: "Mailboxes", icon: "▤", href: "/settings/mailboxes" },
+    ],
+  },
+  {
+    group: "ACCESS",
+    items: [{ id: "security", label: "Security", icon: "◇", href: "/settings/security" }],
+  },
+];
+
 export default async function TeamAccessPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -54,20 +78,47 @@ export default async function TeamAccessPage() {
           <div className="mail-breadcrumb">
             <Link href="/dashboard">Workspace</Link>
             <span className="mail-breadcrumb-slash">/</span>
-            <Link href="/settings">Settings</Link>
-            <span className="mail-breadcrumb-slash">/</span>
-            <strong>Team &amp; Access</strong>
+            <strong>Settings</strong>
           </div>
           <div className={styles.topbarTitle}>Team &amp; Access</div>
           <div className={styles.topbarActions}>
-            <Link href="/settings">All settings</Link>
             <Link href="/settings/account">Account</Link>
             <SignOutButton className="auth-signout-control" />
           </div>
         </header>
 
-        <div className={styles.content}>
-          <TeamAccessManager embedded />
+        <div className="settings-page-scroll">
+          <div className="settings-page-heading">
+            <div>
+              <p className="mail-overline">WORKSPACE SETTINGS</p>
+              <h1>Settings</h1>
+              <p>Set up your workspace, team and email preferences.</p>
+            </div>
+          </div>
+
+          <div className="settings-layout">
+            <nav className="settings-navigation" aria-label="Settings sections">
+              {settingGroups.map((group) => (
+                <div className="settings-nav-group" key={group.group}>
+                  <p>{group.group}</p>
+                  {group.items.map((item) => (
+                    <Link
+                      className={item.id === "team" ? "settings-nav-link active" : "settings-nav-link"}
+                      key={item.id}
+                      href={item.href}
+                      aria-current={item.id === "team" ? "page" : undefined}
+                    >
+                      <span aria-hidden="true">{item.icon}</span>
+                      {item.label}
+                    </Link>
+                  ))}
+                </div>
+              ))}
+            </nav>
+            <div className={styles.manager}>
+              <TeamAccessManager embedded />
+            </div>
+          </div>
         </div>
       </section>
     </div>
