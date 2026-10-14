@@ -80,8 +80,8 @@ select set_config('request.jwt.claim.role', 'authenticated', true);
 select set_config('request.jwt.claims', '{"sub":"10000000-0000-4000-8000-000000000001","role":"authenticated","email":"alice@tenant-a.invalid"}', true);
 
 select is((select count(*)::integer from public.organizations), 2, 'one identity can access two organizations');
-select is((select role from public.organization_memberships where organization_id = '20000000-0000-4000-8000-000000000001'), 'owner', 'role is owner in the first organization');
-select is((select role from public.organization_memberships where organization_id = '20000000-0000-4000-8000-000000000002'), 'member', 'the same identity can be a member in the second organization');
+select is((select role from public.organization_memberships where organization_id = '20000000-0000-4000-8000-000000000001' and user_id = '10000000-0000-4000-8000-000000000001'), 'owner', 'role is owner in the first organization');
+select is((select role from public.organization_memberships where organization_id = '20000000-0000-4000-8000-000000000002' and user_id = '10000000-0000-4000-8000-000000000001'), 'member', 'the same identity can be a member in the second organization');
 select is((select count(*)::integer from public.mailboxes), 3, 'owner sees all own organization mailboxes and only assigned mailboxes in the second');
 select is((select count(*)::integer from public.organization_domains), 1, 'domain metadata is restricted to organizations the user administers');
 select is((select count(*)::integer from public.organization_invitations where organization_id = '20000000-0000-4000-8000-000000000002'), 0, 'membership alone does not expose another organization invitations');
@@ -181,7 +181,9 @@ select is(
   '20000000-0000-4000-8000-000000000001'::uuid,
   'invitation acceptance joins the invited organization'
 );
-select is((select count(*)::integer from public.organizations), 1, 'accepted invitation makes the new member a member of the invited organization');
+select is((select count(*)::integer from public.organizations), 2, 'one account can own one organization and join another');
+select is((select role from public.organization_memberships where organization_id = '20000000-0000-4000-8000-000000000001' and user_id = '10000000-0000-4000-8000-000000000005'), 'member', 'invitation membership role is limited to the invited organization');
+select is((select role from public.organization_memberships where organization_id = (select id from public.organizations where slug = 'eve-owned-workspace') and user_id = '10000000-0000-4000-8000-000000000005'), 'owner', 'the same account retains ownership of its own organization');
 select is((select role from public.organization_memberships where organization_id = '20000000-0000-4000-8000-000000000001'), 'member', 'invitation grants only the invited role');
 select is((select count(*)::integer from public.mailboxes), 1, 'invitation grants only the explicitly assigned mailbox');
 select is((select address from public.mailboxes), 'team@tenant-a.example.com', 'the invited user sees the mailbox assigned by the invitation');
