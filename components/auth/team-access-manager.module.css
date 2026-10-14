@@ -59,3 +59,15 @@
   .intro { margin-top: 30px; }
   .panel { padding: 17px; }
 }
+
+
+/* Embedded mode lets Team & Access live inside the shared mail workspace shell. */
+.embeddedPage {
+  min-height: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--foreground, #17231b);
+}
+.embeddedPage .intro {
+  margin-top: 0;
+}
