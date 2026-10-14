@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
+import Link from "next/link";
+import SignOutButton from "@/components/auth/sign-out-button";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import WorkspaceHome from "@/components/workspace-home";
+import styles from "../dashboard.module.css";
 
 export const metadata: Metadata = { title: "Organization workspace" };
 export const dynamic = "force-dynamic";
@@ -32,10 +35,12 @@ export default async function OrganizationWorkspacePage({ params }: Organization
 
   if (membershipError) {
     return (
-      <main className="workspace-access-error">
-        <section>
+      <main className={styles.page}>
+        <section className={styles.card}>
           <h1>Workspace access is not ready</h1>
           <p>The organization database migration may not have been applied yet.</p>
+          <Link href="/dashboard">Back to all workspaces</Link>
+          <SignOutButton className="auth-signout-control" />
         </section>
       </main>
     );

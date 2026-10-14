@@ -1,5 +1,3 @@
-"use client";
-
 import Link from "next/link";
 import SignOutButton from "@/components/auth/sign-out-button";
 import WorkspaceSidebar from "@/components/workspace-sidebar";
