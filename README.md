@@ -75,7 +75,9 @@ npm run typecheck
 npm run build
 ```
 
-The root route sends unauthenticated visitors to email/password sign-in and authenticated users to the organization dashboard. If Supabase is not configured locally, it falls back to the public landing screen at `/welcome`. The original illustrative mailbox remains available at `/demo`; it contains static sample messages only and is not connected to live mail transport. Authentication routes are available at `/auth/sign-in`, `/auth/sign-up`, `/auth/forgot-password`, and `/auth/update-password`. The authenticated organization dashboard is at `/dashboard`; new owners complete setup at `/onboarding`; owners/admins manage invitations at `/settings/team`; users manage sign-in methods at `/settings/account`. Invitations create one-time links that expire after seven days. Invited users can sign in with the invited email/password or Google if the provider is configured; administrators can assign active mailboxes and optionally allow the mailbox address as an alternate password-login alias. Alias sign-in resolves privately on the server and requires the server-only `SUPABASE_SECRET_KEY`. The four foundation migrations are applied to the current commercial Supabase project; future migrations require review and intentional application. Vercel Production, Preview, and Development currently reference the same commercial Supabase database, so environment isolation remains incomplete. Hosted Auth URL/SMTP delivery, DNS verification, mailbox provisioning, invitation email delivery, and live mail sending/receiving are not configured end to ## Authentication and environment setup
+The root route sends unauthenticated visitors to email/password sign-in and authenticated users to the organization dashboard. If Supabase is not configured locally, it falls back to the public landing screen at `/welcome`. The original illustrative mailbox remains available at `/demo`; it contains static sample messages only and is not connected to live mail transport. Authentication routes are available at `/auth/sign-in`, `/auth/sign-up`, `/auth/forgot-password`, and `/auth/update-password`. The authenticated organization dashboard is at `/dashboard`; new owners complete setup at `/onboarding`; owners/admins manage invitations at `/settings/team`; users manage sign-in methods at `/settings/account`. Invitations create one-time links that expire after seven days. Invited users can sign in with the invited email/password or Google if the provider is configured; administrators can assign active mailboxes and optionally allow the mailbox address as an alternate password-login alias. Alias sign-in resolves privately on the server and requires the server-only `SUPABASE_SECRET_KEY`. The four foundation migrations are applied to the current commercial Supabase project; future migrations require review and intentional application. Vercel Production, Preview, and Development currently reference the same commercial Supabase database, so environment isolation remains incomplete. Hosted Auth URL/SMTP delivery, DNS verification, mailbox provisioning, invitation email delivery, and live mail sending/receiving are not configured end to end. Do not use this foundation with real customer data or live email credentials. Vercel does not apply database migrations automatically.
+
+## Authentication and environment setup
 
 The production Vercel project has the commercial Supabase URL and publishable key configured. These values are browser-safe; never put a Supabase secret key, SMTP credential, provider API key, or webhook secret into a `NEXT_PUBLIC_*` variable.
 
@@ -93,7 +95,7 @@ The app domain and customer mailbox domains are separate. `abemail.vercel.app` i
 
 ## gODtECH FORGE orchestration
 
-This repository vendors the complete **gODtECH FORGE 0.7.0 portable operating framework**, pinned to [source commit 976a19af7ade19551f464c218e6d5535735f6c29](https://github.com/gODtECH-Ctl-Create/gODtECH-FORGE/commit/976a19af7ade19551f464c218e6d5535735f6c29). The full `.forge/` tree contains the upstream intelligence, policies, workflows, schemas, templates, and verification guidance. `AGENTS.md` merges the canonical agent contract with ABEmail's tenancy and production rules. `.mcp.json` describes the separate FORGE MCP server; `.github/copilot-instructions.md` gives agents another entry point.
+This repository vendors the complete **gODtECH FORGE 0.7.0 portable operating framework**, pinned to [source commit 976a19af7ade19551f464c218e6d5535735f6c29](https://github.com/gODtECH-Ctl-Create/gODtECH-FORGE/commit/976a19af7ade19551f464c218e6d5535735f6c29). The full `.forge/` tree contains upstream intelligence modules, policies, workflows, schemas, templates, and verification guidance. `AGENTS.md` merges the canonical agent contract with ABEmail's tenancy and production rules. `.mcp.json` describes the separate FORGE MCP server; `.github/copilot-instructions.md` gives agents another entry point.
 
 The FORGE CLI/MCP server is installed separately by design. Follow [FORGE setup for ABEmail](docs/engineering/forge-setup.md), then run:
 
@@ -110,7 +112,7 @@ Project-specific status, risks, and next work are stored in `.forge/state.md`, `
 
 Built with gODtECH FORGE — Framework for Orchestrated Reasoning, Governance & Engineering.
 
-ive and explicitly selected by the inviting administrator. A password must be set on the same ABEmail account for password-based sign-in.\n\n## Initial delivery milestones
+## Initial delivery milestones
 
 1. Product requirements and tenant/security architecture.
 2. Runnable application foundation and environment validation.
