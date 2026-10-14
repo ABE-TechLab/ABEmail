@@ -31,7 +31,7 @@ async function sha256(value: string) {
   return Array.from(new Uint8Array(bytes), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-export default function TeamAccessManager() {
+export default function TeamAccessManager({ embedded = false }: { embedded?: boolean }) {
   const router = useRouter();
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [organizationId, setOrganizationId] = useState("");
@@ -224,14 +224,14 @@ export default function TeamAccessManager() {
     });
   }
 
-  if (loading) return <main className={styles.page}><p>Loading organization access…</p></main>;
+  if (loading) return embedded ? <div className={styles.embeddedPage}><p>Loading organization access…</p></div> : <main className={styles.page}><p>Loading organization access…</p></main>;
 
   return (
-    <main className={styles.page}>
-      <header className={styles.header}>
+    <main className={embedded ? styles.embeddedPage : styles.page}>
+      {!embedded && <header className={styles.header}>
         <Link className={styles.wordmark} href="/dashboard"><span className={styles.mark}>A</span><span>AB<span>Email</span></span></Link>
         <nav><Link href="/dashboard">Workspace</Link><Link href="/settings/account">Account</Link><SignOutButton className="auth-signout-control" /></nav>
-      </header>
+      </header>}
 
       <section className={styles.intro}>
         <p className={styles.eyebrow}>WORKSPACE ADMINISTRATION</p>
