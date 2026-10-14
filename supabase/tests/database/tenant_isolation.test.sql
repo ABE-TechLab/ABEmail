@@ -18,7 +18,8 @@ on conflict (id) do nothing;
 
 insert into public.organizations (id, name, slug, status, created_by) values
   ('20000000-0000-4000-8000-000000000001', 'Tenant A', 'tenant-a', 'active', '10000000-0000-4000-8000-000000000001'),
-  ('20000000-0000-4000-8000-000000000002', 'Tenant B', 'tenant-b', 'active', '10000000-0000-4000-8000-000000000002');
+  ('20000000-0000-4000-8000-000000000002', 'Tenant B', 'tenant-b', 'active', '10000000-0000-4000-8000-000000000002'),
+  ('20000000-0000-4000-8000-000000000003', 'Eve Workspace', 'eve-owned-workspace', 'active', '10000000-0000-4000-8000-000000000005');
 
 insert into public.organization_memberships (
   organization_id, user_id, role, status, invited_by, joined_at
@@ -27,7 +28,8 @@ insert into public.organization_memberships (
   ('20000000-0000-4000-8000-000000000002', '10000000-0000-4000-8000-000000000001', 'member', 'active', '10000000-0000-4000-8000-000000000002', now()),
   ('20000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000003', 'member', 'active', '10000000-0000-4000-8000-000000000001', now()),
   ('20000000-0000-4000-8000-000000000002', '10000000-0000-4000-8000-000000000002', 'owner', 'active', '10000000-0000-4000-8000-000000000002', now()),
-  ('20000000-0000-4000-8000-000000000002', '10000000-0000-4000-8000-000000000004', 'admin', 'active', '10000000-0000-4000-8000-000000000002', now());
+  ('20000000-0000-4000-8000-000000000002', '10000000-0000-4000-8000-000000000004', 'admin', 'active', '10000000-0000-4000-8000-000000000002', now()),
+  ('20000000-0000-4000-8000-000000000003', '10000000-0000-4000-8000-000000000005', 'owner', 'active', '10000000-0000-4000-8000-000000000005', now());
 
 insert into public.contacts (id, organization_id, name, email, company, created_by) values
   ('40000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000001', 'Tenant A contact', 'contact@tenant-a.invalid', 'Tenant A', '10000000-0000-4000-8000-000000000001'),
@@ -187,7 +189,7 @@ select is(
 select is((select count(*)::integer from public.organizations), 2, 'one account can own one organization and join another');
 select is((select role from public.organization_memberships where organization_id = '20000000-0000-4000-8000-000000000001' and user_id = '10000000-0000-4000-8000-000000000005'), 'member', 'invitation membership role is limited to the invited organization');
 select is((select role from public.organization_memberships where organization_id = (select id from public.organizations where slug = 'eve-owned-workspace') and user_id = '10000000-0000-4000-8000-000000000005'), 'owner', 'the same account retains ownership of its own organization');
-select is((select role from public.organization_memberships where organization_id = '20000000-0000-4000-8000-000000000001'), 'member', 'invitation grants only the invited role');
+select is((select role from public.organization_memberships where organization_id = '20000000-0000-4000-8000-000000000001' and user_id = '10000000-0000-4000-8000-000000000005'), 'member', 'invitation grants only the invited role');
 select is((select count(*)::integer from public.mailboxes), 1, 'invitation grants only the explicitly assigned mailbox');
 select is((select address from public.mailboxes), 'team@tenant-a.example.com', 'the invited user sees the mailbox assigned by the invitation');
 
