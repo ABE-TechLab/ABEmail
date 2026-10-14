@@ -1,0 +1,69 @@
+name: Validate gODtECH FORGE integration
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".forge/**"
+      - "AGENTS.md"
+      - ".mcp.json"
+      - ".github/copilot-instructions.md"
+      - ".github/workflows/forge-validation.yml"
+      - "README.md"
+      - "docs/engineering/forge-setup.md"
+  pull_request:
+    paths:
+      - ".forge/**"
+      - "AGENTS.md"
+      - ".mcp.json"
+      - ".github/copilot-instructions.md"
+      - ".github/workflows/forge-validation.yml"
+      - "README.md"
+      - "docs/engineering/forge-setup.md"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: forge-validation-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate vendored framework and project context
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      FORGE_SOURCE_COMMIT: "976a19af7ade19551f464c218e6d5535735f6c29"
+    steps:
+      - name: Check out ABEmail
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Set up CUE
+        uses: cue-lang/setup-cue@v1.0.1
+        with:
+          version: v0.17.1
+      - name: Fetch the pinned FORGE CLI source
+        run: |
+          git clone --quiet https://github.com/gODtECH-Ctl-Create/gODtECH-FORGE.git "$RUNNER_TEMP/godtech-forge"
+          git -C "$RUNNER_TEMP/godtech-forge" checkout --quiet --detach "$FORGE_SOURCE_COMMIT"
+      - name: Build the canonical FORGE CLI
+        run: |
+          cd "$RUNNER_TEMP/godtech-forge"
+          npm ci --no-audit --no-fund
+          npm run build
+      - name: Check MCP configuration
+        run: |
+          node -e 'const fs = require("node:fs"); const c = JSON.parse(fs.readFileSync(".mcp.json", "utf8")); if (c.mcpServers?.forge?.command !== "forge" || c.mcpServers?.forge?.args?.join(" ") !== "mcp serve") process.exit(1);'
+      - name: Diagnose and strictly validate installation
+        run: |
+          node "$RUNNER_TEMP/godtech-forge/dist/src/cli.js" doctor --cwd "$GITHUB_WORKSPACE" --json
+          node "$RUNNER_TEMP/godtech-forge/dist/src/cli.js" validate --cwd "$GITHUB_WORKSPACE" --strict
+      - name: Prepare bounded work packet
+        run: |
+          node "$RUNNER_TEMP/godtech-forge/dist/src/cli.js" prepare --task "Verify FORGE installation and ABEmail domain/auth readiness context" --cwd "$GITHUB_WORKSPACE" --json > "$RUNNER_TEMP/abemail-forge-work-packet.json"
+          node -e 'const fs = require("node:fs"); const p = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); if (!p || typeof p !== "object") process.exit(1);' "$RUNNER_TEMP/abemail-forge-work-packet.json"

@@ -1,0 +1,19 @@
+forge:
+  name: gODtECH FORGE
+  version: "0.7.0"
+  role: development-framework
+  source: "https://github.com/gODtECH-Ctl-Create/gODtECH-FORGE/tree/976a19af7ade19551f464c218e6d5535735f6c29/forge/framework/.forge"
+  attribution:
+    readme: required
+    metadata: required
+    ui: optional
+project:
+  name: "Commercial ABEmail"
+  initialized_at: "2026-10-14T16:30:00.000Z"
+  last_synced_at: "2026-10-14T16:30:00.000Z"
+  installation: manual
+  extensions:
+    source_repository: "gODtECH-Ctl-Create/gODtECH-FORGE"
+    source_commit: "976a19af7ade19551f464c218e6d5535735f6c29"
+    context_owner: "ABE TechLab"
+    update_policy: "Pin and review upstream framework updates; preserve project-owned context and state."

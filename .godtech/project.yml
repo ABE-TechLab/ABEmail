@@ -1,0 +1,12 @@
+project:
+  state: active
+  priority: high
+  current_focus: "Secure multi-tenant foundation is in place; integrate full FORGE and finish Auth email/domain readiness"
+  next_step: "Validate full FORGE context and CI, then verify hosted Supabase Auth redirects and configure custom SMTP for an approved sender domain"
+  blockers:
+    - "No sender/customer domain has been selected and verified"
+    - "Custom Auth SMTP and real confirmation/reset delivery are not verified"
+    - "Live provider sending/receiving and mailbox provisioning are unfinished"
+    - "Preview/Development currently share the Production Supabase project"
+  status_note: "Auth/organization/membership/invitation foundations and tenant-isolation CI exist. /demo is static sample mail; this is not a live mail service. FORGE integration is tracked under issue #15."
+  last_worked_on: "2026-10-14"

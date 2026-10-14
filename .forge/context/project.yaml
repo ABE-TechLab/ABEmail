@@ -1,0 +1,123 @@
+project:
+  name: "Commercial ABEmail"
+  status: active
+  owner: "ABE TechLab"
+product:
+  problem: "Multi-organization business email with explicit mailbox/team access; live email transport is not yet connected."
+  users:
+    - "ABE TechLab platform operators"
+    - "Organization owners and administrators"
+    - "Organization members"
+  value_proposition: "A multi-organization business email workspace with database-enforced tenant boundaries and controlled onboarding."
+  goals:
+    - "Enforce strict isolation between unrelated customer organizations."
+    - "Support verified email/password identities, organization memberships, invitations, and mailbox grants."
+    - "Provision verified domains and mailboxes through a controlled provider adapter."
+    - "Complete tested outbound and inbound workflows before describing mailboxes as live."
+    - "Preserve durable project context for future developers and AI agents."
+  non_goals:
+    - "Replace the separate Waste2Light reference application."
+    - "Claim delivery works before provider/DNS setup and end-to-end tests pass."
+    - "Enable Google OAuth before credentials and callbacks are configured."
+    - "Purchase domains, create paid resources, or change customer DNS without approval."
+market:
+  geography: "Not finalized"
+  segment: "Organizations requiring managed business email with explicit team and mailbox access."
+  competitors:
+    - "Hosted business email providers"
+    - "Domain registrars and email-hosting services"
+    - "Team communication and shared-inbox products"
+  differentiation: "Organization-scoped access and ABE TechLab-operated onboarding are intended differentiators; market validation remains open."
+  evidence:
+    - "README.md"
+    - "docs/product/commercial-mvp.md"
+    - "docs/architecture/tenant-boundaries.md"
+experience:
+  platforms:
+    - "Responsive web application"
+    - "AI-assisted software development"
+  ux_priorities:
+    - "Make authentication and workspace selection the default application path."
+    - "Separate static demo messages from real tenant mail."
+    - "Enforce organization/mailbox access server-side and in Row Level Security."
+    - "Show pending domain/provider configuration truthfully."
+  ui_direction: "ABE TechLab Design System; static mailbox preview at /demo."
+  accessibility_requirements:
+    - "Accessible form labels, errors, keyboard use, and responsive layouts."
+    - "Run accessibility checks when user-facing flows change."
+technical:
+  architecture: "Next.js App Router on Vercel; Supabase Auth and PostgreSQL with Row Level Security; full vendored gODtECH FORGE framework; separate FORGE CLI/MCP server; live email transport is unfinished."
+  stack:
+    - "Next.js"
+    - "React"
+    - "TypeScript"
+    - "Node.js"
+    - "Supabase Auth"
+    - "PostgreSQL"
+    - "Vercel"
+    - "gODtECH FORGE 0.7.0"
+  integrations:
+    - "Commercial Supabase project jwtfrmzykevfwmjvratb"
+    - "Vercel project abemail"
+    - "GitHub Actions"
+    - "gODtECH FORGE source commit 976a19af7ade19551f464c218e6d5535735f6c29"
+    - "Resend is planned but not configured"
+  constraints:
+    - "Never change or reuse data, secrets, domains, provider accounts, databases, or deployments from gODtECH-Ctl-Create/ABEmail-Mail."
+    - "Production, Preview, and Development currently share one commercial Supabase project."
+    - "Hosted Auth redirects and custom SMTP delivery require end-to-end verification."
+    - "Do not reapply the four foundation migrations already applied to the commercial project."
+    - "Keep all secret keys server-only; never use NEXT_PUBLIC variables for secrets."
+security:
+  risk_level: high
+  sensitive_data:
+    - "Authentication identities and verification/reset tokens"
+    - "Organization memberships, invitations, and mailbox grants"
+    - "Customer domains, mailbox addresses, and future email content/attachments"
+    - "Provider API keys and webhook signing secrets"
+  compliance_requirements:
+    - "Do not market as customer-ready until live-mail security and operational requirements are verified."
+    - "Review provider retention, abuse prevention, data export/deletion, and incident handling before public launch."
+operations:
+  deployment_target: "Vercel abemail at https://abemail.vercel.app"
+  environments:
+    - "Production deployment was Ready on the last verified baseline; re-check current deployment before release claims."
+    - "Preview and Development currently use the same Supabase project as Production."
+    - "Local supabase/config.toml applies only to local development."
+  observability_requirements:
+    - "Health endpoint must distinguish configured values from live dependency probes."
+    - "Redact mail bodies, attachments, secrets, raw invite tokens, and sensitive provider payloads."
+    - "Add provider webhook verification, idempotency, retry, delivery status, and operational alerting before live mail."
+branding:
+  product_identity: "ABEmail"
+  forge_provenance:
+    readme: required
+    metadata: required
+    ui: optional
+    wording: "Built with gODtECH FORGE — Framework for Orchestrated Reasoning, Governance & Engineering."
+forge:
+  active_modules:
+    - product
+    - architecture
+    - engineering
+    - security
+    - quality
+    - operations
+    - documentation
+    - provenance
+    - git-delivery
+    - efficiency
+    - verification
+    - agent-adapter
+  open_questions:
+    - "Which ABE TechLab-owned sender domain and provider will be used?"
+    - "Will authentication mail use a dedicated sender subdomain?"
+    - "When will Preview and Development be isolated from Production data?"
+    - "Which operations, abuse, retention, and recovery requirements block the first customer pilot?"
+  material_risks:
+    - "Custom Auth SMTP and real confirmation/reset email delivery are not proven end to end."
+    - "Live outbound/inbound mail, DNS verification, provider webhooks, and mailbox provisioning are unfinished."
+    - "No commercial sender/customer domain has been verified."
+    - "Preview/Development currently use the Production Supabase project."
+    - "Supabase advisor warned about executable SECURITY DEFINER invitation functions; review privileges without breaking safe invitation flows."
+  last_updated: "2026-10-14"
