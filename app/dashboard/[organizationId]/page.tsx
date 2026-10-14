@@ -3,6 +3,7 @@ import Link from "next/link";
 import SignOutButton from "@/components/auth/sign-out-button";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import WorkspaceHome from "@/components/workspace-home";
 import styles from "../dashboard.module.css";
 
 export const metadata: Metadata = { title: "Organization workspace" };
@@ -20,7 +21,7 @@ export default async function OrganizationWorkspacePage({ params }: Organization
 
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect(`/auth/sign-in?next=${encodeURIComponent(`/dashboard/${organizationId}`)}`);
+  if (!user) redirect("/auth/sign-in?next=" + encodeURIComponent("/dashboard/" + organizationId));
 
   // A requested organization ID is never proof of access. Verify the signed-in
   // user's active membership before returning any organization-specific view.
@@ -55,60 +56,33 @@ export default async function OrganizationWorkspacePage({ params }: Organization
 
   if (organizationError || !organization) notFound();
 
-  // Postgres RLS filters this list to all mailboxes visible to an owner/admin,
-  // or only explicitly granted mailboxes for a regular member.
+  // Postgres RLS filters this list to owner/admin visibility, or to explicitly
+  // granted mailboxes for a regular member.
   const { data: mailboxRows, error: mailboxError } = await supabase
     .from("mailboxes")
     .select("id, address, display_name")
     .eq("organization_id", organization.id)
     .eq("status", "active")
     .order("address");
-  const mailboxes = mailboxRows ?? [];
-  const hasAdministrativeAccess = membership.role === "owner" || membership.role === "admin";
+
+  const currentOrganization = {
+    id: organization.id,
+    name: organization.name,
+    slug: organization.slug,
+    role: membership.role,
+  };
 
   return (
-    <main className={styles.page}>
-      <header className={styles.header}>
-        <Link className={styles.wordmark} href="/dashboard"><span className={styles.mark}>A</span><span>AB<span>Email</span></span></Link>
-        <nav><Link href="/dashboard">Switch workspace</Link><Link href="/settings/account">Account</Link><Link href="/settings/team">Team access</Link><SignOutButton className="auth-signout-control" /></nav>
-      </header>
-
-      <section className={styles.intro}>
-        <p className={styles.eyebrow}>SELECTED WORKSPACE</p>
-        <h1>{organization.name}</h1>
-        <p>Signed in as <strong>{user.email}</strong>. Your role here is <strong>{membership.role}</strong>. This selection does not change your permissions in any other organization.</p>
-      </section>
-
-      <div className={styles.detailGrid}>
-        <section className={styles.card}>
-          <span className={styles.selectedLabel}>WORKSPACE SELECTED</span>
-          <h2>{hasAdministrativeAccess ? "Mailboxes available to you" : "Your assigned mailboxes"}</h2>
-          <p>Mailbox visibility is limited to this organization&apos;s role and mailbox permissions.</p>
-          {mailboxError ? (
-            <p className={styles.mutedMessage}>Mailbox access is being configured for this environment. Organization membership was verified separately.</p>
-          ) : mailboxes.length ? (
-            <ul className={styles.mailboxList}>
-              {mailboxes.map((mailbox) => (
-                <li className={styles.mailboxRow} key={mailbox.id}>
-                  <span className={styles.mailboxDisplayName}>{mailbox.display_name || mailbox.address}</span>
-                  <span className={styles.mailboxAddress}>{mailbox.address}</span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className={styles.mutedMessage}>There are no active mailbox addresses available to this account in this organization yet.</p>
-          )}
-        </section>
-
-        <section className={styles.note}>
-          <strong>This organization is selected.</strong>
-          <p>Organization access and mailbox visibility checks are in place. Inbox messages, sending, and receiving are not yet connected to live mail transport.</p>
-          <div className={styles.actions}>
-            <Link href="/settings/team">Manage team access</Link>
-            <Link href="/dashboard">Switch organization</Link>
-          </div>
-        </section>
-      </div>
-    </main>
+    <WorkspaceHome
+      email={user.email ?? ""}
+      organizations={[currentOrganization]}
+      selectedOrganization={currentOrganization}
+      mailboxes={(mailboxRows ?? []).map((mailbox) => ({
+        id: mailbox.id,
+        address: mailbox.address,
+        display_name: mailbox.display_name,
+      }))}
+      mailboxError={Boolean(mailboxError)}
+    />
   );
 }

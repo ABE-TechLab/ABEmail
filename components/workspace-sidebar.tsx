@@ -28,6 +28,11 @@ type WorkspaceSidebarProps = {
   profileOpen?: boolean;
   onWorkspaceToggle?: () => void;
   onWorkspaceSettings?: () => void;
+  disabledMailFeatures?: boolean;
+  disableContacts?: boolean;
+  workspaceName?: string;
+  workspaceDescription?: string;
+  workspaceHref?: string;
 };
 
 export default function WorkspaceSidebar({
@@ -38,6 +43,11 @@ export default function WorkspaceSidebar({
   profileOpen = false,
   onWorkspaceToggle,
   onWorkspaceSettings,
+  disabledMailFeatures = false,
+  disableContacts = false,
+  workspaceName = "Acme Studio",
+  workspaceDescription = "Sample workspace",
+  workspaceHref,
 }: WorkspaceSidebarProps) {
   const pathname = usePathname();
 
@@ -48,7 +58,11 @@ export default function WorkspaceSidebar({
         <span>AB<span>Email</span></span>
       </Link>
 
-      {onCompose ? (
+      {disabledMailFeatures ? (
+        <button className="mail-compose-button workspace-compose-disabled" disabled type="button" aria-label="Compose is unavailable until email is connected">
+          <span className="compose-plus">＋</span><span className="mail-compose-label">Compose</span>
+        </button>
+      ) : onCompose ? (
         <button className="mail-compose-button" onClick={onCompose} type="button">
           <span className="compose-plus">＋</span><span className="mail-compose-label">Compose</span>
         </button>
@@ -62,7 +76,7 @@ export default function WorkspaceSidebar({
         <div className="mail-nav-label">MAILBOX</div>
         <nav className="mail-nav" aria-label="Mailbox navigation">
           {mailboxLinks.map((item) => {
-            const active = pathname === "/" && activeView === item.view;
+            const active = disabledMailFeatures ? item.view === activeView : pathname === "/" && activeView === item.view;
             const count = mailboxCounts[item.view];
             const children = (
               <>
@@ -71,6 +85,21 @@ export default function WorkspaceSidebar({
                 {count !== undefined && count > 0 && <span className="mail-nav-count">{count}</span>}
               </>
             );
+
+            if (disabledMailFeatures) {
+              return (
+                <button
+                  className={active ? "mail-nav-item active workspace-nav-disabled" : "mail-nav-item workspace-nav-disabled"}
+                  key={item.view}
+                  type="button"
+                  disabled
+                  aria-disabled="true"
+                >
+                  {children}
+                  <span className="mail-feature-pill">Setup</span>
+                </button>
+              );
+            }
 
             return onMailboxNavigate ? (
               <button
@@ -101,6 +130,15 @@ export default function WorkspaceSidebar({
         <nav className="mail-nav" aria-label="Workspace navigation">
           {workspaceLinks.map((item) => {
             const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+            if (disableContacts && item.href === "/contacts") {
+              return (
+                <div className="mail-nav-item workspace-nav-disabled" key={item.href} aria-disabled="true">
+                  <span className="mail-nav-icon" aria-hidden="true">{item.icon}</span>
+                  <span>{item.label}</span>
+                  <span className="mail-feature-pill">Setup</span>
+                </div>
+              );
+            }
             return (
               <Link
                 className={active ? "mail-nav-item active" : "mail-nav-item"}
@@ -118,16 +156,22 @@ export default function WorkspaceSidebar({
 
       <div className="mail-sidebar-bottom">
         <div className="mail-sidebar-divider" />
-        {onWorkspaceToggle ? (
+        {workspaceHref ? (
+          <Link className="mail-workspace-switcher" href={workspaceHref}>
+            <span className="mail-workspace-avatar">{workspaceName.slice(0, 1).toUpperCase()}</span>
+            <span className="mail-workspace-copy"><strong>{workspaceName}</strong><small>{workspaceDescription}</small></span>
+            <span className="mail-chevron">⌄</span>
+          </Link>
+        ) : onWorkspaceToggle ? (
           <button className="mail-workspace-switcher" onClick={onWorkspaceToggle} type="button" aria-expanded={profileOpen}>
-            <span className="mail-workspace-avatar">A</span>
-            <span className="mail-workspace-copy"><strong>Acme Studio</strong><small>Sample workspace</small></span>
+            <span className="mail-workspace-avatar">{workspaceName.slice(0, 1).toUpperCase()}</span>
+            <span className="mail-workspace-copy"><strong>{workspaceName}</strong><small>{workspaceDescription}</small></span>
             <span className="mail-chevron">⌄</span>
           </button>
         ) : (
           <div className="mail-workspace-switcher workspace-sample-switcher">
-            <span className="mail-workspace-avatar">A</span>
-            <span className="mail-workspace-copy"><strong>Acme Studio</strong><small>Sample workspace</small></span>
+            <span className="mail-workspace-avatar">{workspaceName.slice(0, 1).toUpperCase()}</span>
+            <span className="mail-workspace-copy"><strong>{workspaceName}</strong><small>{workspaceDescription}</small></span>
           </div>
         )}
         {profileOpen && onWorkspaceSettings && (
@@ -137,7 +181,7 @@ export default function WorkspaceSidebar({
             <button type="button" onClick={onWorkspaceSettings}>Workspace settings</button>
           </div>
         )}
-        <p className="workspace-sidebar-note">Preview mode · not connected</p>
+        <p className="workspace-sidebar-note">{disabledMailFeatures ? "Email setup required" : "Preview mode · not connected"}</p>
       </div>
     </aside>
   );
