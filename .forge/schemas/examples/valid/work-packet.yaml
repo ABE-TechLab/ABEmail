@@ -1,0 +1,59 @@
+schemaVersion: 1
+command: prepare
+id: 0123456789abcdef
+fingerprint: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+cached: false
+createdAt: 2026-09-10T10:00:00.000Z
+task: Update README wording
+plan:
+  command: plan
+  task: Update README wording
+  taskKind: documentation
+  risk: low
+  workflow: lightweight-delivery
+  signals: []
+  capabilities:
+    - capability: documentation
+      reasons: [Required for documentation work.]
+  approvals: []
+  steps:
+    - id: inspect-context
+      stage: define
+      action: Confirm repository state and intended outcome.
+      capability: efficiency
+repository:
+  git:
+    detected: true
+    branch: main
+    commit: 0123456789abcdef
+    dirty: false
+    changedFiles: []
+    changedFilesTruncated: false
+  filesScanned: 12
+  filesOmitted: 0
+  manifests:
+    - path: package.json
+      kind: node
+      sha256: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+  languages:
+    - name: TypeScript
+      files: 4
+projectContext:
+  project.name: Example
+  security.risk_level: low
+commands:
+  - name: test
+    command: npm run test
+    source: package.json
+frameworkReferences:
+  - .forge/policies/CORE.md
+preparation:
+  deterministicWorkCompleted:
+    - Repository facts inspected.
+  modelWorkRemaining:
+    - Implement the scoped outcome.
+  suggestedModelTier: economy
+  selectedContextCharacters: 72
+  maxContextFiles: 12
+  maxContextCharacters: 12000
+warnings: []
