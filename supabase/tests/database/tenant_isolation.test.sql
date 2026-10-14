@@ -116,12 +116,14 @@ select throws_ok(
   $$insert into public.contacts (organization_id, name, email, created_by)
     values ('20000000-0000-4000-8000-000000000002', 'Injected', 'injected@tenant-b.invalid', '10000000-0000-4000-8000-000000000003')$$,
   '42501',
+  null,
   'member cannot insert a record into a different tenant'
 );
 select throws_ok(
   $$insert into public.organization_domains (organization_id, domain, status, created_by)
     values ('20000000-0000-4000-8000-000000000002', 'unauthorized.example.com', 'pending_verification', '10000000-0000-4000-8000-000000000003')$$,
   '42501',
+  null,
   'member cannot create a domain outside their organization'
 );
 
@@ -147,6 +149,7 @@ select throws_ok(
       repeat('5', 64), '10000000-0000-4000-8000-000000000004', now() + interval '7 days'
     )$$,
   '42501',
+  null,
   'organization administrator cannot grant administrator role'
 );
 select is((with changed as (
