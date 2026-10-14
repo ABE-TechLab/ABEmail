@@ -1,0 +1,22 @@
+evidence:
+  id: evidence-installation-review
+  kind: repository
+  summary: FORGE currently contains portable framework files but no executable installer.
+  source: repository inspection
+  collected_at: 2026-09-10T04:00:00Z
+
+decision:
+  id: decision-distribution-model
+  title: Support CLI, template, and manual adoption
+  status: accepted
+  risk: medium
+  context: FORGE must work for new and existing repositories without forcing a product stack.
+  decision: Make CLI initialization the recommended path while retaining template and manual modes.
+  alternatives:
+    - option: Template only
+      reason: Simple, but cannot validate, upgrade, or safely merge into existing repositories.
+  consequences:
+    - The CLI must track file ownership and framework versions.
+  evidence_ids: [evidence-installation-review]
+  decided_at: 2026-09-10T04:00:00Z
+  approved_by: repository owner

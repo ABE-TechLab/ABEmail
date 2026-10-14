@@ -1,0 +1,33 @@
+module:
+  id: security
+  name: Security Intelligence
+  version: 1.0.0
+  status: active
+  capability: security
+  purpose: Identify material threats and select proportional controls.
+  scope:
+    included: [threat modeling, control selection]
+    excluded: [legal certification]
+  triggers:
+    - kind: risk
+      condition: Sensitive data or identity boundaries are affected.
+  inputs:
+    - name: project_context
+      description: Verified project and architecture context.
+      required: true
+  procedure:
+    - id: classify-risk
+      description: Classify affected assets, trust boundaries, and impact.
+  tools: [repository analysis, policy evaluation]
+  outputs:
+    - name: security_assessment
+      description: Risks, controls, and unresolved security decisions.
+  exit_conditions:
+    - Material risks and controls are recorded.
+  failure_modes:
+    - Required architecture context is unavailable.
+  efficiency_notes:
+    - Reuse a current threat model when the affected boundary is unchanged.
+  security_considerations:
+    - Never include secrets in evidence.
+  dependencies: [architecture, policy-engine]

@@ -1,60 +1,81 @@
 # Commercial ABEmail Implementation Plan
 
+## Verified baseline — 2026-10-14
+
+- Commercial Supabase project `jwtfrmzykevfwmjvratb`; migrations `20261013203000`, `20261013213000`, `20261013223000`, and `20261014100000` are applied.
+- PR #13 hardens invitation-role authorization and adds two-tenant SQL tests; baseline CI passed.
+- PR #14 routes configured visits through sign-in/workspace selection and moves static sample messages to `/demo`.
+- Last checked Vercel production deployment was Ready at `https://abemail.vercel.app`; re-check current state.
+- Vercel Production, Preview, and Development have the public Supabase URL/key but share one Supabase project. Preview/Development are not isolated.
+- Full gODtECH FORGE 0.7.0 integration is in progress under issue #15 and branch `feat/forge-orchestration-issue-15`; mark complete only after strict validation and CI pass and the PR is merged.
+
 ## Phase 0 — Repository and architecture foundation
-- [x] Initialize the dedicated commercial repository under `ABE-TechLab`; repository visibility is public and the source remains proprietary under `LICENSE`.
-- [x] Establish strict separation from the Waste2Light reference deployment.
-- [x] Define commercial product scope and tenant-boundary principles.
-- [x] Define the email provider adapter boundary.
-- [ ] Confirm the commercial Supabase/Vercel resources and environment plan before provisioning.
-- [x] Create a runnable Next.js application scaffold with pinned direct dependencies, readiness endpoint, and automated lint/type-check/build workflow; CI passed.
 
-## Phase 1 — Secure multi-tenant foundation
-- [x] Start the application at the mailbox workspace instead of the landing page; preserve the landing page at `/welcome`.
-- [x] Add separately routed, responsive Contacts and Settings pages.
-- [x] Add initial Settings sections for general preferences, appearance, mail, notifications, team/access, domains, mailboxes, and security (preview interactions only).
-- [x] Integrate the shared ABE TechLab Design System theme tokens from a locally vendored, licensed CSS snapshot, palette selector, and persistent light/dark/system mode without requiring registry authentication.
-- [x] Validate the current multi-page work with lint, type-check, and production build before merge; GitHub Actions passed on this branch.
-- [ ] Implement Supabase Auth session handling with server-side identity verification.
-- [ ] Create organizations, memberships, invitations, and mailbox access schema.
-- [ ] Implement organization context selection backed by an active membership check.
-- [ ] Add RLS policies and automated allow/deny tests.
-- [ ] Add separate platform-operator authorization and audit events.
-- [ ] Create a two-tenant test fixture and prove isolation.
+- [x] Establish the commercial repository and proprietary application license.
+- [x] Separate the commercial product from the Waste2Light reference deployment.
+- [x] Define product scope, provider boundary, and tenant-boundary principles.
+- [x] Create the runnable Next.js application and lint/type-check/build CI.
+- [x] Provision commercial Supabase/Vercel and configure the public Supabase values.
+- [ ] Separate Preview/Development data from Production; targets currently use the same Supabase project.
+- [ ] Vendor and strictly validate the full gODtECH FORGE framework, agent contract, MCP entry, handover, and context-aware CI.
 
-**Exit gate:** no mailbox or message UI is enabled until tenant isolation tests pass.
+## Phase 1 — Authentication and secure multi-tenant foundation
 
-## Phase 2 — Provisioning and domains
-- [ ] Platform operator can create, suspend, and reactivate a tenant.
-- [ ] Owner invitation is time-limited, one-use, and revocable.
-- [ ] Organization owner can add a domain and follow DNS verification instructions.
-- [ ] Mailbox provisioning and member assignment validate same-tenant ownership.
-- [ ] Unverified/suspended resources cannot receive normal send requests.
+- [x] Implement email/password sign-in/sign-up, callbacks, reset/update, sign-out, and account settings.
+- [x] Implement organizations, memberships, invitations, domain metadata, mailboxes, and mailbox grants.
+- [x] Apply the four foundation migrations to commercial Supabase.
+- [x] Implement onboarding, workspace selection, membership checks, invitations, and mailbox assignment.
+- [x] Add Row Level Security (RLS) and allow/deny tests across two tenants.
+- [x] Prevent organization administrators from granting administrator privileges through invitations.
+- [x] Route the root to sign-in/dashboard and isolate static demo at `/demo`.
+- [ ] Verify hosted Auth redirects and deployed confirmation/reset/invitation email flows.
+- [ ] Configure custom SMTP for external Auth email.
+- [ ] Implement platform-operator permissions, tenant lifecycle, and audit events.
+- [ ] Review Supabase advisor warnings for executable SECURITY DEFINER invitation functions.
 
-## Phase 3 — Email transport and core workflows
-- [ ] Add the server-only provider interface and a separate Resend driver.
-- [ ] Implement signature-verified inbound webhooks, recipient-to-mailbox routing, and idempotent event handling.
-- [ ] Implement outbound send with sender authorization, quotas, rate limits, and delivery tracking.
-- [ ] Add private attachments and authorization checks.
-- [ ] Port core inbox, drafts, search, contacts, and scheduled-message workflows with organization and mailbox ownership.
-- [ ] Add integration tests for send/receive in an isolated test tenant.
+**Exit gate:** tenant-isolation tests pass, but Auth email, operator controls, and the security-advisor review remain blockers before public launch.
+
+## Phase 2 — Domain and mailbox provisioning
+
+- [x] Store organization-bound domain metadata and mailbox-grant structures.
+- [x] Create time-limited one-use invitation links for manual sharing.
+- [ ] Choose an ABE TechLab sender domain and provider account; Resend is planned, not configured.
+- [ ] Add domain setup UI and server-side DNS/provider verification.
+- [ ] Configure provider-issued ownership and sender-authentication DNS records.
+- [ ] Provision actual mailboxes only after domain verification.
+- [ ] Add automated invitation delivery after a safe sender service exists.
+- [ ] Enforce verified/suspended domain/mailbox state across sends, schedules, and retries.
+
+## Phase 3 — Live email transport and core workflows
+
+- [ ] Implement a server-only provider interface and selected driver.
+- [ ] Add signed inbound webhooks, raw-body verification, idempotency, retries, and delivery events.
+- [ ] Add outbound sending with verified-sender authorization, quotas, rate limits, and abuse controls.
+- [ ] Store messages/attachments privately and tenant-scope every read/write and scheduled action.
+- [ ] Connect inbox, sent, drafts, search, contacts, and scheduled messages to tenant data, not sample arrays.
+- [ ] Test invalid signatures, unknown recipients, cross-tenant requests, duplicates, bounces/complaints, limits, outages, and rollback.
+- [ ] Pass end-to-end send/receive tests in an isolated tenant.
 
 ## Phase 4 — Operations and controlled pilot
-- [ ] Tenant overview, domain/provider health, usage, incidents, and audit views.
-- [ ] Per-tenant limits, suspension, and safe platform support workflow.
-- [ ] Logs redact bodies, attachments, credentials, and sensitive provider payloads.
-- [ ] Confirm authentication, webhook, tenant isolation, and abuse-control tests.
-- [ ] Create separate Preview and Production configuration.
-- [ ] Roll out to one test tenant first; then invite a small, known customer cohort.
+
+- [ ] Isolate Preview/Development from Production and prove it.
+- [ ] Add operator tenant lifecycle, domain/provider health, usage, incident, and audit views.
+- [ ] Add redacted logs, delivery tracing, alerts, limits, suspension controls, and operational ownership.
+- [ ] Document backup/restore, incident response, provider outages, data export/deletion, migrations, and rollback.
+- [ ] Complete Auth, webhook, tenant-isolation, abuse-control, and recovery verification.
+- [ ] Pilot with one isolated tenant before inviting external customers.
 
 ## Phase 5 — Commercial readiness
-- [ ] Subscription, billing, limits, and customer-facing usage information.
-- [ ] Self-service onboarding only after abuse controls and recovery procedures are operational.
-- [ ] Written support, incident-response, backup/restore, data export/deletion, and provider outage runbooks.
-- [ ] Decide whether to add customer-managed provider credentials or additional email providers based on validated demand.
+
+- [ ] Review domain ownership, sender reputation, support, retention, and customer-data handling.
+- [ ] Add billing/plans/usage only when validated demand requires them.
+- [ ] Enable self-service only after identity/domain verification, abuse controls, monitoring, and recovery are ready.
+- [ ] Add more providers only when justified by customer needs.
 
 ## Execution rules
 
-- Make each phase a reviewable pull request with build/test evidence.
-- Do not merge this feature branch or deploy a commercial production environment without approval.
-- Do not provision paid cloud services until the cost and target organization are presented and accepted.
-- The reference app may inform implementation, but commercial code must remove single-tenant hard-coded domains and query assumptions from day one.
+- Follow `.forge/workflows/GIT.md` for material work: issue, branch, implementation, verification, PR, CI/review, merge, then state/tracker sync.
+- Do not merge or deploy production capabilities without approval and passing checks.
+- Do not buy domains, create paid resources, change live DNS, or apply hosted migrations without explicit approval.
+- Never reuse Waste2Light data, secrets, domains, provider accounts, database, or deployment.
+- Database records do not prove provider provisioning. Do not claim live email until end-to-end tests pass.

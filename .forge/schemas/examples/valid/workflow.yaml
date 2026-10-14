@@ -1,0 +1,27 @@
+workflow:
+  id: standard-delivery
+  name: Standard delivery
+  version: 1.0.0
+  description: Deliver a material repository change through reviewable Git history.
+  stages: [define, build, test, verify]
+  risk:
+    minimum: low
+  inputs:
+    - name: work_item
+      required: true
+  steps:
+    - id: create-branch
+      action: Create a dedicated branch from the current target branch.
+      capability: git-delivery
+      approval: automatic
+      on_failure: stop
+    - id: verify
+      action: Run the checks selected for the affected surface and risk.
+      capability: verification
+      approval: automatic
+      on_failure: stop
+  outputs:
+    - name: pull_request
+  exit_conditions:
+    - Verification evidence is recorded.
+    - The change is reviewable.

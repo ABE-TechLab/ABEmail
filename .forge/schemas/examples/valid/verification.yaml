@@ -1,0 +1,12 @@
+verification:
+  run_id: verify-phase-1-fixture
+  started_at: 2026-09-10T04:00:00Z
+  completed_at: 2026-09-10T04:01:00Z
+  risk: medium
+  checks:
+    - id: cue-valid-fixtures
+      category: type
+      status: passed
+      summary: All valid fixtures conform to their contracts.
+      evidence_ids: []
+  release_decision: pass

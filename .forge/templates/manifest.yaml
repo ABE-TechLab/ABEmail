@@ -1,0 +1,16 @@
+# Generated for a project using gODtECH FORGE.
+# Project-specific values are populated by the agent during initialization.
+
+forge:
+  name: gODtECH FORGE
+  version: 0.x
+  role: development-framework
+  attribution:
+    readme: required
+    metadata: required
+    ui: optional
+
+project:
+  name:
+  initialized_at:
+  last_synced_at:

@@ -75,9 +75,44 @@ npm run typecheck
 npm run build
 ```
 
-The root route sends unauthenticated visitors to email/password sign-in and authenticated users to the organization dashboard. If Supabase is not configured locally, it falls back to the public landing screen at `/welcome`. The original illustrative mailbox remains available at `/demo`; it contains static sample messages only and is not connected to live mail transport. Authentication routes are available at `/auth/sign-in`, `/auth/sign-up`, `/auth/forgot-password`, and `/auth/update-password`. The authenticated organization dashboard is at `/dashboard`; new owners complete setup at `/onboarding`; owners/admins manage invitations at `/settings/team`; users manage sign-in methods at `/settings/account`. Invitations create one-time links that expire after seven days. Invited users can sign in with the invited email/password or Google if the provider is configured; administrators can assign active mailboxes and optionally allow the mailbox address as an alternate password-login alias. Alias sign-in resolves privately on the server and requires the server-only `SUPABASE_SECRET_KEY`. The product's Supabase migrations are still review-only until explicitly applied to the intended environment. DNS verification, mailbox provisioning, automated invitation email delivery, and live mail sending/receiving are not configured yet. Do not use this build with customer data or live email credentials. Vercel does not apply SQL migrations automatically; migrations must be reviewed and applied to the intended Supabase environment separately.
+The root route sends unauthenticated visitors to email/password sign-in and authenticated users to the organization dashboard. If Supabase is not configured locally, it falls back to the public landing screen at `/welcome`. The original illustrative mailbox remains available at `/demo`; it contains static sample messages only and is not connected to live mail transport. Authentication routes are available at `/auth/sign-in`, `/auth/sign-up`, `/auth/forgot-password`, and `/auth/update-password`. The authenticated organization dashboard is at `/dashboard`; new owners complete setup at `/onboarding`; owners/admins manage invitations at `/settings/team`; users manage sign-in methods at `/settings/account`. Invitations create one-time links that expire after seven days. Invited users can sign in with the invited email/password or Google if the provider is configured; administrators can assign active mailboxes and optionally allow the mailbox address as an alternate password-login alias. Alias sign-in resolves privately on the server and requires the server-only `SUPABASE_SECRET_KEY`. The four foundation migrations are applied to the current commercial Supabase project; future migrations require review and intentional application. Vercel Production, Preview, and Development currently reference the same commercial Supabase database, so environment isolation remains incomplete. Hosted Auth URL/SMTP delivery, DNS verification, mailbox provisioning, invitation email delivery, and live mail sending/receiving are not configured end to end. Do not use this foundation with real customer data or live email credentials. Vercel does not apply database migrations automatically.
 
-## Authentication setup (preview only)\n\nBefore testing login, configure Supabase Auth email verification and the Google provider in the Supabase project dashboard. Add the preview URL and local URL to Supabase Auth's allowed redirect URLs, using the callback path `/auth/callback`. The Google provider also needs its OAuth client credentials and authorized redirect URI. Enable manual identity linking only if you intend to link a Google identity whose email differs from the signed-in account email.\n\nSet `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` in the target Vercel environment. `SUPABASE_SECRET_KEY` is an optional server-only variable required for alternate business-email password aliases; never expose it to the browser. Do not add these settings to Production until the auth flows, schema, and RLS checks have been reviewed.\n\nInvitation links are currently displayed for copying/sharing; automatic email delivery is intentionally not enabled. A mailbox can become an alternate login alias only when it is active and explicitly selected by the inviting administrator. A password must be set on the same ABEmail account for password-based sign-in.\n\n## Initial delivery milestones
+## Authentication and environment setup
+
+The production Vercel project has the commercial Supabase URL and publishable key configured. These values are browser-safe; never put a Supabase secret key, SMTP credential, provider API key, or webhook secret into a `NEXT_PUBLIC_*` variable.
+
+Before relying on confirmation or password-reset email, complete the **hosted** Supabase Auth settings:
+1. Site URL: `https://abemail.vercel.app` until a branded application domain is selected.
+2. Allowed callback: `https://abemail.vercel.app/auth/callback`.
+3. Local redirects when needed: `http://localhost:3000/**` and `http://127.0.0.1:3000/**`.
+4. Configure custom SMTP (Simple Mail Transfer Protocol) on an ABE TechLab-controlled sender domain; test sign-up confirmation, password reset, and invitation acceptance against the deployed application.
+
+The local `supabase/config.toml` does not change hosted Auth URL settings. See [Supabase redirect URLs](https://supabase.com/docs/guides/auth/redirect-urls) and [Supabase custom SMTP](https://supabase.com/docs/guides/auth/auth-smtp). Google sign-in stays disabled until OAuth credentials and callback configuration exist.
+
+## Domain and live mail readiness
+
+The app domain and customer mailbox domains are separate. `abemail.vercel.app` is enough for application development. Real Auth email needs a verified ABE TechLab-controlled sender domain and custom SMTP. A customer mailbox such as `person@customer-domain.com` also requires the customer to own or authorize that domain and the chosen provider to provision routing. Resend is planned, not active. Read [Domain and Mail Readiness](docs/product/domain-and-mail-readiness.md) before DNS changes or live-email claims.
+
+## gODtECH FORGE orchestration
+
+This repository vendors the complete **gODtECH FORGE 0.7.0 portable operating framework**, pinned to [source commit 976a19af7ade19551f464c218e6d5535735f6c29](https://github.com/gODtECH-Ctl-Create/gODtECH-FORGE/commit/976a19af7ade19551f464c218e6d5535735f6c29). The full `.forge/` tree contains upstream intelligence modules, policies, workflows, schemas, templates, and verification guidance. `AGENTS.md` merges the canonical agent contract with ABEmail's tenancy and production rules. `.mcp.json` describes the separate FORGE MCP server; `.github/copilot-instructions.md` gives agents another entry point.
+
+The FORGE CLI/MCP server is installed separately by design. Follow [FORGE setup for ABEmail](docs/engineering/forge-setup.md), then run:
+
+```bash
+forge doctor
+forge validate --strict
+forge prepare --task "Describe the next verified ABEmail task"
+forge plan --task "Describe the next verified ABEmail task"
+forge run start --task "Describe the next verified ABEmail task"
+forge run status
+```
+
+Project-specific status, risks, and next work are stored in `.forge/state.md`, `.forge/context/project.yaml`, and `.forge/context/handover.md`. Keep them aligned with the README, roadmap, decisions, and `.godtech/project.yml`.
+
+Built with gODtECH FORGE — Framework for Orchestrated Reasoning, Governance & Engineering.
+
+## Initial delivery milestones
 
 1. Product requirements and tenant/security architecture.
 2. Runnable application foundation and environment validation.

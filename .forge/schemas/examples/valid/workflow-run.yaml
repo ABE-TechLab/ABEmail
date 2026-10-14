@@ -1,0 +1,24 @@
+schemaVersion: 1
+id: 20260910T100000000Z-docs
+status: in-progress
+createdAt: 2026-09-10T10:00:00.000Z
+updatedAt: 2026-09-10T10:00:00.000Z
+task: Update README wording
+plan:
+  command: plan
+  task: Update README wording
+  taskKind: documentation
+  risk: low
+  workflow: lightweight-delivery
+  signals: []
+  capabilities:
+    - capability: documentation
+      reasons: [Required for documentation work.]
+  approvals: []
+  steps:
+    - id: inspect-context
+      stage: define
+      action: Confirm repository state and intended outcome.
+      capability: efficiency
+approvals: []
+completedSteps: []
