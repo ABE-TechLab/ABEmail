@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import PilotSetupButton from "@/components/pilot-setup-button";
@@ -8,6 +8,8 @@ import SignOutButton from "@/components/auth/sign-out-button";
 import WorkspaceSidebar, { type MailboxView } from "@/components/workspace-sidebar";
 import styles from "./live-mailbox.module.css";
 import workspaceStyles from "./workspace-home.module.css";
+
+const COMPACT_MESSAGE_LIST_KEY = "abemail:compact-message-list";
 
 type Mailbox = { id: string; address: string; display_name: string | null };
 type EmailMessage = {
@@ -70,7 +72,16 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   const { organizationId, organizationName, mailboxes, messages, allowPilotSetup, messagesError, activeView = "Inbox" } = props;
   const router = useRouter();
   const [query, setQuery] = useState("");
+  const [compactMessageList, setCompactMessageList] = useState(false);
   const [mailboxId, setMailboxId] = useState(mailboxes[0]?.id ?? "");
+
+  useEffect(() => {
+    try {
+      setCompactMessageList(window.localStorage.getItem(COMPACT_MESSAGE_LIST_KEY) === "true");
+    } catch {
+      // Fall back to standard density if browser storage is unavailable.
+    }
+  }, []);
   const [selectedMessageId, setSelectedMessageId] = useState("");
   const [composeOpen, setComposeOpen] = useState(false);
   const [to, setTo] = useState("");
@@ -145,7 +156,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   }
 
   return (
-    <div className={"mail-app " + workspaceStyles.app}>
+    <div className={"mail-app " + workspaceStyles.app + (compactMessageList ? " " + workspaceStyles.compactList : "")}>
       <WorkspaceSidebar
         activeView={activeView}
         mailboxBaseHref={"/dashboard/" + organizationId + "/mail"}

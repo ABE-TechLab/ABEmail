@@ -474,62 +474,59 @@
 }
 
 
-/* Compact live mailbox proportions for the authenticated workspace. */
+/* Keep the live message reader prominent without making the list column dominate. */
+.app :global(.mail-content-layout) {
+  grid-template-columns: minmax(285px, 34%) minmax(0, 1fr);
+}
+
+/* Compact mailbox navigation slightly, independent of message-list density. */
 .app :global(.mail-nav) {
   gap: 2px;
 }
 .app :global(.mail-nav-item) {
-  min-height: 31px;
-  gap: 8px;
-  padding: 6px 9px;
+  min-height: 33px;
+  gap: 9px;
+  padding: 7px 9px;
   border-radius: 6px;
-  font-size: 12px;
 }
 .app :global(.mail-nav-icon) {
   width: 16px;
   font-size: 14px;
 }
-.app :global(.mail-compose-button) {
-  height: 39px;
-  margin-bottom: 23px;
-  border-radius: 8px;
-}
-.app :global(.mail-content-layout) {
-  grid-template-columns: minmax(285px, 34%) minmax(0, 1fr);
-}
-.app :global(.mail-list-heading) {
-  min-height: 91px;
+
+.compactList :global(.mail-list-heading) {
+  min-height: 84px;
   gap: 8px;
-  padding: 15px 16px 12px;
+  padding: 13px 15px 10px;
 }
-.app :global(.mail-list-heading h1) {
-  font-size: 22px;
-  letter-spacing: -.7px;
+.compactList :global(.mail-list-heading h1) {
+  font-size: 21px;
+  letter-spacing: -.65px;
 }
-.app :global(.mail-overline) {
-  margin-bottom: 5px;
+.compactList :global(.mail-overline) {
+  margin-bottom: 4px;
 }
-.app :global(.mail-list-toolbar) {
-  min-height: 36px;
+.compactList :global(.mail-list-toolbar) {
+  min-height: 34px;
   gap: 8px;
-  padding: 0 14px;
+  padding: 0 13px;
 }
-.app :global(.mail-message-row) {
-  min-height: 78px;
+.compactList :global(.mail-message-row) {
+  min-height: 72px;
 }
-.app :global(.mail-message-open) {
+.compactList :global(.mail-message-open) {
   gap: 8px;
-  padding: 11px 3px 10px 14px;
+  padding: 9px 3px 8px 12px;
 }
-.app :global(.mail-message-copy) {
-  gap: 4px;
+.compactList :global(.mail-message-copy) {
+  gap: 3px;
 }
-.app :global(.mail-message-row-top) {
+.compactList :global(.mail-message-row-top) {
   gap: 6px;
 }
-.app :global(.mail-avatar) {
-  width: 29px;
-  height: 29px;
+.compactList :global(.mail-avatar) {
+  width: 28px;
+  height: 28px;
   border-radius: 8px;
 }
 
@@ -539,61 +536,7 @@
   }
 }
 @media (max-width: 850px) {
-  .app :global(.mail-sidebar) {
-    width: 66px;
-    min-width: 66px;
-    flex-basis: 66px;
-    align-items: center;
-    padding: 17px 8px 10px;
-  }
-  .app :global(.mail-brand) {
-    margin: 0 0 25px;
-  }
-  .app :global(.mail-compose-button) {
-    width: 42px;
-    height: 42px;
-    margin: 0 0 24px;
-    padding: 0;
-    border-radius: 10px;
-  }
-  .app :global(.mail-nav-section) {
-    width: 100%;
-    margin-bottom: 22px;
-  }
-  .app :global(.mail-nav-item) {
-    min-height: 36px;
-    justify-content: center;
-    padding: 7px 0;
-  }
-  .app :global(.mail-nav-icon) {
-    width: 18px;
-    font-size: 16px;
-  }
-  .app :global(.mail-sidebar-bottom) {
-    width: 100%;
-  }
-  .app :global(.mail-workspace-switcher) {
-    justify-content: center;
-    padding: 7px 0;
-  }
   .app :global(.mail-content-layout) {
     grid-template-columns: minmax(260px, 38%) minmax(0, 1fr);
-  }
-}
-@media (max-width: 620px) {
-  .app :global(.mail-sidebar) {
-    width: 54px;
-    min-width: 54px;
-    flex-basis: 54px;
-    padding-right: 5px;
-    padding-left: 5px;
-  }
-  .app :global(.mail-brand-mark) {
-    width: 29px;
-    height: 29px;
-  }
-  .app :global(.mail-compose-button) {
-    width: 38px;
-    height: 38px;
   }
 }

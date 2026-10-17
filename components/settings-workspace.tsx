@@ -5,7 +5,7 @@ import { useAppearanceMode, type AppearanceMode } from "@/components/appearance-
 import WorkspaceSidebar from "@/components/workspace-sidebar";
 import { useDesignTheme } from "@/components/design-theme-provider";
 import { DESIGN_THEMES, type DesignThemeId } from "@/lib/design-system";
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 
 export type SettingsSection = "general" | "appearance" | "mail" | "notifications" | "team" | "domains" | "mailboxes" | "security";
 
@@ -33,6 +33,8 @@ const sectionInfo: Record<SettingsSection, { title: string; description: string 
 
 type LocalMember = { name: string; email: string; role: string; status: "Active" | "Invitation pending" };
 
+const COMPACT_MESSAGE_LIST_KEY = "abemail:compact-message-list";
+
 const APPEARANCE_MODES: { id: AppearanceMode; label: string; glyph: string }[] = [
   { id: "light", label: "Light", glyph: "☼" },
   { id: "dark", label: "Dark", glyph: "☾" },
@@ -57,6 +59,7 @@ export default function SettingsWorkspace({ section }: { section: SettingsSectio
   const [language, setLanguage] = useState("en");
   const { mode, setMode } = useAppearanceMode();
   const { theme: activeDesignTheme, setTheme: setDesignTheme } = useDesignTheme();
+  const [compactMessageList, setCompactMessageList] = useState(false);
   const [font, setFont] = useState("sans");
   const [signature, setSignature] = useState("Best regards,\nAyo");
   const [replyStyle, setReplyStyle] = useState("reply");
@@ -73,6 +76,24 @@ export default function SettingsWorkspace({ section }: { section: SettingsSectio
   const [toast, setToast] = useState("");
 
   const info = sectionInfo[section];
+
+  useEffect(() => {
+    try {
+      setCompactMessageList(window.localStorage.getItem(COMPACT_MESSAGE_LIST_KEY) === "true");
+    } catch {
+      // If browser storage is unavailable, keep the in-session preference.
+    }
+  }, []);
+
+  function updateCompactMessageList(next: boolean) {
+    setCompactMessageList(next);
+    try {
+      window.localStorage.setItem(COMPACT_MESSAGE_LIST_KEY, String(next));
+    } catch {
+      // The setting remains usable until the page is closed.
+    }
+    notify(next ? "Compact message list enabled." : "Compact message list disabled.");
+  }
 
   function notify(message: string) {
     setToast(message);
@@ -151,8 +172,8 @@ export default function SettingsWorkspace({ section }: { section: SettingsSectio
                 <div className="settings-divider" />
                 <div className="settings-choice-group"><p className="settings-subheading">Design system palette</p><p className="settings-muted">Choose one of the shared ABE TechLab Design System palettes. Your choice is saved in this browser.</p><label className="settings-field settings-palette-field"><span>Color palette</span><select className="settings-palette-select" value={activeDesignTheme} onChange={(event) => { const nextTheme = event.target.value as DesignThemeId; setDesignTheme(nextTheme); notify(`${DESIGN_THEMES.find((option) => option.value === nextTheme)?.name ?? "Selected"} palette applied.`); }}>{DESIGN_THEMES.map((option) => <option key={option.value} value={option.value}>{option.name}</option>)}</select></label></div>
                 <div className="settings-divider" />
-                <SettingRow title="Compact message list" description="Show more message rows in the mailbox list."><Toggle checked={false} onChange={() => notify("Compact density preview is not wired to the mailbox yet.")} label="Compact message list" /></SettingRow>
-                <div className="settings-form-footer"><span>Appearance mode and palette are stored in browser cookies.</span><button className="mail-primary-action" type="submit">Save preferences</button></div>
+                <SettingRow title="Compact message list" description="Show more message rows in the mailbox list."><Toggle checked={compactMessageList} onChange={updateCompactMessageList} label="Compact message list" /></SettingRow>
+                <div className="settings-form-footer"><span>Appearance and compact-list preferences are stored in this browser.</span><button className="mail-primary-action" type="submit">Save preferences</button></div>
               </form>}
 
               {section === "mail" && <form onSubmit={savePreview}>
