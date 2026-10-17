@@ -1,15 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import PilotSetupButton from "@/components/pilot-setup-button";
 import SignOutButton from "@/components/auth/sign-out-button";
-import WorkspaceSidebar, { type MailboxView } from "@/components/workspace-sidebar";
+import WorkspaceSidebar, { type MailboxView, type WorkspaceChoice } from "@/components/workspace-sidebar";
 import styles from "./live-mailbox.module.css";
 import workspaceStyles from "./workspace-home.module.css";
 
 const COMPACT_MESSAGE_LIST_KEY = "abemail:compact-message-list";
+const WORKSPACE_SETTINGS_KEY = "abemail:workspace-settings:";
+type MailPreferences = { timezone: string; language: string; font: string; signature: string; replyStyle: string };
+const DEFAULT_MAIL_PREFERENCES: MailPreferences = { timezone: "Africa/Lagos", language: "en", font: "sans", signature: "", replyStyle: "reply" };
 
 type Mailbox = { id: string; address: string; display_name: string | null };
 type EmailMessage = {
@@ -34,6 +37,7 @@ type LiveMailboxProps = {
   allowPilotSetup: boolean;
   messagesError: boolean;
   activeView?: "Inbox" | "Sent";
+  workspaces: WorkspaceChoice[];
 };
 
 function plainText(message: EmailMessage): string {
@@ -53,9 +57,10 @@ function plainText(message: EmailMessage): string {
     .trim();
 }
 
-function messageDate(message: EmailMessage): string {
+function messageDate(message: EmailMessage, timezone = "Africa/Lagos", language = "en"): string {
   const value = message.received_at ?? message.sent_at ?? message.created_at;
-  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+  const locale = language === "fr" ? "fr-FR" : language === "pt" ? "pt-PT" : "en-GB";
+  return new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short", timeZone: timezone || undefined }).format(new Date(value));
 }
 
 function initials(value: string): string {
@@ -69,19 +74,37 @@ function messagePreview(message: EmailMessage): string {
 }
 
 export default function LiveMailbox(props: LiveMailboxProps) {
-  const { organizationId, organizationName, mailboxes, messages, allowPilotSetup, messagesError, activeView = "Inbox" } = props;
+  const { organizationId, organizationName, mailboxes, messages, allowPilotSetup, messagesError, activeView = "Inbox", workspaces } = props;
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [compactMessageList, setCompactMessageList] = useState(false);
+  const [mailPreferences, setMailPreferences] = useState<MailPreferences>(DEFAULT_MAIL_PREFERENCES);
   const [mailboxId, setMailboxId] = useState(mailboxes[0]?.id ?? "");
+  const composeBodyRef = useRef<HTMLTextAreaElement>(null);
+  const composeCursorPosition = useRef<number | null>(null);
 
   useEffect(() => {
     try {
       setCompactMessageList(window.localStorage.getItem(COMPACT_MESSAGE_LIST_KEY) === "true");
+      const stored = window.localStorage.getItem(WORKSPACE_SETTINGS_KEY + organizationId);
+      if (stored) setMailPreferences({ ...DEFAULT_MAIL_PREFERENCES, ...(JSON.parse(stored) as Partial<MailPreferences>) });
     } catch {
-      // Fall back to standard density if browser storage is unavailable.
+      // Preferences remain at their defaults when browser storage is unavailable.
     }
-  }, []);
+  }, [organizationId]);
+
+  useEffect(() => {
+    if (!composeOpen || composeCursorPosition.current === null) return;
+    const position = composeCursorPosition.current;
+    const frame = window.requestAnimationFrame(() => {
+      const textarea = composeBodyRef.current;
+      if (!textarea) return;
+      textarea.focus();
+      textarea.setSelectionRange(position, position);
+      composeCursorPosition.current = null;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [composeOpen, body]);
   const [selectedMessageId, setSelectedMessageId] = useState("");
   const [composeOpen, setComposeOpen] = useState(false);
   const [to, setTo] = useState("");
@@ -109,6 +132,16 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   }, [messages, mailboxId, activeView, query]);
   const selectedMessage = visibleMessages.find((message) => message.id === selectedMessageId) ?? visibleMessages[0];
 
+  function openCompose() {
+    setComposeOpen(true);
+    setNotice("");
+    setTo("");
+    setSubject("");
+    setBody("");
+    setRequestKey(null);
+    composeCursorPosition.current = 0;
+  }
+
   async function submitMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy) return;
@@ -117,10 +150,12 @@ export default function LiveMailbox(props: LiveMailboxProps) {
     const stableRequestKey = requestKey ?? crypto.randomUUID();
     setRequestKey(stableRequestKey);
     try {
+      const signature = mailPreferences.signature.trim();
+      const finalBody = body.trimEnd() + (signature && !body.trimEnd().endsWith(signature) ? "\n\n" + signature : "");
       const response = await fetch("/api/mail/send", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Idempotency-Key": stableRequestKey },
-        body: JSON.stringify({ organizationId, mailboxId, to: to.trim(), subject: subject.trim(), text: body }),
+        body: JSON.stringify({ organizationId, mailboxId, to: to.trim(), subject: subject.trim(), text: finalBody }),
       });
       const result = await response.json() as { ok?: boolean; error?: string; note?: string };
       if (!response.ok || !result.ok) {
@@ -149,9 +184,12 @@ export default function LiveMailbox(props: LiveMailboxProps) {
     setTo(message.from_address);
     setSubject(/^re:/i.test(message.subject) ? message.subject : "Re: " + message.subject);
     const quoted = plainText(message).split("\n").map((line) => "> " + line).join("\n");
-    setBody("\n\n—\nOn " + messageDate(message) + ", " + message.from_address + " wrote:\n" + quoted);
+    const quoteBlock = "—\nOn " + messageDate(message, mailPreferences.timezone, mailPreferences.language) + ", " + message.from_address + " wrote:\n" + quoted;
+    const initialBody = mailPreferences.replyStyle === "bottom" ? quoteBlock + "\n\n" : "\n\n" + quoteBlock;
     setRequestKey(null);
     setNotice("");
+    setBody(initialBody);
+    composeCursorPosition.current = mailPreferences.replyStyle === "bottom" ? initialBody.length : 0;
     setComposeOpen(true);
   }
 
@@ -164,11 +202,13 @@ export default function LiveMailbox(props: LiveMailboxProps) {
         enabledMailboxViews={["Inbox", "Sent"]}
         disabledMailFeatures={!mailboxes.length}
         disableContacts
-        onCompose={() => { setComposeOpen(true); setNotice(""); }}
+        onCompose={openCompose}
         homeHref={"/dashboard/" + organizationId + "/mail"}
+        workspaceBaseHref={"/dashboard/" + organizationId}
         workspaceName={organizationName}
         workspaceDescription="Live Ottawa pilot"
-        workspaceHref="/dashboard"
+        workspaces={workspaces}
+        activeWorkspaceId={organizationId}
       />
       <main className="mail-main">
         <header className={"mail-topbar " + workspaceStyles.topbar}>
@@ -188,8 +228,8 @@ export default function LiveMailbox(props: LiveMailboxProps) {
           </label>
           <div className={"mail-topbar-right " + workspaceStyles.topbarActions}>
             <span className={styles.livePill}><span /> Live pilot</span>
-            <Link href="/settings" className={workspaceStyles.topbarLink}>Settings</Link>
-            <Link href="/settings/account" className={workspaceStyles.topbarLink}>Account</Link>
+            <Link href={"/dashboard/" + organizationId + "/settings"} className={workspaceStyles.topbarLink}>Settings</Link>
+            <Link href={"/dashboard/" + organizationId + "/settings/security"} className={workspaceStyles.topbarLink}>Account</Link>
             <SignOutButton className="auth-signout-control" />
           </div>
         </header>
@@ -241,7 +281,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
                       <span className="mail-message-copy">
                         <span className="mail-message-row-top">
                           <strong>{message.direction === "inbound" ? message.from_address : message.to_addresses.join(", ")}</strong>
-                          <time>{messageDate(message)}</time>
+                          <time>{messageDate(message, mailPreferences.timezone, mailPreferences.language)}</time>
                         </span>
                         <span className="mail-message-subject">{message.subject || "(no subject)"}</span>
                         <span className="mail-message-preview">{messagePreview(message)}</span>
@@ -255,7 +295,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
                     <span>{activeView === "Inbox" ? "▤" : "↗"}</span>
                     <strong>{query ? "No matching messages" : "No messages in " + activeView}</strong>
                     <p>{query ? "Try another search term." : activeView === "Inbox" ? "New incoming messages will appear here." : "Messages you send from this mailbox will appear here."}</p>
-                    {activeView === "Inbox" && !query && <button type="button" onClick={() => { setComposeOpen(true); setNotice(""); }}>Compose a message</button>}
+                    {activeView === "Inbox" && !query && <button type="button" onClick={openCompose}>Compose a message</button>}
                   </div>
                 )}
               </div>
@@ -278,7 +318,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
                         <strong>{selectedMessage.from_address}</strong>
                         <span>To {selectedMessage.to_addresses.join(", ")}</span>
                       </div>
-                      <time>{messageDate(selectedMessage)}</time>
+                      <time>{messageDate(selectedMessage, mailPreferences.timezone, mailPreferences.language)}</time>
                     </div>
                     <div className="mail-message-body">
                       {plainText(selectedMessage).split("\n").map((line, index) => (
@@ -316,7 +356,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
                 <label className="mail-compose-field"><span>Subject</span><input required maxLength={998} value={subject} onChange={(event) => { setSubject(event.target.value); setRequestKey(null); }} placeholder="Add a subject" /></label>
                 <label className="mail-compose-body-label">
                   <span className="mail-sr-only">Message body</span>
-                  <textarea required maxLength={80000} rows={8} value={body} onChange={(event) => { setBody(event.target.value); setRequestKey(null); }} placeholder="Write your message…" />
+                  <textarea ref={composeBodyRef} required maxLength={80000} rows={8} value={body} style={{ fontFamily: mailPreferences.font === "serif" ? "Georgia, serif" : mailPreferences.font === "mono" ? "ui-monospace, SFMono-Regular, Consolas, monospace" : "inherit" }} onChange={(event) => { setBody(event.target.value); setRequestKey(null); composeCursorPosition.current = null; }} placeholder="Write your message…" />
                 </label>
                 <p className="mail-compose-warning"><span>i</span> Plain-text pilot sending · One recipient · 25 messages per workspace per 24 hours</p>
                 <footer className="mail-compose-footer">
