@@ -294,7 +294,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
   ].join("\n");
 
   try {
-    await sendResendEmail({
+    const sent = await sendResendEmail({
       apiKey,
       from: (mailbox.display_name || auth.organization.name) + " <" + mailbox.address + ">",
       to: email,
@@ -305,14 +305,19 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     const { error: updateError } = await auth.admin
       .from("organization_invitations")
-      .update({ delivery_status: "sent", sent_at: new Date().toISOString(), delivery_error_code: null })
+      .update({
+        provider_message_id: sent.id,
+        delivery_status: "sent",
+        sent_at: new Date().toISOString(),
+        delivery_error_code: null,
+      })
       .eq("id", invitation.id)
       .eq("organization_id", organizationId);
     if (updateError) return json({ ok: true, invitation: { id: invitation.id, email, role, expiresAt: invitation.expires_at, mailboxIds: effectiveMailboxIds, mailboxAddresses: chosenMailboxes.map((mailbox) => mailbox.address) }, inviteUrl, emailStatus: "sent", note: "The invite email was accepted by Resend, but the send state could not be saved. Keep this link available until the invitation appears as Sent." }, 201);
 
     return json({
       ok: true,
-      invitation: { id: invitation.id, email, role, expiresAt: invitation.expires_at, mailboxIds },
+      invitation: { id: invitation.id, email, role, expiresAt: invitation.expires_at, mailboxIds: effectiveMailboxIds, mailboxAddresses: chosenMailboxes.map((mailbox) => mailbox.address) },
       emailStatus: "sent",
       note: "Invitation email accepted by Resend. The recipient still needs to accept it and verify their invited email.",
     }, 201);
