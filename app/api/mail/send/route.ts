@@ -141,7 +141,7 @@ export async function POST(request: NextRequest) {
   if (providerConnection && !usesWorkspaceKey) {
     return json({ error: "The workspace Resend connection needs attention. Reconnect it in Settings before sending." }, 503);
   }
-  const sendApiKey = usesWorkspaceKey
+  const sendApiKey = usesWorkspaceKey && providerConnection
     ? (() => { try { return decryptProviderSecret(providerConnection.api_key_ciphertext); } catch { return null; } })()
     : organization.slug === "ottawa-snow-match" ? getPilotSendApiKey() : null;
   if (!sendApiKey) return json({ error: "Connect a Resend API key in workspace Settings before sending." }, 503);
@@ -179,7 +179,7 @@ export async function POST(request: NextRequest) {
       .eq("direction", "outbound")
       .gte("created_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
 
-    if (quotaError) return json({ error: "Pilot sending limits could not be checked." }, 503);
+    if (quotaError) return json({ error: "Workspace sending limits could not be checked." }, 503);
     const configuredDailyLimit = Number(process.env.ABEMAIL_DEFAULT_DAILY_SEND_LIMIT ?? "250");
     const dailyLimit = Number.isSafeInteger(configuredDailyLimit) && configuredDailyLimit > 0 ? configuredDailyLimit : 250;
     if ((count ?? 0) >= dailyLimit) return json({ error: "This workspace has reached its daily sending limit of " + dailyLimit + " messages. Contact the workspace administrator to review its limit." }, 429);
