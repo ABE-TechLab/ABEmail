@@ -6,8 +6,12 @@
 - Vercel Production, Preview, and Development have the public Supabase URL/key, but currently share the same Supabase project.
 - Email/password auth and organization/invitation code exist, and tenant isolation is tested in CI.
 - Hosted Auth URL and confirmation/reset email are not verified end-to-end. Custom SMTP is not configured.
-- Resend is planned but not configured. No domain is verified, mailbox provisioned, or live email sending/receiving proven.
+- The operator reports Resend domain verification completed for the Ottawa Snow Match subdomain `ottawasnowmatch.waste2light.com`. Commercial ABEmail has not yet been configured to use that domain; no commercial-app mailbox has been provisioned, and live send/receive is not proven.
 - `/demo` shows static sample mail.
+
+## Controlled Ottawa Snow Match pilot
+
+Ottawa Snow Match is the first proposed test organization for the commercial ABEmail platform, with planned sender `info@ottawasnowmatch.waste2light.com`. Resend's dashboard reports the domain verified after its provider-issued DKIM TXT, sending CNAME, and receiving MX records were added under the existing `waste2light.com` zone in Cloudflare. The verification status is operator-reported and does not prove that the commercial application can send or receive mail. The root `waste2light.com` MX records must remain unchanged. See [Ottawa Snow Match Controlled Mail Pilot](ottawa-snow-match-pilot.md) for the implementation sequence and acceptance criteria.
 
 ## Three separate domain decisions
 1. **Application domain:** `abemail.vercel.app` is sufficient for internal application testing; a branded domain is optional until public launch.
