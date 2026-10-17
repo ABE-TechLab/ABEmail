@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useAppearanceMode, type AppearanceMode } from "@/components/appearance-provider";
 import WorkspaceSidebar from "@/components/workspace-sidebar";
+import WorkspaceSettingsPanel, { type WorkspaceSettingsContext } from "@/components/workspace-settings-panel";
 import { useDesignTheme } from "@/components/design-theme-provider";
 import { DESIGN_THEMES, type DesignThemeId } from "@/lib/design-system";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
@@ -53,7 +54,7 @@ function Field({ label, children, hint }: { label: string; children: ReactNode; 
   return <label className="settings-field"><span>{label}</span>{children}{hint && <small>{hint}</small>}</label>;
 }
 
-export default function SettingsWorkspace({ section }: { section: SettingsSection }) {
+function LegacySettingsWorkspace({ section }: { section: SettingsSection }) {
   const [displayName, setDisplayName] = useState("Acme Studio");
   const [timezone, setTimezone] = useState("Africa/Lagos");
   const [language, setLanguage] = useState("en");
@@ -223,4 +224,18 @@ export default function SettingsWorkspace({ section }: { section: SettingsSectio
       </section>
     </main>
   );
+}
+
+
+export default function SettingsWorkspace({
+  section,
+  workspace,
+}: {
+  section: SettingsSection;
+  workspace?: WorkspaceSettingsContext;
+}) {
+  if (workspace) {
+    return <WorkspaceSettingsPanel {...workspace} section={section} />;
+  }
+  return <LegacySettingsWorkspace section={section} />;
 }
