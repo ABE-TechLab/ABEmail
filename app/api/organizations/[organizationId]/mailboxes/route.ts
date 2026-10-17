@@ -2,7 +2,6 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getPilotReceiveApiKey, getPilotSendApiKey } from "@/lib/email/resend-pilot";
-import { decryptProviderSecret, ResendProviderError } from "@/lib/email/resend-provider";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
