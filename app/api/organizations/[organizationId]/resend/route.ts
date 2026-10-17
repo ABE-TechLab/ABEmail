@@ -148,7 +148,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
   try {
     await validateResendApiKey(apiKey);
-    const publicOrigin = process.env.ABEMAIL_PUBLIC_APP_URL?.trim() || LEGACY_PUBLIC_URL;
+    const publicOrigin = process.env.ABEMAIL_PUBLIC_APP_URL?.trim() || new URL(request.url).origin;
     let webhookOrigin: string;
     try {
       webhookOrigin = new URL(publicOrigin).origin;
