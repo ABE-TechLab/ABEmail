@@ -147,18 +147,26 @@ export async function POST(request: NextRequest, context: RouteContext) {
     : [];
   if (email.length > 254 || !EMAIL_PATTERN.test(email)) return json({ error: "Enter a valid email address." }, 400);
   if (role !== "admin" && role !== "member") return json({ error: "Choose either the Admin or Member role." }, 400);
-  if (!mailboxIds.length || mailboxIds.length > 50 || mailboxIds.some((id) => typeof id !== "string" || !UUID_PATTERN.test(id)) || new Set(mailboxIds).size !== mailboxIds.length) {
-    return json({ error: "Choose at least one active mailbox for this teammate." }, 400);
+  if (mailboxIds.length > 50 || mailboxIds.some((id) => typeof id !== "string" || !UUID_PATTERN.test(id)) || new Set(mailboxIds).size !== mailboxIds.length) {
+    return json({ error: "Choose valid mailboxes from this workspace." }, 400);
+  }
+  if (role === "member" && mailboxIds.length === 0) {
+    return json({ error: "Choose at least one active mailbox for this member." }, 400);
   }
 
-  const { data: chosenMailboxes, error: chosenMailboxError } = await auth.admin
-    .from("mailboxes")
-    .select("id, address, status")
-    .eq("organization_id", organizationId)
-    .eq("status", "active")
-    .in("id", mailboxIds);
+  // Admin membership is workspace-wide by design. Explicit mailbox assignment
+  // is only meaningful for a regular member and never limits an admin.
+  const effectiveMailboxIds: string[] = role === "admin" ? [] : mailboxIds;
+  const { data: chosenMailboxes, error: chosenMailboxError } = effectiveMailboxIds.length
+    ? await auth.admin
+        .from("mailboxes")
+        .select("id, address, status")
+        .eq("organization_id", organizationId)
+        .eq("status", "active")
+        .in("id", effectiveMailboxIds)
+    : { data: [], error: null };
   if (chosenMailboxError) return json({ error: "Mailbox access could not be checked." }, 503);
-  if ((chosenMailboxes ?? []).length !== mailboxIds.length) {
+  if ((chosenMailboxes ?? []).length !== effectiveMailboxIds.length) {
     return json({ error: "One or more selected mailboxes are no longer active in this workspace. Refresh and try again." }, 409);
   }
   if (email === (auth.user.email ?? "").toLowerCase()) return json({ error: "You are already signed in to this workspace." }, 409);
@@ -247,7 +255,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
   const { error: grantError } = await auth.admin
     .from("organization_invitation_mailboxes")
-    .insert(mailboxIds.map((mailboxId) => ({
+    .insert(effectiveMailboxIds.map((mailboxId) => ({
       organization_id: organizationId,
       invitation_id: invitation.id,
       mailbox_id: mailboxId,
@@ -277,7 +285,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
     "Accept your invitation using this secure link:",
     inviteUrl,
     "",
-    "This invitation gives access to: " + chosenMailboxes.map((mailbox) => mailbox.address).join(", "),
+    role === "admin"
+      ? "As a workspace administrator, you will be able to manage all mailboxes in the workspace."
+      : "This invitation gives access to: " + chosenMailboxes.map((mailbox) => mailbox.address).join(", "),
     "",
     "This invitation expires on " + new Date(invitation.expires_at).toLocaleString("en-GB", { timeZone: "UTC", timeZoneName: "short" }) + ".",
     "If you weren't expecting this invitation, you can ignore this email.",
@@ -298,7 +308,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       .update({ delivery_status: "sent", sent_at: new Date().toISOString(), delivery_error_code: null })
       .eq("id", invitation.id)
       .eq("organization_id", organizationId);
-    if (updateError) return json({ ok: true, invitation: { id: invitation.id, email, role, expiresAt: invitation.expires_at, mailboxIds, mailboxAddresses: chosenMailboxes.map((mailbox) => mailbox.address) }, inviteUrl, emailStatus: "sent", note: "The invite email was accepted by Resend, but the send state could not be saved. Keep this link available until the invitation appears as Sent." }, 201);
+    if (updateError) return json({ ok: true, invitation: { id: invitation.id, email, role, expiresAt: invitation.expires_at, mailboxIds: effectiveMailboxIds, mailboxAddresses: chosenMailboxes.map((mailbox) => mailbox.address) }, inviteUrl, emailStatus: "sent", note: "The invite email was accepted by Resend, but the send state could not be saved. Keep this link available until the invitation appears as Sent." }, 201);
 
     return json({
       ok: true,
