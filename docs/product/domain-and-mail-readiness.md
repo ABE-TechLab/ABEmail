@@ -6,8 +6,13 @@
 - Vercel Production, Preview, and Development have the public Supabase URL/key, but currently share the same Supabase project.
 - Email/password auth and organization/invitation code exist, and tenant isolation is tested in CI.
 - Hosted Auth URL and confirmation/reset email are not verified end-to-end. Custom SMTP is not configured.
-- Resend is planned but not configured. No domain is verified, mailbox provisioned, or live email sending/receiving proven.
+- The operator reports Resend domain verification completed for the Ottawa Snow Match subdomain `ottawasnowmatch.waste2light.com`. Commercial ABEmail has not yet been configured to use that domain; no commercial-app mailbox has been provisioned, and live send/receive is not proven.
 - `/demo` shows static sample mail.
+- The transport branch adds a text-only sender, signed Resend inbound webhook, tenant-filtered message storage, and an Ottawa pilot inbox. This is code under review, not a live release: the mail migration, Production-only keys, webhook registration, and end-to-end send/receive test remain outstanding.
+
+## Controlled Ottawa Snow Match pilot
+
+Ottawa Snow Match is the first proposed test organization for the commercial ABEmail platform, with planned sender `info@ottawasnowmatch.waste2light.com`. Resend's dashboard reports the domain verified after its provider-issued DKIM TXT, sending CNAME, and receiving MX records were added under the existing `waste2light.com` zone in Cloudflare. The verification status is operator-reported and does not prove that the commercial application can send or receive mail. The root `waste2light.com` MX records must remain unchanged. See [Ottawa Snow Match Controlled Mail Pilot](ottawa-snow-match-pilot.md) for the implementation sequence and acceptance criteria.
 
 ## Three separate domain decisions
 1. **Application domain:** `abemail.vercel.app` is sufficient for internal application testing; a branded domain is optional until public launch.
@@ -37,9 +42,9 @@ Request current DNS values from the selected provider; do not guess or reuse Was
 ## Remaining implementation before live mail
 - [ ] Choose an ABE TechLab-owned sender domain and provider.
 - [ ] Configure hosted Supabase Auth redirects/custom SMTP and test live email.
-- [ ] Add authorized organization domain setup and server-side provider/DNS verification.
+- [x] Add pilot-only server-side Resend domain readiness checks and guarded organization/mailbox provisioning in the transport branch (release and live verification still pending).
 - [ ] Provision actual mailboxes only after provider verification.
-- [ ] Implement server-only send, signed inbound webhooks, idempotency, retries, delivery events, quotas, and abuse controls.
+- [x] Add pilot-only server sending, signed inbound webhook processing, idempotency, delivery status events, and a conservative send cap in the transport branch; verify under CI and release review.
 - [ ] Store messages/attachments privately with tenant-bound authorization.
 - [ ] Isolate Preview/Development from Production.
 - [ ] Test sending and receiving in an isolated tenant before external launch.

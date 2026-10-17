@@ -1,12 +1,12 @@
 project:
   state: active
   priority: high
-  current_focus: "Full FORGE orchestration is merged and validated; finish Auth email/domain and live-provider readiness"
-  next_step: "Verify hosted Supabase Auth redirects, configure custom SMTP for an approved sender domain, then implement live mail-provider workflows"
+  current_focus: "Implement tenant-scoped Resend transport with Ottawa Snow Match as the first controlled ABEmail pilot"
+  next_step: "Validate and release the Issue #21 pilot transport, apply its migration intentionally, add Production-only Resend/webhook settings, and complete send plus receive smoke tests; keep Auth SMTP separate"
   blockers:
-    - "No sender/customer domain has been selected and verified"
+    - "Ottawa Snow Match domain verification is reported complete in Resend, but application-side domain verification and live mail remain unproven"
     - "Custom Auth SMTP and real confirmation/reset delivery are not verified"
-    - "Live provider sending/receiving and mailbox provisioning are unfinished"
+    - "Pilot send/receive routes and mailbox setup are implemented in the Issue #21 branch but not live until migration, Production secrets, webhook registration, and end-to-end verification"
     - "Preview/Development currently share the Production Supabase project"
-  status_note: "Auth/organization/membership/invitation foundations and tenant-isolation CI exist. /demo is static sample mail; this is not a live mail service. Full FORGE integration merged through PR #17; strict framework validation and the application/tenant-isolation CI passed. Remaining work is live Auth email and mail-provider setup."
-  last_worked_on: "2026-10-14"
+  status_note: "Auth/organization/membership/invitation foundations and tenant-isolation CI exist. /demo is static sample mail; this is not a live mail service. Operator reports Resend verification for ottawasnowmatch.waste2light.com; pilot transport and setup are in the Issue #21 branch pending CI/review, Production configuration, migration, and verified live send/receive. Issue #21 tracks the tenant-scoped Resend pilot."
+  last_worked_on: "2026-10-17"
