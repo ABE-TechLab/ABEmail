@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import SignOutButton from "@/components/auth/sign-out-button";
 import WorkspaceSidebar, { type MailboxView, type WorkspaceChoice } from "@/components/workspace-sidebar";
 import styles from "./live-mailbox.module.css";
 import workspaceStyles from "./workspace-home.module.css";
@@ -31,6 +30,7 @@ type EmailMessage = {
 type LiveMailboxProps = {
   organizationId: string;
   organizationName: string;
+  userEmail: string;
   mailboxes: Mailbox[];
   messages: EmailMessage[];
   messagesError: boolean;
@@ -72,14 +72,34 @@ function messagePreview(message: EmailMessage): string {
 }
 
 export default function LiveMailbox(props: LiveMailboxProps) {
-  const { organizationId, organizationName, mailboxes, messages, messagesError, activeView = "Inbox", workspaces } = props;
+  const { organizationId, organizationName, userEmail, mailboxes, messages, messagesError, activeView = "Inbox", workspaces } = props;
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [compactMessageList, setCompactMessageList] = useState(false);
   const [mailPreferences, setMailPreferences] = useState<MailPreferences>(DEFAULT_MAIL_PREFERENCES);
+  const [emailConnectionState, setEmailConnectionState] = useState<"checking" | "connected" | "not_connected" | "unavailable">("checking");
   const [mailboxId, setMailboxId] = useState(mailboxes[0]?.id ?? "");
   const composeBodyRef = useRef<HTMLTextAreaElement>(null);
   const composeCursorPosition = useRef<number | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    const timer = window.setTimeout(() => {
+      void fetch("/api/organizations/" + organizationId + "/resend", { cache: "no-store" })
+        .then(async (response) => {
+          const result = await response.json() as { connected?: boolean; environmentManaged?: boolean };
+          if (!active) return;
+          setEmailConnectionState(response.ok && (result.connected || result.environmentManaged) ? "connected" : response.ok ? "not_connected" : "unavailable");
+        })
+        .catch(() => {
+          if (active) setEmailConnectionState("unavailable");
+        });
+    }, 0);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [organizationId]);
 
   useEffect(() => {
     let active = true;
@@ -265,10 +285,13 @@ export default function LiveMailbox(props: LiveMailboxProps) {
             {!query && <kbd>Search</kbd>}
           </label>
           <div className={"mail-topbar-right " + workspaceStyles.topbarActions}>
-            <span className={styles.livePill}><span /> Live email</span>
-            <Link href={"/dashboard/" + organizationId + "/settings"} className={workspaceStyles.topbarLink}>Settings</Link>
-            <Link href={"/dashboard/" + organizationId + "/settings/security"} className={workspaceStyles.topbarLink}>Account</Link>
-            <SignOutButton className="auth-signout-control" />
+            <span className={styles.livePill + (emailConnectionState === "connected" ? "" : " " + styles.livePillUnavailable)} role="status" aria-live="polite">
+              <span />
+              {emailConnectionState === "connected" ? "Live email" : emailConnectionState === "checking" ? "Checking email" : emailConnectionState === "not_connected" ? "Email not connected" : "Email status unavailable"}
+            </span>
+            <Link href={"/dashboard/" + organizationId + "/settings"} className="mail-topbar-profile-link" aria-label="Open profile and general settings" title={userEmail + " · General settings"}>
+              <span className="mail-user-avatar">{userEmail.split("@")[0].slice(0, 2).toUpperCase() || "U"}</span>
+            </Link>
           </div>
         </header>
         {notice && <p className={styles.notice} role="status">{notice}</p>}
