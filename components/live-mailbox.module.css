@@ -57,3 +57,6 @@
 .composeModal footer { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
 @media (max-width: 850px) { .header { align-items: flex-start; flex-direction: column; } .layout { grid-template-columns: minmax(0, 1fr); } .listPanel { max-height: 480px; overflow: auto; } .detailPanel { min-height: 300px; } }
 @media (max-width: 480px) { .page { padding: 16px 12px; } .headerActions { width: 100%; } .headerActions button { flex: 1; } .listHeader { align-items: flex-start; flex-direction: column; } .composeModal form { padding-inline: 14px; } .composeModal > header { padding-inline: 14px; } }
+
+.livePill { display: inline-flex; align-items: center; gap: 6px; padding: 6px 9px; border: 1px solid #dfe9de; border-radius: 999px; background: #f7fbf6; color: #3c7650; font-size: 9px; font-weight: 700; white-space: nowrap; }
+.livePill > span { display: inline-block; width: 6px; height: 6px; flex: 0 0 auto; border-radius: 50%; background: #398353; }

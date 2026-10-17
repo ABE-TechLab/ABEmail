@@ -139,7 +139,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
         workspaceHref="/dashboard"
       />
       <main className="mail-main">
-        <header className="mail-topbar">
+        <header className={"mail-topbar " + workspaceStyles.topbar}>
           <div className="mail-breadcrumb">
             <span>Workspace</span><span className="mail-breadcrumb-slash">/</span><strong>{activeView}</strong>
           </div>
@@ -154,8 +154,8 @@ export default function LiveMailbox(props: LiveMailboxProps) {
             {query && <button type="button" aria-label="Clear search" onClick={() => setQuery("")}>×</button>}
             {!query && <kbd>Search</kbd>}
           </label>
-          <div className="mail-topbar-right">
-            <span className="mail-development-pill"><span /> Live pilot</span>
+          <div className={"mail-topbar-right " + workspaceStyles.topbarActions}>
+            <span className={styles.livePill}><span /> Live pilot</span>
             <Link href="/settings" className={workspaceStyles.topbarLink}>Settings</Link>
             <Link href="/settings/account" className={workspaceStyles.topbarLink}>Account</Link>
             <SignOutButton className="auth-signout-control" />
