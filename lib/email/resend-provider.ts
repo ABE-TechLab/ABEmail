@@ -54,7 +54,7 @@ export class ResendProviderError extends Error {
 }
 
 function encryptionKey(): Buffer {
-  const value = process.env.ABEMAIL_CREDENTIALS_ENCRYPTION_KEY?.trim();
+  const value = process.env.ABEMAIL_CREDENTIALS_ENCRYPTION_KEY_V2?.trim();
   if (!value) throw new ResendProviderError("CREDENTIAL_ENCRYPTION_NOT_CONFIGURED");
   let key: Buffer;
   try {
