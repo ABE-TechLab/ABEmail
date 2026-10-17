@@ -1474,3 +1474,67 @@ html[data-appearance-mode="system"] {
     width: 100%;
   }
 }
+
+
+/* Workspace team and invitation actions. */
+.workspace-team-settings {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+.workspace-team-settings .settings-domain-form {
+  align-items: flex-end;
+}
+.workspace-team-settings .settings-domain-form .settings-field {
+  min-width: 0;
+  flex: 1 1 210px;
+}
+.workspace-team-settings .settings-domain-form > button {
+  flex: 0 0 auto;
+}
+.settings-invitation-link {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+}
+.settings-invitation-link > div {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  min-width: 0;
+}
+.settings-invitation-link strong {
+  color: var(--foreground, #17231b);
+  font-size: 12px;
+}
+.settings-invitation-link p {
+  margin: 0;
+  line-height: 1.6;
+}
+.settings-invitation-link input {
+  width: 100%;
+  min-width: 0;
+}
+.settings-invitation-link .mail-secondary-action {
+  margin-top: 2px;
+}
+.workspace-team-settings .settings-table td {
+  vertical-align: middle;
+}
+.workspace-team-settings .settings-table td time {
+  color: var(--muted-foreground, #66746a);
+  font-size: 10px;
+  white-space: nowrap;
+}
+@media (max-width: 760px) {
+  .workspace-team-settings .settings-domain-form {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .workspace-team-settings .settings-domain-form > button {
+    width: 100%;
+  }
+  .settings-invitation-link {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
