@@ -1916,3 +1916,456 @@ html[data-appearance-mode="system"] {
   font-size: 10px;
   line-height: 1.4;
 }
+
+/* Mail workspace: keep chrome fixed and make the inbox and reader independent scroll areas. */
+.mail-mobile-nav-toggle,
+.mail-sidebar-backdrop {
+  display: none;
+}
+.mail-appearance-toggle {
+  display: inline-grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--border, #e1e8df);
+  border-radius: 9px;
+  background: var(--card, #fff);
+  color: var(--foreground, #354337);
+  font-size: 19px;
+  line-height: 1;
+  transition: background .15s ease, border-color .15s ease, transform .15s ease;
+}
+.mail-appearance-toggle:hover {
+  border-color: var(--ring, #9cc5a0);
+  background: var(--muted, #f4f7f2);
+  transform: translateY(-1px);
+}
+html.dark .mail-appearance-toggle {
+  background: var(--card, #1b211d);
+  color: var(--foreground, #edf2ed);
+}
+.mail-app.mailbox-live-app {
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+.mail-app.mailbox-live-app > .mail-main {
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+.mail-app.mailbox-live-app > .mail-main > .mail-topbar {
+  position: relative;
+  z-index: 8;
+  height: 70px;
+  min-height: 70px;
+  max-height: 70px;
+  flex: 0 0 70px;
+}
+.mail-app.mailbox-live-app .mail-content-layout {
+  height: calc(100dvh - 70px);
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  grid-template-columns: minmax(280px, 38%) minmax(0, 1fr);
+}
+.mail-app.mailbox-live-app .mail-list-pane {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+.mail-app.mailbox-live-app .mail-message-list {
+  min-height: 0;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.mail-app.mailbox-live-app .mail-message-list > section {
+  margin: 12px;
+  flex: 0 0 auto;
+}
+.mail-app.mailbox-live-app .mail-detail-pane {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+.mail-app.mailbox-live-app .mail-message-detail {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+.mail-app.mailbox-live-app .mail-detail-actions {
+  position: relative;
+  z-index: 2;
+  flex: 0 0 52px;
+  background: var(--card, #fff);
+}
+.mail-app.mailbox-live-app .mail-detail-scroll {
+  min-height: 0;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.mail-app.mailbox-live-app > .mail-main > .setupCard {
+  min-height: 0;
+  flex: 1 1 auto;
+  margin: 20px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.mail-app.mailbox-live-app .mail-reader-heading {
+  padding-bottom: 17px;
+  border-bottom: 1px solid var(--border, #e8ede7);
+}
+.mail-app.mailbox-live-app .mail-reader-heading .mail-overline {
+  margin-bottom: 9px;
+}
+.mail-app.mailbox-live-app .mail-subject-line {
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  margin-bottom: 0;
+}
+.mail-app.mailbox-live-app .mail-subject-line h2 {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  flex: 1 1 280px;
+}
+.mail-app.mailbox-live-app .mail-direction-pill {
+  display: inline-flex;
+  min-height: 25px;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  padding: 4px 9px;
+  border: 1px solid var(--border, #dce8da);
+  border-radius: 999px;
+  background: var(--muted, #f3f7f1);
+  color: var(--muted-foreground, #607263);
+  font-size: 10px;
+  font-weight: 700;
+}
+.mail-app.mailbox-live-app .mail-reader-meta {
+  align-items: flex-start;
+  padding: 18px 0 20px;
+  margin-bottom: 0;
+  border-bottom: 1px solid var(--border, #e8ede7);
+}
+.mail-app.mailbox-live-app .mail-reader-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
+  font-size: 12px;
+}
+.mail-app.mailbox-live-app .mail-reader-meta .mail-sender-info {
+  gap: 6px;
+}
+.mail-app.mailbox-live-app .mail-reader-meta .mail-sender-info strong {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.mail-app.mailbox-live-app .mail-reader-meta .mail-sender-info span {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.45;
+}
+.mail-app.mailbox-live-app .mail-reader-meta .mail-sender-info small {
+  color: var(--muted-foreground, #859184);
+  font-size: 10px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.mail-app.mailbox-live-app .mail-reader-meta time {
+  max-width: 155px;
+  text-align: right;
+  white-space: normal;
+  line-height: 1.5;
+}
+.mail-app.mailbox-live-app .mail-message-body-card {
+  margin-top: 18px;
+  padding: clamp(16px, 2.3vw, 26px);
+  border: 1px solid var(--border, #e6ece4);
+  border-radius: 12px;
+  background: var(--card, #fff);
+  box-shadow: 0 3px 12px rgba(23, 44, 26, .035);
+}
+.mail-app.mailbox-live-app .mail-message-body {
+  max-width: 760px;
+  color: var(--foreground, #4a584b);
+  font-size: 13px;
+  line-height: 1.9;
+  overflow-wrap: anywhere;
+}
+.mail-app.mailbox-live-app .mail-message-body p {
+  margin: 0 0 14px;
+}
+.mail-app.mailbox-live-app .mail-message-body p:last-child {
+  margin-bottom: 0;
+}
+.mail-app.mailbox-live-app .mail-reader-reply {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 11px;
+  border: 1px solid var(--border, #dce8da);
+  border-radius: 7px;
+  background: var(--muted, #f7faf5);
+  color: var(--foreground, #376347);
+  font-size: 10px;
+  font-weight: 750;
+}
+.mail-app.mailbox-live-app .mail-reader-reply:hover {
+  background: var(--accent, #edf5eb);
+}
+.mail-app.mailbox-live-app .mail-mobile-back {
+  display: none;
+}
+
+@media (max-width: 850px) {
+  .mail-mobile-nav-toggle {
+    position: fixed;
+    z-index: 89;
+    top: 12px;
+    left: 12px;
+    display: inline-grid;
+    width: 36px;
+    height: 36px;
+    place-items: center;
+    border: 1px solid var(--border, #dfe7dd);
+    border-radius: 9px;
+    background: var(--card, #fff);
+    color: var(--foreground, #354337);
+    box-shadow: 0 4px 14px rgba(20, 40, 24, .08);
+    font-size: 19px;
+  }
+  .mail-sidebar-backdrop {
+    position: fixed;
+    z-index: 90;
+    inset: 0;
+    display: block;
+    padding: 0;
+    border: 0;
+    background: rgba(13, 23, 16, .42);
+    backdrop-filter: blur(2px);
+  }
+  .mail-app .mail-sidebar {
+    position: fixed;
+    z-index: 91;
+    inset: 0 auto 0 0;
+    width: min(292px, 86vw);
+    min-width: 0;
+    height: 100vh;
+    height: 100dvh;
+    max-height: 100dvh;
+    flex: 0 0 auto;
+    align-items: stretch;
+    padding: 18px 14px 12px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    transform: translateX(-110%);
+    transition: transform .2s ease;
+    box-shadow: none;
+  }
+  .mail-app .mail-sidebar.mobile-open {
+    transform: translateX(0);
+    box-shadow: 12px 0 36px rgba(12, 27, 16, .18);
+  }
+  .mail-app .mail-sidebar.mobile-open .mail-sidebar-brand-row {
+    width: 100%;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .mail-app .mail-sidebar.mobile-open .mail-brand > span:last-child,
+  .mail-app .mail-sidebar.mobile-open .mail-compose-label,
+  .mail-app .mail-sidebar.mobile-open .mail-nav-label,
+  .mail-app .mail-sidebar.mobile-open .mail-nav-item > span:not(.mail-nav-icon),
+  .mail-app .mail-sidebar.mobile-open .mail-sidebar-bottom .mail-workspace-copy,
+  .mail-app .mail-sidebar.mobile-open .mail-chevron {
+    display: inline;
+  }
+  .mail-app .mail-sidebar.mobile-open .mail-nav-label {
+    display: block;
+  }
+  .mail-app .mail-sidebar.mobile-open .mail-nav-section {
+    width: 100%;
+    margin-bottom: 23px;
+  }
+  .mail-app .mail-sidebar.mobile-open .mail-nav-item {
+    justify-content: flex-start;
+    gap: 11px;
+    min-height: 38px;
+    padding: 8px 10px;
+  }
+  .mail-app .mail-sidebar.mobile-open .mail-compose-button {
+    width: 100%;
+    margin: 0 0 25px;
+    padding: 0 12px;
+  }
+  .mail-app .mail-sidebar.mobile-open .mail-compose-label {
+    display: inline;
+  }
+  .mail-app .mail-sidebar.mobile-open .mail-nav-item > span:not(.mail-nav-icon) {
+    display: inline;
+  }
+  .mail-app .mail-sidebar.mobile-open .mail-sidebar-bottom {
+    width: 100%;
+    margin-top: auto;
+  }
+  .mail-app .mail-sidebar.mobile-open .mail-sidebar-bottom .mail-workspace-copy {
+    display: flex;
+  }
+  .mail-app .mail-sidebar.mobile-open .mail-workspace-switcher {
+    width: 100%;
+    justify-content: flex-start;
+    padding: 8px 4px;
+  }
+  .mail-app .mail-sidebar.mobile-open.is-collapsed .mail-brand > span:last-child,
+  .mail-app .mail-sidebar.mobile-open.is-collapsed .mail-compose-label,
+  .mail-app .mail-sidebar.mobile-open.is-collapsed .mail-nav-label,
+  .mail-app .mail-sidebar.mobile-open.is-collapsed .mail-nav-item > span:not(.mail-nav-icon),
+  .mail-app .mail-sidebar.mobile-open.is-collapsed .mail-sidebar-bottom .mail-workspace-copy,
+  .mail-app .mail-sidebar.mobile-open.is-collapsed .mail-chevron {
+    display: inline;
+  }
+  .mail-app .mail-sidebar.mobile-open.is-collapsed .mail-nav-label {
+    display: block;
+  }
+  .mail-app .mail-sidebar.mobile-open .mail-sidebar-collapse span {
+    display: none;
+  }
+  .mail-app .mail-sidebar.mobile-open .mail-sidebar-collapse::after {
+    content: "×";
+    font-size: 20px;
+  }
+  .mail-app .mail-main > .mail-topbar {
+    padding-left: 58px;
+  }
+}
+
+@media (max-width: 760px) {
+  .mail-app.mailbox-live-app > .mail-main > .mail-topbar {
+    height: 62px;
+    min-height: 62px;
+    max-height: 62px;
+    flex-basis: 62px;
+    gap: 8px;
+    padding: 8px 10px 8px 58px;
+  }
+  .mail-app.mailbox-live-app .mail-breadcrumb {
+    display: none;
+  }
+  .mail-app.mailbox-live-app .mail-search {
+    width: auto;
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+  .mail-app.mailbox-live-app .mail-search kbd {
+    display: none;
+  }
+  .mail-app.mailbox-live-app .mail-topbar-right {
+    gap: 6px;
+  }
+  .mail-app.mailbox-live-app .mail-topbar-right .mail-appearance-toggle {
+    width: 32px;
+    height: 32px;
+  }
+  .mail-app.mailbox-live-app .mail-content-layout {
+    display: grid;
+    height: calc(100dvh - 62px);
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+  .mail-app.mailbox-live-app .mail-list-pane,
+  .mail-app.mailbox-live-app .mail-detail-pane {
+    grid-column: 1;
+    grid-row: 1;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+  }
+  .mail-app.mailbox-live-app .mail-list-pane {
+    display: flex;
+    border-right: 0;
+  }
+  .mail-app.mailbox-live-app .mail-detail-pane {
+    display: none;
+  }
+  .mail-app.mailbox-live-app .mail-content-layout.mobile-detail-open .mail-list-pane {
+    display: none;
+  }
+  .mail-app.mailbox-live-app .mail-content-layout.mobile-detail-open .mail-detail-pane {
+    display: flex;
+  }
+  .mail-app.mailbox-live-app .mail-list-heading {
+    min-height: 100px;
+    gap: 9px;
+    padding: 14px 13px 12px;
+  }
+  .mail-app.mailbox-live-app .mail-list-heading h1 {
+    font-size: 22px;
+  }
+  .mail-app.mailbox-live-app .mail-list-heading select {
+    max-width: 150px;
+  }
+  .mail-app.mailbox-live-app .mail-list-toolbar {
+    min-height: 40px;
+    padding: 0 12px;
+  }
+  .mail-app.mailbox-live-app .mail-message-open {
+    padding-left: 13px;
+  }
+  .mail-app.mailbox-live-app .mail-detail-actions {
+    min-height: 52px;
+    padding: 0 12px;
+  }
+  .mail-app.mailbox-live-app .mail-mobile-back {
+    display: inline-flex;
+    min-height: 31px;
+    align-items: center;
+    padding: 0 9px;
+    border: 1px solid var(--border, #dce5da);
+    border-radius: 7px;
+    background: var(--card, #fff);
+    color: var(--foreground, #3f5a43);
+    font-size: 10px;
+    font-weight: 750;
+  }
+  .mail-app.mailbox-live-app .mail-detail-scroll {
+    padding: 18px 15px 22px;
+  }
+  .mail-app.mailbox-live-app .mail-reader-meta {
+    gap: 9px;
+  }
+  .mail-app.mailbox-live-app .mail-reader-meta time {
+    max-width: 105px;
+    font-size: 9px;
+  }
+  .mail-app.mailbox-live-app .mail-reader-avatar {
+    width: 36px;
+    height: 36px;
+  }
+  .mail-app.mailbox-live-app .mail-message-body-card {
+    padding: 15px;
+  }
+  .mail-app.mailbox-live-app .mail-message-body {
+    font-size: 12px;
+  }
+  .mail-app.mailbox-live-app .mail-message-list > section {
+    margin: 8px;
+  }
+  .mail-app.mailbox-live-app .mail-topbar-right .livePillUnavailable {
+    max-width: 95px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mail-app .mail-sidebar,
+  .mail-appearance-toggle {
+    transition: none;
+  }
+}
