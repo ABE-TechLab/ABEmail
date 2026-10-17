@@ -61,7 +61,7 @@ technical:
     - "Vercel project abemail"
     - "GitHub Actions"
     - "gODtECH FORGE source commit 976a19af7ade19551f464c218e6d5535735f6c29"
-    - "Resend is planned but not configured"
+    - "Resend is selected for the controlled Ottawa Snow Match pilot; the operator reports domain verification, but commercial app transport is not configured"
   constraints:
     - "Never change or reuse data, secrets, domains, provider accounts, databases, or deployments from gODtECH-Ctl-Create/ABEmail-Mail."
     - "Production, Preview, and Development currently share one commercial Supabase project."
@@ -110,14 +110,15 @@ forge:
     - verification
     - agent-adapter
   open_questions:
-    - "Which ABE TechLab-owned sender domain and provider will be used?"
+    - "Which ABE TechLab-owned sender domain will be used for Auth SMTP, separate from customer mail domains?"
     - "Will authentication mail use a dedicated sender subdomain?"
+    - "How will the verified Ottawa pilot domain be bound to a tenant and provider credential securely?"
     - "When will Preview and Development be isolated from Production data?"
     - "Which operations, abuse, retention, and recovery requirements block the first customer pilot?"
   material_risks:
     - "Custom Auth SMTP and real confirmation/reset email delivery are not proven end to end."
     - "Live outbound/inbound mail, DNS verification, provider webhooks, and mailbox provisioning are unfinished."
-    - "No commercial sender/customer domain has been verified."
+    - "Ottawa Snow Match provider-side domain verification was reported by the operator; application-side verification and live delivery remain unproven, and ABE TechLab Auth SMTP sender domain is still unselected."
     - "Preview/Development currently use the Production Supabase project."
     - "Supabase advisor warned about executable SECURITY DEFINER invitation functions; review privileges without breaking safe invitation flows."
-  last_updated: "2026-10-14"
+  last_updated: "2026-10-17"
