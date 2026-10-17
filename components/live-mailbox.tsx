@@ -126,6 +126,15 @@ export default function LiveMailbox(props: LiveMailboxProps) {
     return () => { active = false; };
   }, [organizationId]);
 
+  const [selectedMessageId, setSelectedMessageId] = useState("");
+  const [composeOpen, setComposeOpen] = useState(false);
+  const [to, setTo] = useState("");
+  const [subject, setSubject] = useState("");
+  const [body, setBody] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [requestKey, setRequestKey] = useState<string | null>(null);
+
   useEffect(() => {
     if (!composeOpen || composeCursorPosition.current === null) return;
     const position = composeCursorPosition.current;
@@ -138,14 +147,6 @@ export default function LiveMailbox(props: LiveMailboxProps) {
     });
     return () => window.cancelAnimationFrame(frame);
   }, [composeOpen, body]);
-  const [selectedMessageId, setSelectedMessageId] = useState("");
-  const [composeOpen, setComposeOpen] = useState(false);
-  const [to, setTo] = useState("");
-  const [subject, setSubject] = useState("");
-  const [body, setBody] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState("");
-  const [requestKey, setRequestKey] = useState<string | null>(null);
 
   const visibleMessages = useMemo(() => {
     const direction = activeView === "Sent" ? "outbound" : "inbound";
