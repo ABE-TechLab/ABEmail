@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import LiveMailbox from "@/components/live-mailbox";
 
-export const metadata: Metadata = { title: "Pilot mail | ABEmail" };
+export const metadata: Metadata = { title: "Workspace inbox | ABEmail" };
 export const dynamic = "force-dynamic";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -12,7 +12,7 @@ type MailPageProps = {
   searchParams?: Promise<{ view?: string }>;
 };
 
-export default async function PilotMailPage({ params, searchParams }: MailPageProps) {
+export default async function WorkspaceMailPage({ params, searchParams }: MailPageProps) {
   const { organizationId } = await params;
   const { view } = (await searchParams) ?? {};
   const activeView = view === "Sent" ? "Sent" : "Inbox";
@@ -45,10 +45,6 @@ export default async function PilotMailPage({ params, searchParams }: MailPagePr
     .maybeSingle();
 
   if (organizationError || !organization) notFound();
-  if (organization.slug !== "ottawa-snow-match") {
-    return <main style={{ padding: 28 }}><h1>Pilot mailbox only</h1><p>This first live transport release is limited to the Ottawa Snow Match test workspace.</p></main>;
-  }
-
   const { data: workspaceMembershipRows } = await supabase
     .from("organization_memberships")
     .select("organization_id, role")
@@ -118,7 +114,6 @@ export default async function PilotMailPage({ params, searchParams }: MailPagePr
       organizationName={organization.name}
       mailboxes={mailboxes}
       messages={messages}
-      allowPilotSetup={membership.role === "owner" || membership.role === "admin"}
       messagesError={messagesError || Boolean(mailboxError)}
       activeView={activeView}
       workspaces={workspaces}
