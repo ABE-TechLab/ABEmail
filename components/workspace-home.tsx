@@ -73,6 +73,10 @@ export default function WorkspaceHome({
     ? mailboxes.filter((mailbox) => !mailbox.organization_id || mailbox.organization_id === selected.id)
     : mailboxes;
   const pilotMailboxReady = selected?.slug === "ottawa-snow-match" && currentMailboxes.length > 0;
+  const workspaceBase = selected ? "/dashboard/" + selected.id : undefined;
+  const settingsHref = (section = "general") => selected
+    ? section === "general" ? workspaceBase + "/settings" : workspaceBase + "/settings/" + section
+    : section === "general" ? "/settings" : "/settings/" + section;
 
   return (
     <div className={"mail-app " + styles.app}>
@@ -82,7 +86,10 @@ export default function WorkspaceHome({
         disableContacts
         workspaceName={selected?.name ?? "Your workspaces"}
         workspaceDescription={selected ? "Email setup pending" : "Choose an organization"}
-        workspaceHref="/dashboard"
+        homeHref={workspaceBase ?? "/dashboard"}
+        workspaceBaseHref={workspaceBase}
+        workspaces={organizations}
+        activeWorkspaceId={selected?.id}
       />
 
       <main className="mail-main">
@@ -96,8 +103,8 @@ export default function WorkspaceHome({
             <input type="search" disabled placeholder="Search email · unavailable" aria-label="Search email unavailable" />
           </div>
           <div className={styles.topbarActions}>
-            <Link href="/settings" className={styles.topbarLink}>Settings</Link>
-            <Link href="/settings/account" className={styles.topbarLink}>Account</Link>
+            <Link href={settingsHref()} className={styles.topbarLink}>Settings</Link>
+            <Link href={settingsHref("security")} className={styles.topbarLink}>Account</Link>
             <SignOutButton className="auth-signout-control" />
           </div>
         </header>
@@ -136,7 +143,7 @@ export default function WorkspaceHome({
                       ? "This is a controlled text-only pilot. Attachments and scheduled messages are not enabled."
                       : "The domain, mailbox, and mail settings screens are currently previews; they do not save provider or DNS configuration."}
                   </p>
-                  <Link href={pilotMailboxReady ? "/dashboard/" + selected.id + "/mail" : "/settings/domains"} className={styles.bannerLink}>{pilotMailboxReady ? "Open pilot inbox" : "View setup steps"} <span aria-hidden="true">→</span></Link>
+                  <Link href={pilotMailboxReady ? "/dashboard/" + selected.id + "/mail" : settingsHref("domains")} className={styles.bannerLink}>{pilotMailboxReady ? "Open pilot inbox" : "View setup steps"} <span aria-hidden="true">→</span></Link>
                 </div>
               </section>
 
@@ -177,7 +184,7 @@ export default function WorkspaceHome({
                             <span className={step.state === "Available" ? styles.readyState : styles.pendingState}>{step.state}</span>
                           </div>
                           <p>{step.detail}</p>
-                          <Link href={step.href}>{step.action} <span aria-hidden="true">→</span></Link>
+                          <Link href={settingsHref(step.href.split("/").pop() ?? "general")}>{step.action} <span aria-hidden="true">→</span></Link>
                         </div>
                       </article>
                     ))}
@@ -188,7 +195,7 @@ export default function WorkspaceHome({
               <section className={styles.mailboxPanel} aria-labelledby="mailboxes-heading">
                 <header className={styles.mailboxPanelHeading}>
                   <div><p className={styles.eyebrow}>ORGANIZATION EMAIL</p><h2 id="mailboxes-heading">Mailboxes</h2></div>
-                  <Link href="/settings/mailboxes">Open mailbox settings <span aria-hidden="true">→</span></Link>
+                  <Link href={settingsHref("mailboxes")}>Open mailbox settings <span aria-hidden="true">→</span></Link>
                 </header>
                 {mailboxError ? (
                   <p className={styles.mailboxNotice}>Mailbox data could not be loaded. No configuration has been changed.</p>
