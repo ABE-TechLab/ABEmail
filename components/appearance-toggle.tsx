@@ -1,19 +1,32 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import { useAppearanceMode } from "@/components/appearance-provider";
 
-export default function AppearanceToggle() {
-  const { mode, setMode } = useAppearanceMode();
-  const [isDark, setIsDark] = useState(mode === "dark");
+function subscribeToAppearance(onChange: () => void) {
+  const observer = new MutationObserver(onChange);
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+  return () => observer.disconnect();
+}
 
-  useEffect(() => {
-    setIsDark(document.documentElement.classList.contains("dark"));
-  }, [mode]);
+function getDarkModeSnapshot() {
+  return document.documentElement.classList.contains("dark");
+}
+
+function getServerDarkModeSnapshot() {
+  return false;
+}
+
+export default function AppearanceToggle() {
+  const { setMode } = useAppearanceMode();
+  const isDark = useSyncExternalStore(
+    subscribeToAppearance,
+    getDarkModeSnapshot,
+    getServerDarkModeSnapshot,
+  );
 
   function toggleAppearance() {
     const nextIsDark = !document.documentElement.classList.contains("dark");
-    setIsDark(nextIsDark);
     setMode(nextIsDark ? "dark" : "light");
   }
 
