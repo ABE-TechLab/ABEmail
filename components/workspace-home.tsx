@@ -75,7 +75,9 @@ export default function WorkspaceHome({
   const pilotMailboxReady = selected?.slug === "ottawa-snow-match" && currentMailboxes.length > 0;
   const workspaceBase = selected ? "/dashboard/" + selected.id : undefined;
   const settingsHref = (section = "general") => selected
-    ? section === "general" ? workspaceBase + "/settings" : workspaceBase + "/settings/" + section
+    ? section === "general"
+      ? "/dashboard/" + selected.id + "/settings"
+      : "/dashboard/" + selected.id + "/settings/" + section
     : section === "general" ? "/settings" : "/settings/" + section;
 
   return (
