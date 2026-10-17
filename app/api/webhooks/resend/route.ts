@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   fetchReceivedEmail,
-  getPilotApiKey,
+  getPilotReceiveApiKey,
   getPilotWebhookSecret,
   OTTAWA_PILOT_ADDRESS,
   OTTAWA_PILOT_DOMAIN,
@@ -137,10 +137,9 @@ export async function POST(request: NextRequest) {
   let resolvedMailboxId: string | null = null;
 
   try {
-    const apiKey = getPilotApiKey();
-    if (!apiKey) throw new ResendPilotError("RESEND_PILOT_KEY_MISSING");
-
     if (event.type === "email.received") {
+      const apiKey = getPilotReceiveApiKey();
+      if (!apiKey) throw new ResendPilotError("RESEND_PILOT_RECEIVE_KEY_MISSING");
       const emailId = event.data?.email_id ?? event.data?.id;
       if (!emailId) throw new ResendPilotError("RESEND_INBOUND_ID_MISSING");
 

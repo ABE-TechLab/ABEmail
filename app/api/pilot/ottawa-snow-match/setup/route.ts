@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   checkPilotDomain,
-  getPilotApiKey,
+  getPilotReceiveApiKey,
   OTTAWA_PILOT_ADDRESS,
   OTTAWA_PILOT_DOMAIN,
   ResendPilotError,
@@ -44,8 +44,8 @@ export async function POST(request: NextRequest) {
     return json({ error: "This account is not authorized to configure the Ottawa pilot." }, 403);
   }
 
-  const apiKey = getPilotApiKey();
-  if (!apiKey) return json({ error: "The Ottawa pilot API key is missing from this environment." }, 503);
+  const apiKey = getPilotReceiveApiKey();
+  if (!apiKey) return json({ error: "The Ottawa pilot domain-check/receiving key is missing from this environment." }, 503);
 
   let providerDomain;
   try {
@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
     if (error instanceof ResendPilotError && error.code === "RESEND_PILOT_DOMAIN_NOT_FOUND") {
       return json({ error: "Resend does not list the configured Ottawa pilot domain." }, 424);
     }
-    return json({ error: "Could not verify the Ottawa pilot with Resend. The API key needs permission to read domain status." }, 503);
+    return json({ error: "Could not verify the Ottawa pilot with Resend. The receiving key needs permission to read domain status." }, 503);
   }
 
   if (

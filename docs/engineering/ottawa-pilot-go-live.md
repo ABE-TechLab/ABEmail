@@ -8,7 +8,8 @@ After reviewing and merging the pilot transport pull request, apply the new migr
 
 In **Vercel Production only**, configure these server-side variables and redeploy:
 
-- `ABEMAIL_RESEND_OTTAWA_API_KEY`: Resend key limited to the Ottawa pilot domain, with access needed to read its domain state, send messages, and retrieve inbound content.
+- `ABEMAIL_RESEND_OTTAWA_SEND_API_KEY`: a Resend **Sending access** key restricted to `ottawasnowmatch.waste2light.com`. The outbound endpoint uses only this key to send.
+- `ABEMAIL_RESEND_OTTAWA_RECEIVE_API_KEY`: a Resend **Full access** key, required by Resend's current domain-status and inbound-message retrieval APIs. This is elevated account-wide access, not a domain-restricted receive-only key. Keep it Production-only and only in this product; do not reuse the Waste2Light key or credentials.
 - `ABEMAIL_RESEND_OTTAWA_WEBHOOK_SECRET`: the signing secret for the webhook registered in Resend.
 - `ABEMAIL_PILOT_OPERATOR_EMAILS`: comma-separated list of exact, verified ABEmail login email addresses allowed to provision the pilot.
 - `SUPABASE_SECRET_KEY`: Supabase server-side secret key used by the app's privileged mail operations.

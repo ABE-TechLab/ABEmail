@@ -18,8 +18,16 @@ export class ResendPilotError extends Error {
   }
 }
 
-export function getPilotApiKey(): string | null {
-  const key = process.env.ABEMAIL_RESEND_OTTAWA_API_KEY?.trim();
+// Resend offers sending-only keys (optionally domain-restricted) and full-access
+// keys. Keep the restricted key on the outbound route. The receiving API currently
+// requires full access, so isolate that elevated key to setup/inbound retrieval.
+export function getPilotSendApiKey(): string | null {
+  const key = process.env.ABEMAIL_RESEND_OTTAWA_SEND_API_KEY?.trim();
+  return key || null;
+}
+
+export function getPilotReceiveApiKey(): string | null {
+  const key = process.env.ABEMAIL_RESEND_OTTAWA_RECEIVE_API_KEY?.trim();
   return key || null;
 }
 

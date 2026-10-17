@@ -57,7 +57,7 @@ Before activating live sending:
 
 ## Ottawa pilot transport (initial implementation)
 
-The pilot-only implementation lives in lib/email/resend-pilot.ts and intentionally rejects any sender domain other than ottawasnowmatch.waste2light.com. The authenticated send route resolves the sender from the selected active mailbox, checks active organization membership and mailbox send permission, checks the app-side verified-domain record, rechecks Resend's sending capability, records an idempotency fingerprint, enforces a conservative daily cap, and stores the provider response. The request cannot supply a From address.
+The pilot-only implementation lives in lib/email/resend-pilot.ts and intentionally rejects any sender domain other than ottawasnowmatch.waste2light.com. The authenticated send route resolves the sender from the selected active mailbox, checks active organization membership and mailbox send permission, checks the app-side verified-domain record on every request, uses only the domain-restricted sending key for delivery, records an idempotency fingerprint, enforces a conservative daily cap, and stores the provider response. The request cannot supply a From address.
 
 The Resend webhook route uses the raw request body and Svix headers (svix-id, svix-timestamp, svix-signature) for signature and replay-window checks before JSON parsing. It deduplicates the provider event, retrieves inbound content from Resend, resolves recipients from active domain/mailbox rows, stores only the pilot's recognized messages, and updates outbound delivery states for the exact pilot sender. The database gives signed-in users read access only to messages in active mailboxes permitted by tenant role or mailbox grant; provider event rows are service-only.
 

@@ -50,7 +50,8 @@ The pilot implementation adds a signed-in setup endpoint, a text-only send API, 
 The setup endpoint creates or reuses the controlled ottawa-snow-match organization and its info@ mailbox only after the server checks the Resend domain status and sending/receiving capabilities. It is restricted to the comma-separated verified account emails in ABEMAIL_PILOT_OPERATOR_EMAILS. It does not create DNS records, reuse Waste2Light application keys, or trust a browser-provided sender domain.
 
 Required server-only Production environment variables:
-- ABEMAIL_RESEND_OTTAWA_API_KEY: pilot-specific Resend key with permissions to read domain status, send email, and retrieve received message bodies. Do not reuse the reference application's key.
+- ABEMAIL_RESEND_OTTAWA_SEND_API_KEY: Resend Sending access key restricted to the Ottawa pilot domain; used by the send endpoint only.
+- ABEMAIL_RESEND_OTTAWA_RECEIVE_API_KEY: Resend Full access key required to read domain status and retrieve received message bodies. This is account-wide elevated access, not a receive-only key; keep it Production-only and do not reuse the reference application's key.
 - ABEMAIL_RESEND_OTTAWA_WEBHOOK_SECRET: signing secret for the webhook created in the Resend dashboard.
 - ABEMAIL_PILOT_OPERATOR_EMAILS: comma-separated exact email addresses of verified ABEmail accounts allowed to provision the pilot.
 - SUPABASE_SECRET_KEY: required for server-only provisioning and provider writes.

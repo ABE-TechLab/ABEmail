@@ -3,8 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
-  assertPilotDomainReady,
-  getPilotApiKey,
+  getPilotSendApiKey,
   OTTAWA_PILOT_DOMAIN,
   ResendPilotError,
   sendPilotEmail,
@@ -133,17 +132,8 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const apiKey = getPilotApiKey();
-  if (!apiKey) return json({ error: "The Ottawa pilot sender is not configured in this environment." }, 503);
-
-  try {
-    await assertPilotDomainReady(apiKey);
-  } catch (error) {
-    if (error instanceof ResendPilotError && error.code.startsWith("RESEND_PILOT_")) {
-      return json({ error: "Resend does not currently report the Ottawa pilot domain as ready for sending." }, 424);
-    }
-    return json({ error: "Resend domain readiness could not be checked. Verify the pilot API key permissions." }, 503);
-  }
+  const sendApiKey = getPilotSendApiKey();
+  if (!sendApiKey) return json({ error: "The Ottawa pilot sending key is not configured in this environment." }, 503);
 
   const { data: existing, error: existingError } = await admin
     .from("email_messages")
@@ -199,7 +189,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const sent = await sendPilotEmail({
-      apiKey,
+      apiKey: sendApiKey,
       to,
       subject,
       text,
