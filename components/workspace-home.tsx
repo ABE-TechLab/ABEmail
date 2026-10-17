@@ -105,7 +105,7 @@ export default function WorkspaceHome({
               <section className={styles.setupBanner} aria-labelledby="setup-title">
                 <div className={styles.bannerIcon} aria-hidden="true">✉</div>
                 <div className={styles.bannerContent}>
-                  <p className={styles.eyebrow}>SETUP REQUIRED</p>
+                  <p className={styles.eyebrow}>{emailReady ? "BUSINESS EMAIL" : "GET STARTED"}</p>
                   <h2 id="setup-title">{emailReady ? "Your business email workspace is ready" : "Set up business email for " + selected.name}</h2>
                   <p>
                     {emailReady
