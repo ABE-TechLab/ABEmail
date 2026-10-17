@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import SignOutButton from "@/components/auth/sign-out-button";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -286,7 +287,10 @@ export default function WorkspaceSidebar({
                 </Link>
               );
             })}
-            <Link className="mail-workspace-all" href="/dashboard" onClick={() => setSwitcherOpen(false)}>View all workspaces</Link>
+            <div className="mail-workspace-menu-actions">
+              <Link className="mail-workspace-all" href={workspaceBaseHref ? workspaceBaseHref + "/settings" : "/settings"} onClick={() => setSwitcherOpen(false)}>Workspace settings</Link>
+              <SignOutButton className="mail-workspace-signout" />
+            </div>
           </div>
         )}
 
