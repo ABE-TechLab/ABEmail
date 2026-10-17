@@ -83,33 +83,43 @@ export default function LiveMailbox(props: LiveMailboxProps) {
 
   useEffect(() => {
     let active = true;
-    try {
-      const stored = window.localStorage.getItem(WORKSPACE_SETTINGS_KEY + organizationId);
-      const localPreferences = stored ? JSON.parse(stored) as Partial<MailPreferences> : {};
-      const local = { ...DEFAULT_MAIL_PREFERENCES, ...localPreferences };
-      setMailPreferences(local);
-      setCompactMessageList(localPreferences.compactMessageList ?? window.localStorage.getItem(COMPACT_MESSAGE_LIST_KEY) === "true");
-    } catch {
-      // Browser storage is only a fallback; use server preferences when available.
-    }
-
     void (async () => {
+      let localPreferences: Partial<MailPreferences> = {};
+      try {
+        const stored = window.localStorage.getItem(WORKSPACE_SETTINGS_KEY + organizationId);
+        if (stored) localPreferences = JSON.parse(stored) as Partial<MailPreferences>;
+      } catch {
+        // Browser storage is a fallback only.
+      }
+
+      let loaded: MailPreferences = { ...DEFAULT_MAIL_PREFERENCES, ...localPreferences };
       try {
         const response = await fetch("/api/organizations/" + organizationId + "/preferences", { cache: "no-store" });
-        if (!response.ok) return;
-        const result = await response.json() as { preferences?: Partial<MailPreferences> };
-        if (!active || !result.preferences) return;
-        const preferences = { ...DEFAULT_MAIL_PREFERENCES, ...result.preferences };
-        setMailPreferences(preferences);
-        setCompactMessageList(preferences.compactMessageList);
-        try {
-          window.localStorage.setItem(WORKSPACE_SETTINGS_KEY + organizationId, JSON.stringify(preferences));
-          window.localStorage.setItem(COMPACT_MESSAGE_LIST_KEY, String(preferences.compactMessageList));
-        } catch {
-          // The server preference has already loaded.
+        if (response.ok) {
+          const result = await response.json() as { preferences?: Partial<MailPreferences> };
+          const saved = result.preferences ?? {};
+          if (Object.keys(saved).length > 0) {
+            loaded = { ...DEFAULT_MAIL_PREFERENCES, ...saved };
+          } else if (Object.keys(localPreferences).length > 0) {
+            await fetch("/api/organizations/" + organizationId + "/preferences", {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(loaded),
+            });
+          }
         }
       } catch {
-        // Keep the local preference if the preference endpoint is temporarily unavailable.
+        // Keep local preferences if the backend is briefly unavailable.
+      }
+
+      if (!active) return;
+      setMailPreferences(loaded);
+      setCompactMessageList(loaded.compactMessageList);
+      try {
+        window.localStorage.setItem(WORKSPACE_SETTINGS_KEY + organizationId, JSON.stringify(loaded));
+        window.localStorage.setItem(COMPACT_MESSAGE_LIST_KEY, String(loaded.compactMessageList));
+      } catch {
+        // The preferences are already in React state.
       }
     })();
 
