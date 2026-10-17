@@ -30,6 +30,50 @@ export type WorkspacePreferenceValues = {
   notifications: { newMail: boolean; mentions: boolean; product: boolean; digest: boolean };
 };
 
+type ProviderStatus = {
+  connected: boolean;
+  provider: string;
+  keyLastFour: string | null;
+  webhookConfigured: boolean;
+  status: string;
+  connectedAt: string | null;
+  lastCheckedAt: string | null;
+  lastErrorCode: string | null;
+  environmentManaged: boolean;
+};
+
+type DnsRecord = {
+  record?: string;
+  name?: string;
+  type?: string;
+  ttl?: string;
+  value?: string;
+  priority?: number;
+  status?: string;
+};
+
+type WorkspaceDomain = {
+  id: string;
+  domain: string;
+  status: string;
+  verifiedAt: string | null;
+  providerDomainId: string | null;
+  dnsRecords: DnsRecord[];
+  sendingEnabled: boolean;
+  receivingEnabled: boolean;
+  lastCheckedAt: string | null;
+  lastErrorCode: string | null;
+};
+
+type WorkspaceMailbox = {
+  id: string;
+  address: string;
+  display_name: string | null;
+  status: string;
+  domain_id: string;
+  created_at: string;
+};
+
 const SETTINGS_KEY = "abemail:workspace-settings:";
 const COMPACT_KEY = "abemail:compact-message-list";
 
@@ -56,11 +100,11 @@ const SECTIONS = [
 const SECTION_INFO: Record<string, { title: string; description: string }> = {
   general: { title: "General", description: "Workspace identity and regional preferences." },
   appearance: { title: "Appearance", description: "Personalize the workspace shell and message list." },
-  mail: { title: "Mail & compose", description: "Set the defaults used when writing and replying to email." },
+  mail: { title: "Mail & compose", description: "Connect your mail provider and configure writing preferences." },
   notifications: { title: "Notifications", description: "Save your notification preferences for this workspace." },
   team: { title: "Team & access", description: "Review the active membership grants for this workspace." },
-  domains: { title: "Domains", description: "Review the domains used by active workspace mailboxes." },
-  mailboxes: { title: "Mailboxes", description: "Review the active mailboxes returned by the workspace database." },
+  domains: { title: "Domains", description: "Connect a custom domain, add its DNS records, and verify it with Resend." },
+  mailboxes: { title: "Mailboxes", description: "Create real addresses on verified domains in this workspace." },
   security: { title: "Security", description: "Review your current access and account-session controls." },
 };
 
@@ -74,12 +118,21 @@ function SettingRow({ title, description, children }: { title: string; descripti
   return <div className="settings-row"><div className="settings-row-copy"><strong>{title}</strong><p>{description}</p></div><div className="settings-row-control">{children}</div></div>;
 }
 
-function Field({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
+function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
   return <label className="settings-field"><span>{label}</span>{children}{hint && <small>{hint}</small>}</label>;
 }
 
 function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (next: boolean) => void; label: string }) {
   return <button type="button" role="switch" aria-checked={checked} aria-label={label} className={checked ? "settings-toggle checked" : "settings-toggle"} onClick={() => onChange(!checked)}><span /></button>;
+}
+
+function statusLabel(status: string) {
+  if (status === "verified") return "Verified";
+  if (status === "pending_verification" || status === "pending") return "Needs DNS verification";
+  if (status === "failed" || status === "partially_failed") return "Verification failed";
+  if (status === "partially_verified") return "Partially verified";
+  if (status === "suspended") return "Suspended";
+  return status.replaceAll("_", " ");
 }
 
 export default function WorkspaceSettingsPanel({
@@ -102,11 +155,29 @@ export default function WorkspaceSettingsPanel({
   const [compactMessageList, setCompactMessageList] = useState(false);
   const [toast, setToast] = useState("");
   const [saving, setSaving] = useState(false);
+  const [providerStatus, setProviderStatus] = useState<ProviderStatus | null>(null);
+  const [providerKey, setProviderKey] = useState("");
+  const [providerLoading, setProviderLoading] = useState(false);
+  const [providerBusy, setProviderBusy] = useState(false);
+  const [domains, setDomains] = useState<WorkspaceDomain[]>([]);
+  const [domainsLoading, setDomainsLoading] = useState(false);
+  const [domainInput, setDomainInput] = useState("");
+  const [domainBusy, setDomainBusy] = useState(false);
+  const [verifyingDomainId, setVerifyingDomainId] = useState("");
+  const [mailboxRows, setMailboxRows] = useState<WorkspaceMailbox[]>([]);
+  const [mailboxesLoading, setMailboxesLoading] = useState(false);
+  const [mailboxName, setMailboxName] = useState("");
+  const [mailboxLocalPart, setMailboxLocalPart] = useState("info");
+  const [mailboxDomainId, setMailboxDomainId] = useState("");
+  const [mailboxBusy, setMailboxBusy] = useState(false);
+  const [disconnectBusy, setDisconnectBusy] = useState(false);
 
   const base = "/dashboard/" + organizationId;
   const settingsBase = base + "/settings";
-  const liveMailAvailable = organizationSlug === "ottawa-snow-match" && mailboxes.length > 0;
+  const liveMailAvailable = mailboxes.length > 0;
   const info = SECTION_INFO[section] ?? SECTION_INFO.general;
+  const canManageWorkspace = organizationRole === "owner" || organizationRole === "admin";
+  const verifiedReceivingDomains = domains.filter((domain) => domain.status === "verified" && domain.sendingEnabled && domain.receivingEnabled);
 
   useEffect(() => {
     setDisplayName(organizationName);
@@ -128,6 +199,73 @@ export default function WorkspaceSettingsPanel({
       // The workspace remains usable with defaults when browser storage is blocked.
     }
   }, [organizationId]);
+
+  async function refreshProviderStatus(showError = true) {
+    setProviderLoading(true);
+    try {
+      const response = await fetch("/api/organizations/" + organizationId + "/resend", { cache: "no-store" });
+      const result = await response.json() as ProviderStatus & { error?: string };
+      if (!response.ok || !("connected" in result)) {
+        if (showError) notify(result.error || "Resend connection status could not be loaded.");
+        return;
+      }
+      setProviderStatus(result);
+    } catch {
+      if (showError) notify("Resend connection status could not be loaded. Check your connection and retry.");
+    } finally {
+      setProviderLoading(false);
+    }
+  }
+
+  async function refreshDomains(showError = true) {
+    setDomainsLoading(true);
+    try {
+      const response = await fetch("/api/organizations/" + organizationId + "/domains", { cache: "no-store" });
+      const result = await response.json() as { ok?: boolean; domains?: WorkspaceDomain[]; error?: string };
+      if (!response.ok || !result.ok) {
+        if (showError) notify(result.error || "Domain list could not be loaded.");
+        return;
+      }
+      setDomains(result.domains ?? []);
+      setMailboxDomainId((current) => current || result.domains?.find((item) => item.status === "verified" && item.sendingEnabled && item.receivingEnabled)?.id || "");
+    } catch {
+      if (showError) notify("Domain list could not be loaded. Check your connection and retry.");
+    } finally {
+      setDomainsLoading(false);
+    }
+  }
+
+  async function refreshMailboxes(showError = true) {
+    setMailboxesLoading(true);
+    try {
+      const response = await fetch("/api/organizations/" + organizationId + "/mailboxes", { cache: "no-store" });
+      const result = await response.json() as { ok?: boolean; mailboxes?: WorkspaceMailbox[]; error?: string };
+      if (!response.ok || !result.ok) {
+        if (showError) notify(result.error || "Mailbox list could not be loaded.");
+        return;
+      }
+      setMailboxRows(result.mailboxes ?? []);
+    } catch {
+      if (showError) notify("Mailbox list could not be loaded. Check your connection and retry.");
+    } finally {
+      setMailboxesLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (section === "mail") void refreshProviderStatus(false);
+    if (section === "domains") {
+      void refreshProviderStatus(false);
+      void refreshDomains(false);
+    }
+    if (section === "mailboxes") {
+      void refreshProviderStatus(false);
+      void refreshDomains(false);
+      void refreshMailboxes(false);
+    }
+    // The active section drives only its own remote reads.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [organizationId, section]);
 
   function notify(message: string) {
     setToast(message);
@@ -156,17 +294,15 @@ export default function WorkspaceSettingsPanel({
 
   async function saveGeneral(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const nextName = displayName.trim();
+    if (nextName.length < 2 || nextName.length > 80) {
+      notify("Workspace name must contain between 2 and 80 characters.");
+      return;
+    }
     setSaving(true);
     setToast("");
     if (!storePreferences()) {
       setSaving(false);
-      return;
-    }
-
-    const nextName = displayName.trim();
-    if (nextName.length < 2 || nextName.length > 80) {
-      setSaving(false);
-      notify("Workspace name must contain between 2 and 80 characters.");
       return;
     }
     if (nextName !== organizationName) {
@@ -191,7 +327,6 @@ export default function WorkspaceSettingsPanel({
       }
       return;
     }
-
     notify("Regional preferences saved for this workspace in this browser.");
     setSaving(false);
   }
@@ -204,6 +339,138 @@ export default function WorkspaceSettingsPanel({
   function updateNotification(key: keyof WorkspacePreferenceValues["notifications"], value: boolean) {
     const next = { ...preferences, notifications: { ...preferences.notifications, [key]: value } };
     if (storePreferences(next)) notify("Notification preference saved for this workspace in this browser.");
+  }
+
+  async function connectResend(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!canManageWorkspace) return notify("Only workspace owners and admins can connect Resend.");
+    const value = providerKey.trim();
+    if (!value) return notify("Paste your Resend API key first.");
+    setProviderBusy(true);
+    setToast("");
+    try {
+      const response = await fetch("/api/organizations/" + organizationId + "/resend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ apiKey: value }),
+      });
+      const result = await response.json() as { ok?: boolean; connected?: boolean; note?: string; error?: string };
+      if (!response.ok || !result.ok) {
+        notify(result.error || "Resend could not be connected.");
+        return;
+      }
+      setProviderKey("");
+      await refreshProviderStatus(false);
+      await refreshDomains(false);
+      notify(result.note || "Resend connected securely to this workspace.");
+    } catch {
+      notify("Resend could not be connected. Check your network and retry.");
+    } finally {
+      setProviderBusy(false);
+    }
+  }
+
+  async function disconnectResend() {
+    if (!canManageWorkspace) return notify("Only workspace owners and admins can disconnect Resend.");
+    if (!window.confirm("Disconnect Resend from this workspace? Existing verified domains will prevent this until they are removed or suspended.")) return;
+    setDisconnectBusy(true);
+    try {
+      const response = await fetch("/api/organizations/" + organizationId + "/resend", { method: "DELETE" });
+      const result = await response.json() as { ok?: boolean; error?: string };
+      if (!response.ok || !result.ok) return notify(result.error || "Resend could not be disconnected.");
+      await refreshProviderStatus(false);
+      notify("Resend disconnected from this workspace.");
+    } catch {
+      notify("Resend could not be disconnected. Check your network and retry.");
+    } finally {
+      setDisconnectBusy(false);
+    }
+  }
+
+  async function addDomain(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!canManageWorkspace) return notify("Only workspace owners and admins can add domains.");
+    setDomainBusy(true);
+    setToast("");
+    try {
+      const response = await fetch("/api/organizations/" + organizationId + "/domains", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ domain: domainInput }),
+      });
+      const result = await response.json() as { ok?: boolean; domain?: WorkspaceDomain; error?: string };
+      if (!response.ok || !result.ok) {
+        notify(result.error || "Domain could not be added.");
+        return;
+      }
+      setDomainInput("");
+      await refreshDomains(false);
+      notify(result.domain?.status === "verified"
+        ? "Domain is already verified in Resend."
+        : "Domain added. Copy the DNS records into your domain registrar, then verify it here.");
+    } catch {
+      notify("Domain could not be added. Check your connection and retry.");
+    } finally {
+      setDomainBusy(false);
+    }
+  }
+
+  async function verifyDomain(domain: WorkspaceDomain) {
+    if (!canManageWorkspace) return notify("Only workspace owners and admins can verify domains.");
+    setVerifyingDomainId(domain.id);
+    setToast("");
+    try {
+      const response = await fetch("/api/organizations/" + organizationId + "/domains/" + domain.id + "/verify", { method: "POST" });
+      const result = await response.json() as { ok?: boolean; verified?: boolean; note?: string; error?: string };
+      if (!response.ok || !result.ok) {
+        notify(result.error || "Domain verification could not be checked.");
+        return;
+      }
+      await refreshDomains(false);
+      notify(result.note || (result.verified ? "Domain verified." : "Verification is pending. Review the DNS records and retry after they propagate."));
+    } catch {
+      notify("Domain verification could not be checked. Retry in a moment.");
+    } finally {
+      setVerifyingDomainId("");
+    }
+  }
+
+  async function copyDnsRecord(record: DnsRecord) {
+    const text = [record.type, record.name, record.value, record.priority === undefined ? "" : "priority " + record.priority]
+      .filter(Boolean).join("\t");
+    try {
+      await navigator.clipboard.writeText(text);
+      notify("DNS record copied.");
+    } catch {
+      notify("Copy is not available in this browser. Select and copy the DNS record manually.");
+    }
+  }
+
+  async function createMailbox(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!canManageWorkspace) return notify("Only workspace owners and admins can create mailboxes.");
+    setMailboxBusy(true);
+    setToast("");
+    try {
+      const response = await fetch("/api/organizations/" + organizationId + "/mailboxes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ localPart: mailboxLocalPart, domainId: mailboxDomainId, displayName: mailboxName }),
+      });
+      const result = await response.json() as { ok?: boolean; mailbox?: WorkspaceMailbox; error?: string; note?: string };
+      if (!response.ok || !result.ok) {
+        notify(result.error || "Mailbox could not be created.");
+        return;
+      }
+      setMailboxName("");
+      await refreshMailboxes(false);
+      router.refresh();
+      notify(result.note || "Mailbox created.");
+    } catch {
+      notify("Mailbox could not be created. Check your connection and retry.");
+    } finally {
+      setMailboxBusy(false);
+    }
   }
 
   const usedDomains = [...new Set(mailboxes.map((mailbox) => mailbox.address.split("@")[1]).filter((domain): domain is string => Boolean(domain)))];
@@ -267,13 +534,30 @@ export default function WorkspaceSettingsPanel({
                 <div className="settings-form-footer"><span>Appearance mode and palette are user-wide; message density is saved in this browser.</span><span className="settings-status active"><span />Applied</span></div>
               </div>}
 
-              {section === "mail" && <form onSubmit={saveMailPreferences}>
-                <Field label="Default writing font"><select value={preferences.font} onChange={(event) => setPreferences((current) => ({ ...current, font: event.target.value }))}><option value="sans">Sans serif</option><option value="serif">Serif</option><option value="mono">Monospace</option></select></Field>
+              {section === "mail" && <div className="workspace-provider-settings">
+                <div className="settings-section-summary"><div><strong>Resend connection</strong><p>Connect the Resend account that will send from and receive messages for this workspace.</p></div><span className={providerStatus?.connected ? "settings-status active" : "settings-status pending"}><span />{providerStatus?.connected ? "Connected" : providerStatus?.environmentManaged ? "Environment connected" : "Not connected"}</span></div>
+                {providerLoading && <p className="settings-muted">Checking provider connection…</p>}
+                {providerStatus?.connected && <div className="settings-info-banner"><span>✓</span><p>Resend is connected{providerStatus.keyLastFour ? " with a key ending in " + providerStatus.keyLastFour : ""}. Signed webhook: {providerStatus.webhookConfigured ? "configured" : "not configured"}. Secrets stay on the server and are never shown here again.</p></div>}
+                {providerStatus?.environmentManaged && !providerStatus.connected && <div className="settings-info-banner"><span>i</span><p>This workspace currently uses the existing server-managed Resend setup. Connect a dedicated Full Access API key below to move it onto the per-workspace provider connection.</p></div>}
+                <form className="settings-domain-form" onSubmit={connectResend}>
+                  <Field label="Resend API key" hint="Use a Full Access key dedicated to ABEmail. It is required to manage domain verification and webhooks; sending-only keys cannot complete setup.">
+                    <input type="password" autoComplete="new-password" value={providerKey} onChange={(event) => setProviderKey(event.target.value)} placeholder="re_…" minLength={12} maxLength={512} required disabled={!canManageWorkspace || providerBusy} />
+                  </Field>
+                  <button className="mail-primary-action" type="submit" disabled={!canManageWorkspace || providerBusy}>{providerBusy ? "Connecting…" : providerStatus?.connected ? "Replace connection" : "Connect Resend"}</button>
+                </form>
+                <p className="settings-muted">The key is validated against Resend and encrypted before it is stored. ABEmail also registers a signed webhook for this workspace so inbound messages and delivery events can be processed.</p>
+                {providerStatus?.lastErrorCode && <p className="settings-muted">Last provider warning: {providerStatus.lastErrorCode.replaceAll("_", " ")}</p>}
+                {providerStatus?.connected && <div className="settings-form-footer"><span>Connected {providerStatus.connectedAt ? "on " + new Date(providerStatus.connectedAt).toLocaleDateString() : "to this workspace"}.</span><button className="mail-secondary-action" type="button" disabled={!canManageWorkspace || disconnectBusy} onClick={disconnectResend}>{disconnectBusy ? "Disconnecting…" : "Disconnect Resend"}</button></div>}
                 <div className="settings-divider" />
-                <div className="settings-choice-group"><p className="settings-subheading">When replying</p><label className="settings-radio-row"><input type="radio" name="workspace-reply-style" value="reply" checked={preferences.replyStyle === "reply"} onChange={() => setPreferences((current) => ({ ...current, replyStyle: "reply" }))} /><span><strong>Reply above the quoted message</strong><small>Start writing before the original message.</small></span></label><label className="settings-radio-row"><input type="radio" name="workspace-reply-style" value="bottom" checked={preferences.replyStyle === "bottom"} onChange={() => setPreferences((current) => ({ ...current, replyStyle: "bottom" }))} /><span><strong>Reply below the quoted message</strong><small>Place the cursor after the quoted original message.</small></span></label></div>
-                <Field label="Email signature" hint="Added to outgoing messages from this workspace."><textarea rows={4} value={preferences.signature} onChange={(event) => setPreferences((current) => ({ ...current, signature: event.target.value }))} /></Field>
-                <div className="settings-form-footer"><span>These preferences are applied to the live compose and reply flow.</span><button className="mail-primary-action" type="submit">Save mail preferences</button></div>
-              </form>}
+                <form onSubmit={saveMailPreferences}>
+                  <p className="settings-subheading">Mail & compose preferences</p>
+                  <Field label="Default writing font"><select value={preferences.font} onChange={(event) => setPreferences((current) => ({ ...current, font: event.target.value }))}><option value="sans">Sans serif</option><option value="serif">Serif</option><option value="mono">Monospace</option></select></Field>
+                  <div className="settings-divider" />
+                  <div className="settings-choice-group"><p className="settings-subheading">When replying</p><label className="settings-radio-row"><input type="radio" name="workspace-reply-style" value="reply" checked={preferences.replyStyle === "reply"} onChange={() => setPreferences((current) => ({ ...current, replyStyle: "reply" }))} /><span><strong>Reply above the quoted message</strong><small>Start writing before the original message.</small></span></label><label className="settings-radio-row"><input type="radio" name="workspace-reply-style" value="bottom" checked={preferences.replyStyle === "bottom"} onChange={() => setPreferences((current) => ({ ...current, replyStyle: "bottom" }))} /><span><strong>Reply below the quoted message</strong><small>Place the cursor after the quoted original message.</small></span></label></div>
+                  <Field label="Email signature" hint="Added to outgoing messages from this workspace."><textarea rows={4} value={preferences.signature} onChange={(event) => setPreferences((current) => ({ ...current, signature: event.target.value }))} /></Field>
+                  <div className="settings-form-footer"><span>Mail preferences are applied to the live compose and reply flow.</span><button className="mail-primary-action" type="submit">Save mail preferences</button></div>
+                </form>
+              </div>}
 
               {section === "notifications" && <div className="settings-notification-list">
                 <SettingRow title="New messages" description="Enable the workspace preference for new-message alerts when alert delivery is available."><Toggle checked={preferences.notifications.newMail} onChange={(next) => updateNotification("newMail", next)} label="New messages" /></SettingRow>
@@ -289,21 +573,64 @@ export default function WorkspaceSettingsPanel({
                 <div className="settings-info-banner"><span>i</span><p>Memberships above come from the workspace database. Sending invitations and changing another member's role are not enabled from this screen yet.</p></div>
               </div>}
 
-              {section === "domains" && <div>
-                {usedDomains.length ? <div className="settings-domain-list">{usedDomains.map((domain) => <div className="settings-domain-row" key={domain}><span className="settings-domain-icon">◎</span><span className="settings-domain-name"><strong>{domain}</strong><small>Used by an active mailbox in this workspace</small></span><span className="settings-status active"><span />In use</span></div>)}</div> : <div className="settings-empty-state"><strong>No active mailbox domain</strong><p>A domain will appear here when this workspace has an active mailbox address.</p></div>}
-                <div className="settings-info-banner"><span>i</span><p>This list is derived from active mailbox addresses. DNS checks, domain verification status, and domain provisioning are not exposed by the current settings backend.</p></div>
+              {section === "domains" && <div className="workspace-domains-settings">
+                <div className="settings-section-summary"><div><strong>Business domains</strong><p>Add a domain to Resend, publish the requested DNS records at your registrar, then verify it here.</p></div><button className="mail-secondary-action" type="button" onClick={() => { void refreshDomains(); }}>Refresh status</button></div>
+                {!providerStatus?.connected && !providerStatus?.environmentManaged && <div className="settings-info-banner"><span>i</span><p>Connect Resend in Settings → Mail & compose before adding a domain. A Full Access key is required for domain setup and receiving webhooks.</p></div>}
+                <form className="settings-domain-form" onSubmit={addDomain}>
+                  <Field label="Domain name" hint="Enter the host you own, for example company.com. Do not include https:// or an email address."><input value={domainInput} onChange={(event) => setDomainInput(event.target.value)} placeholder="company.com" autoCapitalize="none" autoCorrect="off" required disabled={!canManageWorkspace || domainBusy} /></Field>
+                  <button className="mail-primary-action" type="submit" disabled={!canManageWorkspace || domainBusy || (!providerStatus?.connected && !providerStatus?.environmentManaged)}>{domainBusy ? "Adding…" : "Add domain"}</button>
+                </form>
+                {domainsLoading && <p className="settings-muted">Loading domain records…</p>}
+                {!domainsLoading && domains.length === 0 && <div className="settings-empty-state"><strong>No domains configured</strong><p>Connect Resend and add a domain to start preparing business email.</p></div>}
+                <div className="settings-domain-list">
+                  {domains.map((domain) => (
+                    <article className="settings-domain-record" key={domain.id}>
+                      <div className="settings-domain-row">
+                        <span className="settings-domain-icon">◎</span>
+                        <span className="settings-domain-name"><strong>{domain.domain}</strong><small>{domain.status === "verified" ? "Verification confirmed by Resend" : "DNS setup required"}</small></span>
+                        <span className={domain.status === "verified" ? "settings-status active" : "settings-status pending"}><span />{statusLabel(domain.status)}</span>
+                        <button className="mail-secondary-action" type="button" onClick={() => { void verifyDomain(domain); }} disabled={!canManageWorkspace || verifyingDomainId === domain.id || (!providerStatus?.connected && !providerStatus?.environmentManaged)}>{verifyingDomainId === domain.id ? "Checking…" : domain.status === "verified" ? "Recheck DNS" : "Verify DNS"}</button>
+                      </div>
+                      {domain.status === "verified" && <div className="settings-domain-capabilities"><span className={domain.sendingEnabled ? "settings-status active" : "settings-status pending"}><span />Sending {domain.sendingEnabled ? "enabled" : "not enabled"}</span><span className={domain.receivingEnabled ? "settings-status active" : "settings-status pending"}><span />Receiving {domain.receivingEnabled ? "enabled" : "not enabled"}</span></div>}
+                      {domain.dnsRecords?.length > 0 && <div className="settings-dns-records">
+                        <p className="settings-subheading">DNS records to publish at your domain registrar</p>
+                        <div className="settings-table-wrap"><table className="settings-table"><thead><tr><th>Purpose</th><th>Type</th><th>Name / host</th><th>Value</th><th>State</th><th /></tr></thead>
+                          <tbody>{domain.dnsRecords.map((record, index) => <tr key={(record.record ?? "dns") + "-" + (record.name ?? "") + "-" + index}>
+                            <td>{record.record || "DNS"}</td><td>{record.type || "—"}</td><td><code>{record.name || "@"}</code></td>
+                            <td><code className="settings-dns-value">{record.value || "—"}</code>{record.priority !== undefined && <small>Priority {record.priority}</small>}{record.ttl && <small>TTL {record.ttl}</small>}</td>
+                            <td><span className={record.status === "verified" ? "settings-status active" : "settings-status pending"}><span />{statusLabel(record.status || "pending")}</span></td>
+                            <td><button type="button" className="mail-secondary-action" onClick={() => { void copyDnsRecord(record); }}>Copy</button></td>
+                          </tr>)}</tbody>
+                        </table></div>
+                        <p className="settings-muted">Add these exact records at the DNS provider for {domain.domain}. Leave existing mail records in place unless the DNS provider or your email migration plan says otherwise. DNS propagation may take time.</p>
+                      </div>}
+                      {domain.lastErrorCode && <p className="settings-muted">Latest check: {domain.lastErrorCode.replaceAll("_", " ")}</p>}
+                    </article>
+                  ))}
+                </div>
               </div>}
 
-              {section === "mailboxes" && <div>
-                {mailboxes.length ? <div className="settings-table-wrap"><table className="settings-table"><thead><tr><th>Mailbox</th><th>Display name</th><th>Status</th></tr></thead><tbody>{mailboxes.map((mailbox) => <tr key={mailbox.id}><td><strong>{mailbox.address}</strong><small>Mailbox ID {mailbox.id.slice(0, 8)}</small></td><td>{mailbox.display_name || "—"}</td><td><span className="settings-status active"><span />Active</span></td></tr>)}</tbody></table></div> : <div className="settings-empty-state"><strong>No active mailboxes</strong><p>This workspace does not currently return any active mailbox records.</p></div>}
-                <div className="settings-info-banner"><span>i</span><p>These addresses are read from the workspace database. Mailbox creation and assignment are not enabled from this settings screen yet.</p></div>
+              {section === "mailboxes" && <div className="workspace-mailboxes-settings">
+                <div className="settings-section-summary"><div><strong>Business email addresses</strong><p>Create an address after its domain is verified and both send/receive capabilities are enabled.</p></div><button className="mail-secondary-action" type="button" onClick={() => { void refreshMailboxes(); }}>Refresh mailboxes</button></div>
+                {!providerStatus?.connected && !providerStatus?.environmentManaged && <div className="settings-info-banner"><span>i</span><p>Connect Resend first, then add and verify your domain in Settings → Domains.</p></div>}
+                <form className="settings-domain-form" onSubmit={createMailbox}>
+                  <Field label="Address name" hint="This is the part before @, for example info, sales, or hello."><input value={mailboxLocalPart} onChange={(event) => setMailboxLocalPart(event.target.value)} required maxLength={64} autoCapitalize="none" autoCorrect="off" disabled={!canManageWorkspace || mailboxBusy} /></Field>
+                  <Field label="Domain"><select value={mailboxDomainId} onChange={(event) => setMailboxDomainId(event.target.value)} required disabled={!canManageWorkspace || mailboxBusy || verifiedReceivingDomains.length === 0}><option value="">Select verified domain</option>{verifiedReceivingDomains.map((domain) => <option key={domain.id} value={domain.id}>{domain.domain}</option>)}</select></Field>
+                  <Field label="Display name"><input value={mailboxName} onChange={(event) => setMailboxName(event.target.value)} placeholder={organizationName} maxLength={120} disabled={!canManageWorkspace || mailboxBusy} /></Field>
+                  <button className="mail-primary-action" type="submit" disabled={!canManageWorkspace || mailboxBusy || verifiedReceivingDomains.length === 0 || !providerStatus?.connected}>{mailboxBusy ? "Creating…" : "Create mailbox"}</button>
+                </form>
+                {verifiedReceivingDomains.length === 0 && <p className="settings-muted">No verified domain with sending and receiving enabled is available. Complete domain verification before creating an address.</p>}
+                {mailboxesLoading && <p className="settings-muted">Loading mailbox status…</p>}
+                {!mailboxesLoading && mailboxRows.length === 0 && <div className="settings-empty-state"><strong>No mailboxes yet</strong><p>Your active email addresses will appear here once created.</p></div>}
+                {mailboxRows.length > 0 && <div className="settings-table-wrap"><table className="settings-table"><thead><tr><th>Address</th><th>Display name</th><th>Status</th></tr></thead><tbody>{mailboxRows.map((mailbox) => <tr key={mailbox.id}><td><strong>{mailbox.address}</strong><small>Mailbox ID {mailbox.id.slice(0, 8)}</small></td><td>{mailbox.display_name || "—"}</td><td><span className={mailbox.status === "active" ? "settings-status active" : "settings-status pending"}><span />{statusLabel(mailbox.status)}</span></td></tr>)}</tbody></table></div>}
+                <div className="settings-info-banner"><span>i</span><p>Incoming email is delivered into ABEmail through the workspace's signed Resend webhook. Sending and receiving are dependent on the domain capabilities and DNS records shown in Settings → Domains.</p></div>
               </div>}
 
               {section === "security" && <div>
                 <div className="settings-security-card"><span className="settings-security-icon">◇</span><div><strong>Signed in to ABEmail</strong><p>{email || "Current authenticated account"} · Workspace role: {organizationRole}</p></div><span className="settings-summary-chip">Authenticated</span></div>
                 <SettingRow title="Workspace switching" description="Switching organizations keeps this account session active; access is rechecked for each workspace."><span className="settings-status active"><span />Membership checked</span></SettingRow>
                 <SettingRow title="Sign out" description="Sign out of the ABEmail account across all workspaces."><SignOutButton className="mail-secondary-action" /></SettingRow>
-                <div className="settings-info-banner"><span>i</span><p>Sessions, multi-factor settings, and audit history are account-wide or require identity-provider support; they are not separately managed per workspace here.</p></div>
+                <div className="settings-info-banner"><span>i</span><p>Sessions, multi-factor settings, and audit history require identity-provider support and are not separately managed here yet.</p></div>
               </div>}
             </section>
           </div>
