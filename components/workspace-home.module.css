@@ -472,3 +472,89 @@
   .mailboxRow { align-items: flex-start; flex-wrap: wrap; }
   .mailboxState { width: 100%; margin-left: 45px; text-align: left; }
 }
+
+
+/* Compact live mailbox proportions for the authenticated workspace. */
+.app :global(.mail-sidebar) {
+  width: 218px;
+  min-width: 198px;
+  flex-basis: 218px;
+  padding: 18px 11px 12px;
+}
+.app :global(.mail-nav) {
+  gap: 2px;
+}
+.app :global(.mail-nav-item) {
+  min-height: 31px;
+  gap: 8px;
+  padding: 6px 9px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+.app :global(.mail-nav-icon) {
+  width: 16px;
+  font-size: 14px;
+}
+.app :global(.mail-compose-button) {
+  height: 39px;
+  margin-bottom: 23px;
+  border-radius: 8px;
+}
+.app :global(.mail-content-layout) {
+  grid-template-columns: minmax(285px, 34%) minmax(0, 1fr);
+}
+.app :global(.mail-list-heading) {
+  min-height: 91px;
+  gap: 8px;
+  padding: 15px 16px 12px;
+}
+.app :global(.mail-list-heading h1) {
+  font-size: 22px;
+  letter-spacing: -.7px;
+}
+.app :global(.mail-overline) {
+  margin-bottom: 5px;
+}
+.app :global(.mail-list-toolbar) {
+  min-height: 36px;
+  gap: 8px;
+  padding: 0 14px;
+}
+.app :global(.mail-message-row) {
+  min-height: 78px;
+}
+.app :global(.mail-message-open) {
+  gap: 8px;
+  padding: 11px 3px 10px 14px;
+}
+.app :global(.mail-message-copy) {
+  gap: 4px;
+}
+.app :global(.mail-message-row-top) {
+  gap: 6px;
+}
+.app :global(.mail-avatar) {
+  width: 29px;
+  height: 29px;
+  border-radius: 8px;
+}
+
+@media (max-width: 1120px) {
+  .app :global(.mail-sidebar) {
+    width: 198px;
+    min-width: 185px;
+    flex-basis: 198px;
+  }
+  .app :global(.mail-content-layout) {
+    grid-template-columns: minmax(275px, 36%) minmax(0, 1fr);
+  }
+}
+@media (max-width: 850px) {
+  .app :global(.mail-nav-item) {
+    min-height: 36px;
+    padding: 7px 0;
+  }
+  .app :global(.mail-content-layout) {
+    grid-template-columns: minmax(260px, 38%) minmax(0, 1fr);
+  }
+}
