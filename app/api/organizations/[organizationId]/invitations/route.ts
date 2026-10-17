@@ -73,12 +73,37 @@ export async function GET(_request: NextRequest, context: RouteContext) {
 
   if (error) return json({ error: "Workspace invitations could not be loaded." }, 503);
 
+  const invitationIds = (invitations ?? []).map((invitation) => invitation.id);
+  const mailboxIdsByInvitation = new Map<string, string[]>();
+  const mailboxAddressesByInvitation = new Map<string, string[]>();
+  if (invitationIds.length) {
+    const { data: grants, error: grantsError } = await auth.admin
+      .from("organization_invitation_mailboxes")
+      .select("invitation_id, mailbox_id")
+      .eq("organization_id", organizationId)
+      .in("invitation_id", invitationIds);
+    if (grantsError) return json({ error: "Invitation mailbox access could not be loaded." }, 503);
+    const mailboxIds = [...new Set((grants ?? []).map((grant) => grant.mailbox_id))];
+    const { data: mailboxRows, error: mailboxRowsError } = mailboxIds.length
+      ? await auth.admin.from("mailboxes").select("id, address").eq("organization_id", organizationId).in("id", mailboxIds)
+      : { data: [], error: null };
+    if (mailboxRowsError) return json({ error: "Invitation mailbox names could not be loaded." }, 503);
+    const addressByMailbox = new Map((mailboxRows ?? []).map((mailbox) => [mailbox.id, mailbox.address]));
+    for (const grant of grants ?? []) {
+      mailboxIdsByInvitation.set(grant.invitation_id, [...(mailboxIdsByInvitation.get(grant.invitation_id) ?? []), grant.mailbox_id]);
+      const address = addressByMailbox.get(grant.mailbox_id);
+      if (address) mailboxAddressesByInvitation.set(grant.invitation_id, [...(mailboxAddressesByInvitation.get(grant.invitation_id) ?? []), address]);
+    }
+  }
+
   return json({
     ok: true,
     invitations: (invitations ?? []).map((invitation) => ({
       id: invitation.id,
       email: invitation.invite_email,
       role: invitation.role,
+      mailboxIds: mailboxIdsByInvitation.get(invitation.id) ?? [],
+      mailboxAddresses: mailboxAddressesByInvitation.get(invitation.id) ?? [],
       expiresAt: invitation.expires_at,
       acceptedAt: invitation.accepted_at,
       revokedAt: invitation.revoked_at,
@@ -273,7 +298,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       .update({ delivery_status: "sent", sent_at: new Date().toISOString(), delivery_error_code: null })
       .eq("id", invitation.id)
       .eq("organization_id", organizationId);
-    if (updateError) return json({ ok: true, invitation: { id: invitation.id, email, role, expiresAt: invitation.expires_at, mailboxIds }, inviteUrl, emailStatus: "sent", note: "The invite email was accepted by Resend, but the send state could not be saved. Keep this link available until the invitation appears as Sent." }, 201);
+    if (updateError) return json({ ok: true, invitation: { id: invitation.id, email, role, expiresAt: invitation.expires_at, mailboxIds, mailboxAddresses: chosenMailboxes.map((mailbox) => mailbox.address) }, inviteUrl, emailStatus: "sent", note: "The invite email was accepted by Resend, but the send state could not be saved. Keep this link available until the invitation appears as Sent." }, 201);
 
     return json({
       ok: true,
