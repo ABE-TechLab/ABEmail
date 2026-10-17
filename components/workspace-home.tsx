@@ -1,7 +1,6 @@
 import Link from "next/link";
 import SignOutButton from "@/components/auth/sign-out-button";
 import WorkspaceSidebar from "@/components/workspace-sidebar";
-import PilotSetupButton from "@/components/pilot-setup-button";
 import styles from "./workspace-home.module.css";
 
 type WorkspaceOrganization = {
@@ -24,42 +23,9 @@ type WorkspaceHomeProps = {
   selectedOrganization?: WorkspaceOrganization;
   mailboxes?: WorkspaceMailbox[];
   mailboxError?: boolean;
+  providerConnected?: boolean;
+  workspaceDomains?: { id: string; domain: string; status: string; sending_enabled: boolean; receiving_enabled: boolean }[];
 };
-
-const setupSteps = [
-  {
-    number: "01",
-    title: "Verify a sending domain",
-    detail: "Domain ownership and DNS checks are not connected yet.",
-    state: "Preview only",
-    href: "/settings/domains",
-    action: "Review domains",
-  },
-  {
-    number: "02",
-    title: "Provision mailboxes",
-    detail: "A workspace address does not yet mean provider mail is active.",
-    state: "Not connected",
-    href: "/settings/mailboxes",
-    action: "Review mailboxes",
-  },
-  {
-    number: "03",
-    title: "Connect email delivery",
-    detail: "Resend has not been configured for this commercial environment.",
-    state: "Not connected",
-    href: "/settings/mail",
-    action: "Review mail settings",
-  },
-  {
-    number: "04",
-    title: "Manage your team",
-    detail: "Invitations and mailbox grants have a working account-scoped flow.",
-    state: "Available",
-    href: "/settings/team",
-    action: "Manage team",
-  },
-];
 
 export default function WorkspaceHome({
   email,
@@ -67,12 +33,17 @@ export default function WorkspaceHome({
   selectedOrganization,
   mailboxes = [],
   mailboxError = false,
+  providerConnected = false,
+  workspaceDomains = [],
 }: WorkspaceHomeProps) {
   const selected = selectedOrganization;
   const currentMailboxes = selected
     ? mailboxes.filter((mailbox) => !mailbox.organization_id || mailbox.organization_id === selected.id)
     : mailboxes;
-  const pilotMailboxReady = selected?.slug === "ottawa-snow-match" && currentMailboxes.length > 0;
+  const verifiedDomains = workspaceDomains.filter((domain) => domain.status === "verified" && domain.sending_enabled && domain.receiving_enabled);
+  const mailboxReady = currentMailboxes.length > 0;
+  const emailReady = Boolean(providerConnected && verifiedDomains.length > 0 && mailboxReady);
+  const completedSetupSteps = Number(providerConnected) + Number(verifiedDomains.length > 0) + Number(mailboxReady);
   const workspaceBase = selected ? "/dashboard/" + selected.id : undefined;
   const settingsHref = (section = "general") => selected
     ? section === "general"
@@ -84,10 +55,12 @@ export default function WorkspaceHome({
     <div className={"mail-app " + styles.app}>
       <WorkspaceSidebar
         activeView="Inbox"
-        disabledMailFeatures
+        mailboxBaseHref={workspaceBase ? workspaceBase + "/mail" : undefined}
+        enabledMailboxViews={emailReady ? ["Inbox", "Sent"] : []}
+        disabledMailFeatures={!emailReady}
         disableContacts
         workspaceName={selected?.name ?? "Your workspaces"}
-        workspaceDescription={selected ? "Email setup pending" : "Choose an organization"}
+        workspaceDescription={selected ? emailReady ? "Business email ready" : "Email setup required" : "Choose an organization"}
         homeHref={workspaceBase ?? "/dashboard"}
         workspaceBaseHref={workspaceBase}
         workspaces={organizations}
@@ -100,9 +73,9 @@ export default function WorkspaceHome({
             <span>Workspace</span><span className="mail-breadcrumb-slash">/</span>
             <strong>{selected?.name ?? "Organizations"}</strong>
           </div>
-          <div className={"mail-search " + styles.search} aria-label="Email search is unavailable until mail is connected">
+          <div className={"mail-search " + styles.search} aria-label="Search is available inside the active inbox">
             <span aria-hidden="true">⌕</span>
-            <input type="search" disabled placeholder="Search email · unavailable" aria-label="Search email unavailable" />
+            <input type="search" disabled placeholder="Search is available in Inbox" aria-label="Search available in Inbox" />
           </div>
           <div className={styles.topbarActions}>
             <Link href={settingsHref()} className={styles.topbarLink}>Settings</Link>
@@ -123,10 +96,9 @@ export default function WorkspaceHome({
                   </p>
                 </div>
                 <div className={styles.headingControls}>
-                  {(selected.role === "owner" || selected.role === "admin") && <PilotSetupButton />}
-                  {selected.slug === "ottawa-snow-match" && currentMailboxes.length > 0 && <Link className={styles.topbarLink} href={"/dashboard/" + selected.id + "/mail"}>Open pilot inbox</Link>}
-                  <span className={styles.pendingStatus}><span aria-hidden="true">●</span> {pilotMailboxReady ? "Pilot mailbox configured" : "Mail not connected"}</span>
-                  <button className={styles.disabledCompose} type="button" disabled>＋ Compose</button>
+                  {emailReady && <Link className={styles.topbarLink} href={"/dashboard/" + selected.id + "/mail"}>Open inbox</Link>}
+                  <span className={styles.pendingStatus}><span aria-hidden="true">●</span> {emailReady ? "Business email ready" : "Email setup required"}</span>
+                  <Link className={styles.topbarLink} href={settingsHref("mail")}>Connect provider</Link>
                 </div>
               </section>
 
@@ -134,18 +106,18 @@ export default function WorkspaceHome({
                 <div className={styles.bannerIcon} aria-hidden="true">✉</div>
                 <div className={styles.bannerContent}>
                   <p className={styles.eyebrow}>SETUP REQUIRED</p>
-                  <h2 id="setup-title">{pilotMailboxReady ? "Open the Ottawa Snow Match pilot inbox" : "Connect your email provider to activate this inbox"}</h2>
+                  <h2 id="setup-title">{emailReady ? "Your business email workspace is ready" : "Set up business email for " + selected.name}</h2>
                   <p>
-                    {pilotMailboxReady
-                      ? "The pilot mailbox has been provisioned in ABEmail. Real sending and receiving still depend on Production credentials, the applied mail migration, and the signed Resend webhook."
-                      : "Your account and organization access are working. Messages, search, compose, and delivery actions stay unavailable until domain verification, mailbox provisioning, and the mail provider are connected."}
+                    {emailReady
+                      ? "Your Resend connection, verified domain and active mailbox are ready. Open the inbox to send, receive and track messages."
+                      : "Complete these workspace steps in order: connect a Resend account, add your business domain and publish its DNS records, verify sending and receiving, then create an email address."}
                   </p>
                   <p className={styles.previewDisclaimer}>
-                    {pilotMailboxReady
-                      ? "This is a controlled text-only pilot. Attachments and scheduled messages are not enabled."
-                      : "The domain, mailbox, and mail settings screens are currently previews; they do not save provider or DNS configuration."}
+                    {emailReady
+                      ? "This workspace currently supports the enabled mailbox features. Attachments and scheduled sending are not available yet."
+                      : "Provider keys are stored encrypted on the server. Domain status is shown only after ABEmail checks it with Resend."}
                   </p>
-                  <Link href={pilotMailboxReady ? "/dashboard/" + selected.id + "/mail" : settingsHref("domains")} className={styles.bannerLink}>{pilotMailboxReady ? "Open pilot inbox" : "View setup steps"} <span aria-hidden="true">→</span></Link>
+                  <Link href={emailReady ? "/dashboard/" + selected.id + "/mail" : settingsHref(!providerConnected ? "mail" : verifiedDomains.length === 0 ? "domains" : "mailboxes")} className={styles.bannerLink}>{emailReady ? "Open inbox" : !providerConnected ? "Connect Resend" : verifiedDomains.length === 0 ? "Add and verify domain" : "Create mailbox"} <span aria-hidden="true">→</span></Link>
                 </div>
               </section>
 
@@ -153,7 +125,7 @@ export default function WorkspaceHome({
                 <section className={styles.inboxPanel} aria-labelledby="inbox-heading">
                   <header className={styles.inboxHeader}>
                     <div><span aria-hidden="true">▤</span><h2 id="inbox-heading">Inbox</h2></div>
-                    <span>0 live messages</span>
+                    <span>{mailboxReady ? "Mailbox is configured" : "No active mailbox"}</span>
                   </header>
                   {mailboxError ? (
                     <div className={styles.emptyState}>
@@ -164,8 +136,10 @@ export default function WorkspaceHome({
                   ) : (
                     <div className={styles.emptyState}>
                       <div className={styles.emptyIcon} aria-hidden="true">✉</div>
-                      <h3>Your inbox is ready for setup</h3>
-                      <p>There are no live messages to show yet. ABEmail will not display sample mail in your signed-in workspace.</p>
+                      <h3>{mailboxReady ? "Open your active inbox" : "Your inbox is ready for setup"}</h3>
+                      <p>{mailboxReady ? "Your mailbox has been configured. Open Inbox to view incoming and sent messages." : "Create an email address after connecting Resend and verifying your domain."}</p>
+                      {mailboxReady && <Link className={styles.bannerLink} href={"/dashboard/" + selected.id + "/mail"}>Open Inbox <span aria-hidden="true">→</span></Link>}
+                      {!mailboxReady && <Link className={styles.bannerLink} href={settingsHref(!providerConnected ? "mail" : "domains")}>Continue setup <span aria-hidden="true">→</span></Link>}
                     </div>
                   )}
                 </section>
@@ -173,20 +147,45 @@ export default function WorkspaceHome({
                 <aside className={styles.setupPanel} aria-labelledby="setup-checklist-heading">
                   <div className={styles.setupPanelHeading}>
                     <div><p className={styles.eyebrow}>GET STARTED</p><h2 id="setup-checklist-heading">Workspace setup</h2></div>
-                    <span className={styles.setupCount}>0/3</span>
+                    <span className={styles.setupCount}>{completedSetupSteps}/3</span>
                   </div>
                   <p className={styles.setupIntro}>These are the remaining steps before the mail features can be activated.</p>
                   <div className={styles.setupList}>
-                    {setupSteps.map((step) => (
+                    {[
+                      {
+                        number: "01",
+                        title: "Connect Resend",
+                        detail: "Use a dedicated Full Access key so ABEmail can manage domains and signed inbound webhooks.",
+                        complete: providerConnected,
+                        href: settingsHref("mail"),
+                        action: providerConnected ? "Connection settings" : "Connect provider",
+                      },
+                      {
+                        number: "02",
+                        title: "Verify your domain",
+                        detail: "Publish the requested DNS records and confirm sending and receiving in Resend.",
+                        complete: verifiedDomains.length > 0,
+                        href: settingsHref("domains"),
+                        action: verifiedDomains.length > 0 ? "Manage domains" : "Add domain",
+                      },
+                      {
+                        number: "03",
+                        title: "Create a mailbox",
+                        detail: "Set up an address such as info@yourdomain.com on a verified domain.",
+                        complete: mailboxReady,
+                        href: settingsHref("mailboxes"),
+                        action: mailboxReady ? "Manage mailboxes" : "Create mailbox",
+                      },
+                    ].map((step) => (
                       <article className={styles.setupStep} key={step.number}>
                         <span className={styles.stepNumber}>{step.number}</span>
                         <div className={styles.stepCopy}>
                           <div className={styles.stepTitleRow}>
                             <h3>{step.title}</h3>
-                            <span className={step.state === "Available" ? styles.readyState : styles.pendingState}>{step.state}</span>
+                            <span className={step.complete ? styles.readyState : styles.pendingState}>{step.complete ? "Complete" : "Next step"}</span>
                           </div>
                           <p>{step.detail}</p>
-                          <Link href={settingsHref(step.href.split("/").pop() ?? "general")}>{step.action} <span aria-hidden="true">→</span></Link>
+                          <Link href={step.href}>{step.action} <span aria-hidden="true">→</span></Link>
                         </div>
                       </article>
                     ))}
@@ -210,7 +209,7 @@ export default function WorkspaceHome({
                           <strong>{mailbox.display_name || mailbox.address}</strong>
                           <small>{mailbox.address}</small>
                         </span>
-                        <span className={styles.mailboxState}>Provider connection unverified</span>
+                        <span className={styles.mailboxState}>Active</span>
                       </li>
                     ))}
                   </ul>
