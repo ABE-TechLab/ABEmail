@@ -27,6 +27,7 @@ export type WorkspacePreferenceValues = {
   font: string;
   signature: string;
   replyStyle: "reply" | "bottom";
+  compactMessageList: boolean;
   notifications: { newMail: boolean; mentions: boolean; product: boolean; digest: boolean };
 };
 
@@ -83,6 +84,7 @@ const DEFAULT_PREFERENCES: WorkspacePreferenceValues = {
   font: "sans",
   signature: "",
   replyStyle: "reply",
+  compactMessageList: false,
   notifications: { newMail: true, mentions: true, product: false, digest: false },
 };
 
@@ -184,20 +186,60 @@ export default function WorkspaceSettingsPanel({
   }, [organizationName]);
 
   useEffect(() => {
+    let active = true;
+    let localPreferences: Partial<WorkspacePreferenceValues> = {};
     try {
       const stored = window.localStorage.getItem(SETTINGS_KEY + organizationId);
-      if (stored) {
-        const parsed = JSON.parse(stored) as Partial<WorkspacePreferenceValues>;
-        setPreferences({
+      if (stored) localPreferences = JSON.parse(stored) as Partial<WorkspacePreferenceValues>;
+      if (active) {
+        const local = {
           ...DEFAULT_PREFERENCES,
-          ...parsed,
-          notifications: { ...DEFAULT_PREFERENCES.notifications, ...(parsed.notifications ?? {}) },
-        });
+          ...localPreferences,
+          compactMessageList: localPreferences.compactMessageList ?? window.localStorage.getItem(COMPACT_KEY) === "true",
+          notifications: { ...DEFAULT_PREFERENCES.notifications, ...(localPreferences.notifications ?? {}) },
+        };
+        setPreferences(local);
+        setCompactMessageList(local.compactMessageList);
       }
-      setCompactMessageList(window.localStorage.getItem(COMPACT_KEY) === "true");
     } catch {
-      // The workspace remains usable with defaults when browser storage is blocked.
+      // Browser storage is only a fallback; the server remains the source of truth.
     }
+
+    void (async () => {
+      try {
+        const response = await fetch("/api/organizations/" + organizationId + "/preferences", { cache: "no-store" });
+        if (!response.ok) return;
+        const result = await response.json() as { preferences?: Partial<WorkspacePreferenceValues> };
+        const saved = result.preferences ?? {};
+        const hasServerPreferences = Object.keys(saved).length > 0;
+        const base = hasServerPreferences ? saved : localPreferences;
+        const loaded: WorkspacePreferenceValues = {
+          ...DEFAULT_PREFERENCES,
+          ...base,
+          notifications: { ...DEFAULT_PREFERENCES.notifications, ...(base.notifications ?? {}) },
+        };
+        if (!active) return;
+        setPreferences(loaded);
+        setCompactMessageList(loaded.compactMessageList);
+        try {
+          window.localStorage.setItem(SETTINGS_KEY + organizationId, JSON.stringify(loaded));
+          window.localStorage.setItem(COMPACT_KEY, String(loaded.compactMessageList));
+        } catch {
+          // Server preferences are still loaded even if browser storage is blocked.
+        }
+        if (!hasServerPreferences && Object.keys(localPreferences).length > 0) {
+          await fetch("/api/organizations/" + organizationId + "/preferences", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(loaded),
+          });
+        }
+      } catch {
+        // Keep local preferences available if the preference endpoint is temporarily unreachable.
+      }
+    })();
+
+    return () => { active = false; };
   }, [organizationId]);
 
   async function refreshProviderStatus(showError = true) {
@@ -271,25 +313,51 @@ export default function WorkspaceSettingsPanel({
     setToast(message);
   }
 
-  function storePreferences(next = preferences): boolean {
+  async function storePreferences(next = preferences): Promise<boolean> {
+    setPreferences(next);
+    setCompactMessageList(next.compactMessageList);
     try {
       window.localStorage.setItem(SETTINGS_KEY + organizationId, JSON.stringify(next));
-      setPreferences(next);
+      window.localStorage.setItem(COMPACT_KEY, String(next.compactMessageList));
+    } catch {
+      // Continue and try saving through the authenticated backend.
+    }
+
+    try {
+      const response = await fetch("/api/organizations/" + organizationId + "/preferences", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(next),
+      });
+      const result = await response.json() as { ok?: boolean; preferences?: Partial<WorkspacePreferenceValues>; error?: string };
+      if (!response.ok || !result.ok) {
+        notify(result.error || "Preferences could not be synced to this workspace. Retry saving them.");
+        return false;
+      }
+      const merged = result.preferences ?? next;
+      const saved: WorkspacePreferenceValues = {
+        ...DEFAULT_PREFERENCES,
+        ...merged,
+        notifications: { ...DEFAULT_PREFERENCES.notifications, ...(merged.notifications ?? {}) },
+      };
+      setPreferences(saved);
+      setCompactMessageList(saved.compactMessageList);
+      try {
+        window.localStorage.setItem(SETTINGS_KEY + organizationId, JSON.stringify(saved));
+        window.localStorage.setItem(COMPACT_KEY, String(saved.compactMessageList));
+      } catch {
+        // Server-side preference save succeeded.
+      }
       return true;
     } catch {
-      notify("Your browser could not save this preference. Check its storage settings and try again.");
+      notify("Preferences were changed locally but could not be synced to this workspace. Check the connection and save again.");
       return false;
     }
   }
 
-  function updateCompact(next: boolean) {
-    setCompactMessageList(next);
-    try {
-      window.localStorage.setItem(COMPACT_KEY, String(next));
-      notify(next ? "Compact message list enabled in the mailbox." : "Standard message list enabled in the mailbox.");
-    } catch {
-      notify("Your browser could not save the message-list preference.");
-    }
+  async function updateCompact(next: boolean) {
+    const saved = await storePreferences({ ...preferences, compactMessageList: next });
+    if (saved) notify(next ? "Compact message list enabled in the mailbox." : "Standard message list enabled in the mailbox.");
   }
 
   async function saveGeneral(event: FormEvent<HTMLFormElement>) {
@@ -301,7 +369,7 @@ export default function WorkspaceSettingsPanel({
     }
     setSaving(true);
     setToast("");
-    if (!storePreferences()) {
+    if (!(await storePreferences())) {
       setSaving(false);
       return;
     }
@@ -319,7 +387,7 @@ export default function WorkspaceSettingsPanel({
           return;
         }
         router.refresh();
-        notify("Workspace name updated. Regional preferences are saved in this browser.");
+        notify("Workspace name updated. Regional preferences are saved to this workspace.");
       } catch {
         notify("The workspace name could not be saved because the connection failed.");
       } finally {
@@ -327,18 +395,18 @@ export default function WorkspaceSettingsPanel({
       }
       return;
     }
-    notify("Regional preferences saved for this workspace in this browser.");
+    notify("Regional preferences saved for this workspace.");
     setSaving(false);
   }
 
-  function saveMailPreferences(event: FormEvent<HTMLFormElement>) {
+  async function saveMailPreferences(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (storePreferences()) notify("Mail and compose preferences saved. The live mailbox will use them on this browser.");
+    if (await storePreferences()) notify("Mail and compose preferences saved for this workspace.");
   }
 
-  function updateNotification(key: keyof WorkspacePreferenceValues["notifications"], value: boolean) {
+  async function updateNotification(key: keyof WorkspacePreferenceValues["notifications"], value: boolean) {
     const next = { ...preferences, notifications: { ...preferences.notifications, [key]: value } };
-    if (storePreferences(next)) notify("Notification preference saved for this workspace in this browser.");
+    if (await storePreferences(next)) notify("Notification preference saved for this workspace.");
   }
 
   async function connectResend(event: FormEvent<HTMLFormElement>) {
@@ -519,7 +587,7 @@ export default function WorkspaceSettingsPanel({
                   <Field label="Language"><select value={preferences.language} onChange={(event) => setPreferences((current) => ({ ...current, language: event.target.value }))}><option value="en">English</option><option value="fr">French</option><option value="pt">Portuguese</option></select></Field>
                   <Field label="Time zone" hint="Used for message timestamps in this workspace."><select value={preferences.timezone} onChange={(event) => setPreferences((current) => ({ ...current, timezone: event.target.value }))}><option value="Africa/Lagos">Africa/Lagos (WAT)</option><option value="UTC">UTC</option><option value="Europe/London">Europe/London</option><option value="America/New_York">America/New York</option><option value="America/Toronto">America/Toronto</option></select></Field>
                 </div>
-                <div className="settings-info-banner"><span>i</span><p>Regional preferences are stored per workspace in this browser. Workspace name changes are saved to the organization when authorized by your role.</p></div>
+                <div className="settings-info-banner"><span>i</span><p>Regional preferences sync to this workspace. Workspace name changes are saved to the organization when authorized by your role.</p></div>
                 <div className="settings-form-footer"><span>Workspace: {organizationSlug}</span><button className="mail-primary-action" type="submit" disabled={saving}>{saving ? "Saving…" : "Save changes"}</button></div>
               </form>}
 
@@ -529,7 +597,7 @@ export default function WorkspaceSettingsPanel({
                 <div className="settings-choice-group"><p className="settings-subheading">Design system palette</p><p className="settings-muted">Apply a shared ABE TechLab palette to the workspace UI.</p><label className="settings-field settings-palette-field"><span>Color palette</span><select className="settings-palette-select" value={activeDesignTheme} onChange={(event) => { const nextTheme = event.target.value as DesignThemeId; setDesignTheme(nextTheme); notify((DESIGN_THEMES.find((option) => option.value === nextTheme)?.name ?? "Selected") + " palette applied."); }}>{DESIGN_THEMES.map((option) => <option key={option.value} value={option.value}>{option.name}</option>)}</select></label></div>
                 <div className="settings-divider" />
                 <SettingRow title="Compact message list" description="Show more messages in the active mailbox list."><Toggle checked={compactMessageList} onChange={updateCompact} label="Compact message list" /></SettingRow>
-                <div className="settings-form-footer"><span>Appearance mode and palette are user-wide; message density is saved in this browser.</span><span className="settings-status active"><span />Applied</span></div>
+                <div className="settings-form-footer"><span>Appearance and palette are user-wide; message density syncs with this workspace.</span><span className="settings-status active"><span />Applied</span></div>
               </div>}
 
               {section === "mail" && <div className="workspace-provider-settings">
@@ -553,7 +621,7 @@ export default function WorkspaceSettingsPanel({
                   <div className="settings-divider" />
                   <div className="settings-choice-group"><p className="settings-subheading">When replying</p><label className="settings-radio-row"><input type="radio" name="workspace-reply-style" value="reply" checked={preferences.replyStyle === "reply"} onChange={() => setPreferences((current) => ({ ...current, replyStyle: "reply" }))} /><span><strong>Reply above the quoted message</strong><small>Start writing before the original message.</small></span></label><label className="settings-radio-row"><input type="radio" name="workspace-reply-style" value="bottom" checked={preferences.replyStyle === "bottom"} onChange={() => setPreferences((current) => ({ ...current, replyStyle: "bottom" }))} /><span><strong>Reply below the quoted message</strong><small>Place the cursor after the quoted original message.</small></span></label></div>
                   <Field label="Email signature" hint="Added to outgoing messages from this workspace."><textarea rows={4} value={preferences.signature} onChange={(event) => setPreferences((current) => ({ ...current, signature: event.target.value }))} /></Field>
-                  <div className="settings-form-footer"><span>Mail preferences are applied to the live compose and reply flow.</span><button className="mail-primary-action" type="submit">Save mail preferences</button></div>
+                  <div className="settings-form-footer"><span>Mail preferences sync to your account in this workspace and apply to compose/reply.</span><button className="mail-primary-action" type="submit">Save mail preferences</button></div>
                 </form>
               </div>}
 
@@ -562,7 +630,7 @@ export default function WorkspaceSettingsPanel({
                 <SettingRow title="Workspace mentions" description="Save your preference for workspace mention alerts."><Toggle checked={preferences.notifications.mentions} onChange={(next) => updateNotification("mentions", next)} label="Workspace mentions" /></SettingRow>
                 <SettingRow title="Product updates" description="Save your preference for ABEmail product updates."><Toggle checked={preferences.notifications.product} onChange={(next) => updateNotification("product", next)} label="Product updates" /></SettingRow>
                 <SettingRow title="Weekly digest" description="Save your preference for a weekly activity digest."><Toggle checked={preferences.notifications.digest} onChange={(next) => updateNotification("digest", next)} label="Weekly digest" /></SettingRow>
-                <div className="settings-info-banner"><span>i</span><p>These choices are saved per workspace in this browser. ABEmail does not yet dispatch browser or weekly-digest notifications.</p></div>
+                <div className="settings-info-banner"><span>i</span><p>These choices sync to this workspace for your account. Browser and weekly-digest notification delivery are not enabled yet.</p></div>
               </div>}
 
               {section === "team" && <div>
