@@ -109,6 +109,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   if (displayName === null || displayName.length > 120) return json({ error: "Display name must be 120 characters or fewer." }, 400);
 
   const addressChanged = localPart !== current.local_part || domainId !== current.domain_id;
+  let nextAddress = current.address;
   if (addressChanged) {
     const { data: domain, error: domainError } = await auth.admin
       .from("organization_domains")
@@ -123,7 +124,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       return json({ error: "Address changes require a domain that Resend has verified with both sending and receiving enabled." }, 409);
     }
 
-    const nextAddress = localPart + "@" + domain.domain;
+    nextAddress = localPart + "@" + domain.domain;
     if (nextAddress !== current.address) {
       const { data: addressConflict, error: conflictError } = await auth.admin
         .from("mailboxes")
@@ -142,7 +143,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     .update({
       local_part: localPart,
       domain_id: domainId,
-      address: addressChanged ? undefined : undefined,
+      address: nextAddress,
       display_name: displayName,
     })
     .eq("id", mailboxId)
