@@ -45,7 +45,7 @@ Secure multi-tenant foundation. Authentication and organization access code exis
 3. Keep the ABE TechLab authentication-email sender domain decision separate from customer mailbox domains.
 4. Implement tenant-scoped Resend transport and the Ottawa Snow Match controlled pilot tracked in [issue #21](https://github.com/ABE-TechLab/ABEmail/issues/21); provider-side domain verification does not mark the app live.
 5. Implement verified domain/mailbox provisioning, signed inbound webhooks, idempotent delivery events, send authorization, quotas, and tenant-safe storage.
-5. Separate Preview/Development data from Production and complete operational readiness before customer invitations.
+6. Separate Preview/Development data from Production and complete operational readiness before customer invitations.
 
 ## Rules
 - Do not reuse Waste2Light data, secrets, domains, database, provider account, or deployment.
