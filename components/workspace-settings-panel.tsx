@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
-import SignOutButton from "@/components/auth/sign-out-button";
 import WorkspaceSidebar, { type WorkspaceChoice } from "@/components/workspace-sidebar";
 import { useAppearanceMode, type AppearanceMode } from "@/components/appearance-provider";
 import { useDesignTheme } from "@/components/design-theme-provider";
@@ -331,20 +330,14 @@ export default function WorkspaceSettingsPanel({
     let active = true;
     const timer = window.setTimeout(() => {
       if (!active) return;
-      if (section === "mail") void refreshProviderStatus(false);
-      if (section === "domains") {
-        void refreshProviderStatus(false);
-        void refreshDomains(false);
-      }
+      // The header status must reflect the real provider state on every Settings section.
+      void refreshProviderStatus(false);
+      if (section === "domains") void refreshDomains(false);
       if (section === "mailboxes") {
-        void refreshProviderStatus(false);
         void refreshDomains(false);
         void refreshMailboxes(false);
       }
-      if (section === "team") {
-        void refreshProviderStatus(false);
-        void refreshInvitations(false);
-      }
+      if (section === "team") void refreshInvitations(false);
     }, 0);
     return () => {
       active = false;
@@ -719,11 +712,17 @@ export default function WorkspaceSettingsPanel({
         <header className="mail-topbar">
           <div className="mail-breadcrumb"><Link href={base}>Workspace</Link><span className="mail-breadcrumb-slash">/</span><strong>{info.title}</strong></div>
           <div className="settings-topbar-title">{organizationName}</div>
-          <div className="mail-topbar-right"><span className="settings-role-pill">{organizationRole}</span><span className="mail-user-avatar" title={email}>{email.split("@")[0].slice(0, 2).toUpperCase() || "U"}</span><SignOutButton className="auth-signout-control" /></div>
+          <div className="mail-topbar-right">
+            <Link href={settingsBase} className="mail-topbar-profile-link" aria-label="Open profile and general settings" title={email + " · General settings"}>
+              <span className="mail-user-avatar">{email.split("@")[0].slice(0, 2).toUpperCase() || "U"}</span>
+            </Link>
+          </div>
         </header>
 
         <div className="settings-page-scroll">
-          <div className="settings-page-heading"><div><p className="mail-overline">WORKSPACE SETTINGS</p><h1>Settings</h1><p>Changes are scoped to {organizationName}; workspace switching does not sign you out.</p></div><span className="settings-preview-chip"><span /> Workspace connected</span></div>
+          <div className="settings-page-heading"><div><p className="mail-overline">WORKSPACE SETTINGS</p><h1>Settings</h1><p>Changes are scoped to {organizationName}; workspace switching does not sign you out.</p></div><span className={"settings-preview-chip " + ((providerStatus?.connected || providerStatus?.environmentManaged) ? "connected" : providerLoading ? "checking" : "not-connected")}>
+            <span />{providerLoading ? "Checking connection" : providerStatus?.connected || providerStatus?.environmentManaged ? "Workspace connected" : providerStatus ? "Workspace not connected" : "Connection status unavailable"}
+          </span></div>
           <div className="settings-layout">
             <nav className="settings-navigation" aria-label="Settings sections">
               {(["PREFERENCES", "WORKSPACE", "ACCESS"] as const).map((group) => (
@@ -912,7 +911,7 @@ export default function WorkspaceSettingsPanel({
               {section === "security" && <div>
                 <div className="settings-security-card"><span className="settings-security-icon">◇</span><div><strong>Signed in to ABEmail</strong><p>{email || "Current authenticated account"} · Workspace role: {organizationRole}</p></div><span className="settings-summary-chip">Authenticated</span></div>
                 <SettingRow title="Workspace switching" description="Switching organizations keeps this account session active; access is rechecked for each workspace."><span className="settings-status active"><span />Membership checked</span></SettingRow>
-                <SettingRow title="Sign out" description="Sign out of the ABEmail account across all workspaces."><SignOutButton className="mail-secondary-action" /></SettingRow>
+                <SettingRow title="Sign out" description="Sign out from the workspace switcher at the bottom of the left sidebar."><span className="settings-muted">Available in the workspace menu</span></SettingRow>
                 <div className="settings-info-banner"><span>i</span><p>Sessions, multi-factor settings, and audit history require identity-provider support and are not separately managed here yet.</p></div>
               </div>}
             </section>
