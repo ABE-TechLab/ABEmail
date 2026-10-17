@@ -1883,3 +1883,36 @@ html[data-appearance-mode="system"] {
     margin-top: 5px;
   }
 }
+
+
+.mail-profile-menu .mail-workspace-signout {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: transparent;
+}
+.mail-profile-menu .mail-workspace-signout > button {
+  display: block;
+  width: 100%;
+  min-height: 34px;
+  padding: 7px 8px;
+  border: 1px solid var(--border, #dfe7de);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--foreground, #485449);
+  text-align: left;
+  font-size: 10px;
+  font-weight: 650;
+}
+.mail-profile-menu .mail-workspace-signout > button:hover {
+  border-color: #e1bebe;
+  background: #fff7f6;
+  color: #9e3737;
+}
+.mail-profile-menu .mail-workspace-signout [role="alert"] {
+  display: block;
+  margin-top: 6px;
+  color: #a43f3f;
+  font-size: 10px;
+  line-height: 1.4;
+}
