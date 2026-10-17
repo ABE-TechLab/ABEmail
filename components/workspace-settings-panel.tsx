@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import SignOutButton from "@/components/auth/sign-out-button";
 import WorkspaceSidebar, { type WorkspaceChoice } from "@/components/workspace-sidebar";
 import { useAppearanceMode, type AppearanceMode } from "@/components/appearance-provider";
@@ -70,7 +70,7 @@ const APPEARANCE_MODES: { id: AppearanceMode; label: string; glyph: string }[] =
   { id: "system", label: "System", glyph: "◐" },
 ];
 
-function SettingRow({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
+function SettingRow({ title, description, children }: { title: string; description: string; children: ReactNode }) {
   return <div className="settings-row"><div className="settings-row-copy"><strong>{title}</strong><p>{description}</p></div><div className="settings-row-control">{children}</div></div>;
 }
 
