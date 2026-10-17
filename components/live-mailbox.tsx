@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import WorkspaceSidebar, { type MailboxView, type WorkspaceChoice } from "@/components/workspace-sidebar";
+import AppearanceToggle from "@/components/appearance-toggle";
 import styles from "./live-mailbox.module.css";
 import workspaceStyles from "./workspace-home.module.css";
 
@@ -147,6 +148,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   }, [organizationId]);
 
   const [selectedMessageId, setSelectedMessageId] = useState("");
+  const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);
   const [to, setTo] = useState("");
   const [subject, setSubject] = useState("");
@@ -154,6 +156,16 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [requestKey, setRequestKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 760px)");
+    const returnToListOnMobile = () => {
+      if (media.matches) setMobileDetailOpen(false);
+    };
+    returnToListOnMobile();
+    media.addEventListener("change", returnToListOnMobile);
+    return () => media.removeEventListener("change", returnToListOnMobile);
+  }, []);
 
   useEffect(() => {
     if (!composeOpen || composeCursorPosition.current === null) return;
@@ -285,6 +297,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
             {!query && <kbd>Search</kbd>}
           </label>
           <div className={"mail-topbar-right " + workspaceStyles.topbarActions}>
+            <AppearanceToggle />
             <span className={styles.livePill + (emailConnectionState === "connected" ? "" : " " + styles.livePillUnavailable)} role="status" aria-live="polite">
               <span />
               {emailConnectionState === "connected" ? "Live email" : emailConnectionState === "checking" ? "Checking email" : emailConnectionState === "not_connected" ? "Email not connected" : "Email status unavailable"}
@@ -294,10 +307,46 @@ export default function LiveMailbox(props: LiveMailboxProps) {
             </Link>
           </div>
         </header>
-        {notice && <p className={styles.notice} role="status">{notice}</p>}
-        {messagesError && <div className={styles.warning} role="alert">The mail database could not be read in this deployment. Refresh the page or contact an administrator.</div>}
-        {mailboxes.length > 0 && selectedMailbox && !firstEmailChecksComplete && (
-          <section className={styles.firstEmailChecklist} aria-labelledby="first-email-heading">
+        {!mailboxes.length ? (
+          <section className={styles.setupCard}>
+            <h2>Finish email setup for this workspace</h2>
+            <p>Connect a Resend account, add a domain, publish the requested DNS records and verify both sending and receiving before creating a mailbox.</p>
+            <div className={styles.headerActions}>
+              <Link className={styles.primaryButton} href={"/dashboard/" + organizationId + "/settings/mail"}>Connect Resend</Link>
+              <Link className={styles.secondaryButton} href={"/dashboard/" + organizationId + "/settings/domains"}>Set up a domain</Link>
+            </div>
+          </section>
+        ) : (
+          <div className={"mail-content-layout" + (mobileDetailOpen ? " mobile-detail-open" : "")}>
+            <section className="mail-list-pane" aria-label={activeView + " messages"}>
+              {notice && <p className={styles.notice} role="status">{notice}</p>}
+              {messagesError && <div className={styles.warning} role="alert">The mail database could not be read in this deployment. Refresh the page or contact an administrator.</div>}
+              <div className="mail-list-heading">
+                <div>
+                  <p className="mail-overline">YOUR MAIL</p>
+                  <h1>{activeView}</h1>
+                  <p className="mail-list-subtitle">{visibleMessages.length} message{visibleMessages.length === 1 ? "" : "s"} in this view</p>
+                </div>
+                <label className={styles.mailboxPickerLabel}>
+                  <span className="mail-sr-only">Mailbox</span>
+                  <select
+                    value={mailboxId}
+                    onChange={(event) => { setMailboxId(event.target.value); setSelectedMessageId(""); setMobileDetailOpen(false); }}
+                    aria-label="Select mailbox"
+                  >
+                    {mailboxes.map((mailbox) => (
+                      <option key={mailbox.id} value={mailbox.id}>{mailbox.display_name || mailbox.address}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <div className="mail-list-toolbar">
+                <span className="mail-toolbar-label">{activeView === "Inbox" ? "Received" : "Sent by this mailbox"}</span>
+                <span className="mail-toolbar-spacer" />
+                <button type="button" className="mail-toolbar-button" onClick={() => router.refresh()} aria-label="Refresh messages">↻</button>
+              </div>
+              <div className="mail-message-list">
+                          <section className={styles.firstEmailChecklist} aria-labelledby="first-email-heading">
             <div className={styles.firstEmailHeading}>
               <div>
                 <p className="mail-overline">DELIVERY CHECK</p>
@@ -326,49 +375,11 @@ export default function LiveMailbox(props: LiveMailboxProps) {
             </div>
             <p className={styles.firstEmailFootnote}>A sent status confirms Resend accepted a message; delivery events update its status separately. Check the recipient inbox and send a reply to verify both directions.</p>
           </section>
-        )}
-        {!mailboxes.length ? (
-          <section className={styles.setupCard}>
-            <h2>Finish email setup for this workspace</h2>
-            <p>Connect a Resend account, add a domain, publish the requested DNS records and verify both sending and receiving before creating a mailbox.</p>
-            <div className={styles.headerActions}>
-              <Link className={styles.primaryButton} href={"/dashboard/" + organizationId + "/settings/mail"}>Connect Resend</Link>
-              <Link className={styles.secondaryButton} href={"/dashboard/" + organizationId + "/settings/domains"}>Set up a domain</Link>
-            </div>
-          </section>
-        ) : (
-          <div className="mail-content-layout">
-            <section className="mail-list-pane" aria-label={activeView + " messages"}>
-              <div className="mail-list-heading">
-                <div>
-                  <p className="mail-overline">YOUR MAIL</p>
-                  <h1>{activeView}</h1>
-                  <p className="mail-list-subtitle">{visibleMessages.length} message{visibleMessages.length === 1 ? "" : "s"} in this view</p>
-                </div>
-                <label className={styles.mailboxPickerLabel}>
-                  <span className="mail-sr-only">Mailbox</span>
-                  <select
-                    value={mailboxId}
-                    onChange={(event) => { setMailboxId(event.target.value); setSelectedMessageId(""); }}
-                    aria-label="Select mailbox"
-                  >
-                    {mailboxes.map((mailbox) => (
-                      <option key={mailbox.id} value={mailbox.id}>{mailbox.display_name || mailbox.address}</option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-              <div className="mail-list-toolbar">
-                <span className="mail-toolbar-label">{activeView === "Inbox" ? "Received" : "Sent by this mailbox"}</span>
-                <span className="mail-toolbar-spacer" />
-                <button type="button" className="mail-toolbar-button" onClick={() => router.refresh()} aria-label="Refresh messages">↻</button>
-              </div>
-              <div className="mail-message-list">
                 {visibleMessages.map((message) => (
                   <article className={selectedMessage?.id === message.id ? "mail-message-row selected" : "mail-message-row"} key={message.id}>
                     <button
                       className="mail-message-open"
-                      onClick={() => setSelectedMessageId(message.id)}
+                      onClick={() => { setSelectedMessageId(message.id); setMobileDetailOpen(true); }}
                       type="button"
                       aria-label={"Open " + (message.subject || "message")}
                     >
@@ -400,34 +411,45 @@ export default function LiveMailbox(props: LiveMailboxProps) {
               {selectedMessage ? (
                 <div className="mail-message-detail">
                   <div className="mail-detail-actions">
+                    <button type="button" className="mail-mobile-back" onClick={() => setMobileDetailOpen(false)}>← Inbox</button>
                     <span className={styles.messageStatus}>{selectedMessage.status}</span>
                     <div className="mail-detail-action-group">
+                      {selectedMessage.direction === "inbound" && <button type="button" className="mail-reader-reply" onClick={() => replyTo(selectedMessage)}>Reply <span aria-hidden="true">↶</span></button>}
                       <button type="button" className="mail-toolbar-button" onClick={() => router.refresh()} aria-label="Refresh message">↻</button>
                     </div>
                   </div>
                   <div className="mail-detail-scroll">
-                    <div className="mail-subject-line"><h2>{selectedMessage.subject || "(no subject)"}</h2></div>
-                    <div className="mail-message-meta">
-                      <span className="mail-avatar tone-slate">{initials(selectedMessage.from_address)}</span>
+                    <div className="mail-reader-heading">
+                      <p className="mail-overline">{selectedMessage.direction === "inbound" ? "INCOMING MESSAGE" : "SENT MESSAGE"}</p>
+                      <div className="mail-subject-line">
+                        <h2>{selectedMessage.subject || "(no subject)"}</h2>
+                        <span className="mail-direction-pill">{selectedMessage.direction === "inbound" ? "Inbox" : "Sent"}</span>
+                      </div>
+                    </div>
+                    <div className="mail-message-meta mail-reader-meta">
+                      <span className="mail-avatar mail-reader-avatar tone-slate">{initials(selectedMessage.direction === "inbound" ? selectedMessage.from_address : organizationName)}</span>
                       <div className="mail-sender-info">
-                        <strong>{selectedMessage.from_address}</strong>
+                        <strong>{selectedMessage.direction === "inbound" ? selectedMessage.from_address : organizationName}</strong>
                         <span>To {selectedMessage.to_addresses.join(", ")}</span>
+                        <small>{selectedMessage.direction === "inbound" ? "Received by" : "Sent from"} {selectedMailbox?.address ?? ""}</small>
                       </div>
                       <time>{messageDate(selectedMessage, mailPreferences.timezone, mailPreferences.language)}</time>
                     </div>
-                    <div className="mail-message-body">
-                      {plainText(selectedMessage).split("\n").map((line, index) => (
-                        line
-                          ? <p key={index}>{line}</p>
-                          : <div key={index} className="mail-body-spacer" />
-                      ))}
+                    <div className="mail-message-body-card">
+                      <div className="mail-message-body">
+                        {plainText(selectedMessage).split("\n").map((line, index) => (
+                          line
+                            ? <p key={index}>{line}</p>
+                            : <div key={index} className="mail-body-spacer" />
+                        ))}
+                      </div>
                     </div>
                     {selectedMessage.direction === "inbound" && (
                       <div className="mail-reply-actions">
                         <button type="button" className="mail-primary-action" onClick={() => replyTo(selectedMessage)}>↶ Reply</button>
                       </div>
                     )}
-                    <p className="mail-demo-footnote"><span className="mail-demo-dot" /> Live message · {selectedMessage.status}</p>
+                    <p className="mail-demo-footnote"><span className="mail-demo-dot" /> Message status: {selectedMessage.status} · {selectedMessage.direction === "inbound" ? "Received" : "Sent"} {messageDate(selectedMessage, mailPreferences.timezone, mailPreferences.language)}</p>
                   </div>
                 </div>
               ) : (
