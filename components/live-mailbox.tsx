@@ -264,7 +264,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   }
 
   return (
-    <div className={"mail-app " + workspaceStyles.app + (compactMessageList ? " " + workspaceStyles.compactList : "")}>
+    <div className={"mail-app mailbox-live-app " + workspaceStyles.app + (compactMessageList ? " " + workspaceStyles.compactList : "")}>
       <WorkspaceSidebar
         activeView={activeView}
         mailboxBaseHref={"/dashboard/" + organizationId + "/mail"}
