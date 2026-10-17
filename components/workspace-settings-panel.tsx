@@ -473,8 +473,6 @@ export default function WorkspaceSettingsPanel({
     }
   }
 
-  const usedDomains = [...new Set(mailboxes.map((mailbox) => mailbox.address.split("@")[1]).filter((domain): domain is string => Boolean(domain)))];
-
   return (
     <div className="mail-app workspace-settings-app">
       <WorkspaceSidebar
