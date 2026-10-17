@@ -49,6 +49,26 @@ export default async function PilotMailPage({ params, searchParams }: MailPagePr
     return <main style={{ padding: 28 }}><h1>Pilot mailbox only</h1><p>This first live transport release is limited to the Ottawa Snow Match test workspace.</p></main>;
   }
 
+  const { data: workspaceMembershipRows } = await supabase
+    .from("organization_memberships")
+    .select("organization_id, role")
+    .eq("user_id", user.id)
+    .eq("status", "active");
+  const workspaceMemberships = workspaceMembershipRows ?? [];
+  const workspaceIds = [...new Set([...workspaceMemberships.map((row) => row.organization_id), organization.id])];
+  const { data: workspaceRows } = await supabase
+    .from("organizations")
+    .select("id, name, slug, status")
+    .in("id", workspaceIds)
+    .eq("status", "active");
+  const workspaces = (workspaceRows ?? []).map((workspace) => ({
+    id: workspace.id,
+    name: workspace.name,
+    slug: workspace.slug,
+    role: workspaceMemberships.find((row) => row.organization_id === workspace.id)?.role
+      ?? (workspace.id === organization.id ? membership.role : "member"),
+  }));
+
   const { data: mailboxRows, error: mailboxError } = await supabase
     .from("mailboxes")
     .select("id, address, display_name")
@@ -101,6 +121,7 @@ export default async function PilotMailPage({ params, searchParams }: MailPagePr
       allowPilotSetup={membership.role === "owner" || membership.role === "admin"}
       messagesError={messagesError || Boolean(mailboxError)}
       activeView={activeView}
+      workspaces={workspaces}
     />
   );
 }
