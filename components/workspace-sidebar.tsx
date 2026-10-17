@@ -72,11 +72,19 @@ export default function WorkspaceSidebar({
   const [switcherOpen, setSwitcherOpen] = useState(false);
 
   useEffect(() => {
-    try {
-      setCollapsed(window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "true");
-    } catch {
-      // Keep the sidebar expanded when storage is unavailable.
-    }
+    let active = true;
+    const timer = window.setTimeout(() => {
+      if (!active) return;
+      try {
+        setCollapsed(window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "true");
+      } catch {
+        // Keep the sidebar expanded when storage is unavailable.
+      }
+    }, 0);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
   }, []);
 
   function toggleCollapsed() {
