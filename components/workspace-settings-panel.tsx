@@ -575,10 +575,10 @@ export default function WorkspaceSettingsPanel({
 
               {section === "domains" && <div className="workspace-domains-settings">
                 <div className="settings-section-summary"><div><strong>Business domains</strong><p>Add a domain to Resend, publish the requested DNS records at your registrar, then verify it here.</p></div><button className="mail-secondary-action" type="button" onClick={() => { void refreshDomains(); }}>Refresh status</button></div>
-                {!providerStatus?.connected && !providerStatus?.environmentManaged && <div className="settings-info-banner"><span>i</span><p>Connect Resend in Settings → Mail & compose before adding a domain. A Full Access key is required for domain setup and receiving webhooks.</p></div>}
+                {!providerStatus?.connected && <div className="settings-info-banner"><span>i</span><p>Connect Resend in Settings → Mail & compose before adding a domain. A Full Access key is required for domain setup and receiving webhooks.</p></div>}
                 <form className="settings-domain-form" onSubmit={addDomain}>
                   <Field label="Domain name" hint="Enter the host you own, for example company.com. Do not include https:// or an email address."><input value={domainInput} onChange={(event) => setDomainInput(event.target.value)} placeholder="company.com" autoCapitalize="none" autoCorrect="off" required disabled={!canManageWorkspace || domainBusy} /></Field>
-                  <button className="mail-primary-action" type="submit" disabled={!canManageWorkspace || domainBusy || (!providerStatus?.connected && !providerStatus?.environmentManaged)}>{domainBusy ? "Adding…" : "Add domain"}</button>
+                  <button className="mail-primary-action" type="submit" disabled={!canManageWorkspace || domainBusy || !providerStatus?.connected}>{domainBusy ? "Adding…" : "Add domain"}</button>
                 </form>
                 {domainsLoading && <p className="settings-muted">Loading domain records…</p>}
                 {!domainsLoading && domains.length === 0 && <div className="settings-empty-state"><strong>No domains configured</strong><p>Connect Resend and add a domain to start preparing business email.</p></div>}
