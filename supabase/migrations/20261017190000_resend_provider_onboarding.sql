@@ -34,6 +34,7 @@ comment on table public.organization_provider_connections is
 alter table public.organization_domains
   add column if not exists provider_domain_id text,
   add column if not exists dns_records jsonb not null default '[]'::jsonb,
+  add column if not exists sending_enabled boolean not null default false,
   add column if not exists receiving_enabled boolean not null default false,
   add column if not exists last_checked_at timestamptz,
   add column if not exists last_error_code text;
