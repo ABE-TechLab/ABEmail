@@ -253,14 +253,18 @@ export async function POST(request: NextRequest, context: RouteContext) {
     return json({ error: "The invitation could not be saved." }, 503);
   }
 
-  const { error: grantError } = await auth.admin
-    .from("organization_invitation_mailboxes")
-    .insert(effectiveMailboxIds.map((mailboxId) => ({
-      organization_id: organizationId,
-      invitation_id: invitation.id,
-      mailbox_id: mailboxId,
-      use_as_login_alias: false,
-    })));
+  let grantError: { message?: string } | null = null;
+  if (effectiveMailboxIds.length) {
+    const grantResult = await auth.admin
+      .from("organization_invitation_mailboxes")
+      .insert(effectiveMailboxIds.map((mailboxId) => ({
+        organization_id: organizationId,
+        invitation_id: invitation.id,
+        mailbox_id: mailboxId,
+        use_as_login_alias: false,
+      })));
+    grantError = grantResult.error;
+  }
   if (grantError) {
     await auth.admin.from("organization_invitations").delete().eq("id", invitation.id).eq("organization_id", organizationId);
     return json({ error: "Mailbox access could not be attached to the invitation. No invitation was sent; check workspace access settings and retry." }, 503);
