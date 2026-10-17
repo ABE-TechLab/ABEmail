@@ -1,5 +1,4 @@
 import Link from "next/link";
-import SignOutButton from "@/components/auth/sign-out-button";
 import WorkspaceSidebar from "@/components/workspace-sidebar";
 import styles from "./workspace-home.module.css";
 
@@ -78,9 +77,9 @@ export default function WorkspaceHome({
             <input type="search" disabled placeholder="Search is available in Inbox" aria-label="Search available in Inbox" />
           </div>
           <div className={styles.topbarActions}>
-            <Link href={settingsHref()} className={styles.topbarLink}>Settings</Link>
-            <Link href={settingsHref("security")} className={styles.topbarLink}>Account</Link>
-            <SignOutButton className="auth-signout-control" />
+            <Link href={settingsHref()} className="mail-topbar-profile-link" aria-label="Open profile and general settings" title={email + " · General settings"}>
+              <span className="mail-user-avatar">{email.split("@")[0].slice(0, 2).toUpperCase() || "U"}</span>
+            </Link>
           </div>
         </header>
 
