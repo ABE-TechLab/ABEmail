@@ -155,6 +155,23 @@ export async function POST(request: NextRequest, context: RouteContext) {
     return json({ error: "This Resend API key is already connected to another ABEmail workspace. Use a separate Resend account/API key for each customer workspace." }, 409);
   }
 
+  const { data: currentConnection, error: currentConnectionError } = await auth.admin
+    .from("organization_provider_connections")
+    .select("api_key_fingerprint, status")
+    .eq("organization_id", organizationId)
+    .maybeSingle();
+  if (currentConnectionError) return json({ error: "The current provider connection could not be checked." }, 503);
+  if (currentConnection?.status === "connected" && currentConnection.api_key_fingerprint !== fingerprint) {
+    const [{ data: verifiedDomains, error: domainsError }, { data: activeMailboxes, error: mailboxesError }] = await Promise.all([
+      auth.admin.from("organization_domains").select("id").eq("organization_id", organizationId).eq("status", "verified"),
+      auth.admin.from("mailboxes").select("id").eq("organization_id", organizationId).eq("status", "active"),
+    ]);
+    if (domainsError || mailboxesError) return json({ error: "Provider replacement safety checks could not be completed." }, 503);
+    if ((verifiedDomains ?? []).length > 0 || (activeMailboxes ?? []).length > 0) {
+      return json({ error: "This workspace has verified domains or active mailboxes that depend on the current Resend account. Do not replace the key until a provider/domain migration is planned." }, 409);
+    }
+  }
+
   try {
     await validateResendApiKey(apiKey);
     const publicOrigin = process.env.ABEMAIL_PUBLIC_APP_URL?.trim() || new URL(request.url).origin;
