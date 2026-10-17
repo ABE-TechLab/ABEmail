@@ -285,7 +285,7 @@ export async function handleResendWebhook(request: NextRequest, tenantOrganizati
       .update({
         status: "processed",
         processed_at: new Date().toISOString(),
-        organization_id: resolvedOrganizationId ?? tenantOrganizationId ?? null,
+        organization_id: tenantOrganizationId ? (resolvedOrganizationId ?? tenantOrganizationId) : null,
         mailbox_id: resolvedMailboxId,
         last_error_code: null,
       })
