@@ -1,7 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getPilotReceiveApiKey, getPilotSendApiKey } from "@/lib/email/resend-pilot";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -123,10 +122,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
     .maybeSingle();
   if (connectionError) return json({ error: "The Resend connection could not be checked." }, 503);
 
-  const legacyEnvironmentReady = auth.organization.slug === "ottawa-snow-match" &&
-    Boolean(getPilotSendApiKey() && getPilotReceiveApiKey());
-  if (connection?.status !== "connected" && !legacyEnvironmentReady) {
-    return json({ error: "Connect Resend and configure the inbound webhook before creating a mailbox." }, 409);
+  if (connection?.status !== "connected") {
+    return json({ error: "Connect this workspace to Resend in Settings before creating a mailbox." }, 409);
   }
 
   const address = localPart + "@" + domain.domain;
