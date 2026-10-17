@@ -117,8 +117,25 @@ export async function POST(request: NextRequest, context: RouteContext) {
   const role = typeof payload === "object" && payload !== null && "role" in payload && typeof payload.role === "string"
     ? payload.role
     : "member";
+  const mailboxIds = typeof payload === "object" && payload !== null && "mailboxIds" in payload && Array.isArray(payload.mailboxIds)
+    ? payload.mailboxIds
+    : [];
   if (email.length > 254 || !EMAIL_PATTERN.test(email)) return json({ error: "Enter a valid email address." }, 400);
   if (role !== "admin" && role !== "member") return json({ error: "Choose either the Admin or Member role." }, 400);
+  if (!mailboxIds.length || mailboxIds.length > 50 || mailboxIds.some((id) => typeof id !== "string" || !UUID_PATTERN.test(id)) || new Set(mailboxIds).size !== mailboxIds.length) {
+    return json({ error: "Choose at least one active mailbox for this teammate." }, 400);
+  }
+
+  const { data: chosenMailboxes, error: chosenMailboxError } = await auth.admin
+    .from("mailboxes")
+    .select("id, address, status")
+    .eq("organization_id", organizationId)
+    .eq("status", "active")
+    .in("id", mailboxIds);
+  if (chosenMailboxError) return json({ error: "Mailbox access could not be checked." }, 503);
+  if ((chosenMailboxes ?? []).length !== mailboxIds.length) {
+    return json({ error: "One or more selected mailboxes are no longer active in this workspace. Refresh and try again." }, 409);
+  }
   if (email === (auth.user.email ?? "").toLowerCase()) return json({ error: "You are already signed in to this workspace." }, 409);
 
   const now = new Date();
@@ -203,6 +220,19 @@ export async function POST(request: NextRequest, context: RouteContext) {
     return json({ error: "The invitation could not be saved." }, 503);
   }
 
+  const { error: grantError } = await auth.admin
+    .from("organization_invitation_mailboxes")
+    .insert(mailboxIds.map((mailboxId) => ({
+      organization_id: organizationId,
+      invitation_id: invitation.id,
+      mailbox_id: mailboxId,
+      use_as_login_alias: false,
+    })));
+  if (grantError) {
+    await auth.admin.from("organization_invitations").delete().eq("id", invitation.id).eq("organization_id", organizationId);
+    return json({ error: "Mailbox access could not be attached to the invitation. No invitation was sent; check workspace access settings and retry." }, 503);
+  }
+
   const publicOrigin = process.env.ABEMAIL_PUBLIC_APP_URL?.trim() || new URL(request.url).origin;
   let inviteUrl: string;
   try {
@@ -221,6 +251,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
     "",
     "Accept your invitation using this secure link:",
     inviteUrl,
+    "",
+    "This invitation gives access to: " + chosenMailboxes.map((mailbox) => mailbox.address).join(", "),
     "",
     "This invitation expires on " + new Date(invitation.expires_at).toLocaleString("en-GB", { timeZone: "UTC", timeZoneName: "short" }) + ".",
     "If you weren't expecting this invitation, you can ignore this email.",
@@ -241,12 +273,11 @@ export async function POST(request: NextRequest, context: RouteContext) {
       .update({ delivery_status: "sent", sent_at: new Date().toISOString(), delivery_error_code: null })
       .eq("id", invitation.id)
       .eq("organization_id", organizationId);
-    if (updateError) return json({ ok: true, invitation: { id: invitation.id, email, role, expiresAt: invitation.expires_at }, inviteUrl, emailStatus: "sent", note: "The invite email was accepted by Resend, but the send state could not be saved. Keep this link available until the invitation appears as Sent." }, 201);
+    if (updateError) return json({ ok: true, invitation: { id: invitation.id, email, role, expiresAt: invitation.expires_at, mailboxIds }, inviteUrl, emailStatus: "sent", note: "The invite email was accepted by Resend, but the send state could not be saved. Keep this link available until the invitation appears as Sent." }, 201);
 
     return json({
       ok: true,
-      invitation: { id: invitation.id, email, role, expiresAt: invitation.expires_at },
-      inviteUrl,
+      invitation: { id: invitation.id, email, role, expiresAt: invitation.expires_at, mailboxIds },
       emailStatus: "sent",
       note: "Invitation email accepted by Resend. The recipient still needs to accept it and verify their invited email.",
     }, 201);
@@ -262,7 +293,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     return json({
       ok: true,
-      invitation: { id: invitation.id, email, role, expiresAt: invitation.expires_at },
+      invitation: { id: invitation.id, email, role, expiresAt: invitation.expires_at, mailboxIds },
       inviteUrl,
       emailStatus: deliveryStatus,
       note: deliveryUnknown
