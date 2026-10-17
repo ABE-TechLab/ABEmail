@@ -1355,3 +1355,10 @@ html[data-appearance-mode="system"] {
 @media (prefers-reduced-motion: reduce) {
   .mail-sidebar { transition: none; }
 }
+
+/* Keep expanded workspace identity stacked on narrow screens. */
+@media (max-width: 850px) {
+  .mail-sidebar:not(.is-collapsed) .mail-sidebar-bottom .mail-workspace-copy {
+    display: flex;
+  }
+}
