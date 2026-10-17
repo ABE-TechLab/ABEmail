@@ -69,11 +69,12 @@ export async function POST(request: NextRequest) {
   const admin = createAdminClient();
   if (!admin) return json({ error: "Server-side Supabase administration is not configured in this environment." }, 503);
 
-  let { data: organization, error: organizationError } = await admin
+  const { data: existingOrganization, error: organizationError } = await admin
     .from("organizations")
     .select("id, name, slug, status")
     .eq("slug", "ottawa-snow-match")
     .maybeSingle();
+  let organization = existingOrganization;
 
   if (organizationError) return json({ error: "The pilot workspace could not be checked." }, 503);
 
