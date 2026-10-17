@@ -165,6 +165,10 @@ export default function LiveMailbox(props: LiveMailboxProps) {
     });
   }, [messages, mailboxId, activeView, query]);
   const selectedMessage = visibleMessages.find((message) => message.id === selectedMessageId) ?? visibleMessages[0];
+  const selectedMailbox = mailboxes.find((mailbox) => mailbox.id === mailboxId);
+  const sentFromSelectedMailbox = messages.some((message) => message.mailbox_id === mailboxId && message.direction === "outbound");
+  const receivedBySelectedMailbox = messages.some((message) => message.mailbox_id === mailboxId && message.direction === "inbound");
+  const firstEmailChecksComplete = sentFromSelectedMailbox && receivedBySelectedMailbox;
 
   function openCompose() {
     setComposeOpen(true);
@@ -269,6 +273,37 @@ export default function LiveMailbox(props: LiveMailboxProps) {
         </header>
         {notice && <p className={styles.notice} role="status">{notice}</p>}
         {messagesError && <div className={styles.warning} role="alert">The mail database could not be read in this deployment. Refresh the page or contact an administrator.</div>}
+        {mailboxes.length > 0 && selectedMailbox && !firstEmailChecksComplete && (
+          <section className={styles.firstEmailChecklist} aria-labelledby="first-email-heading">
+            <div className={styles.firstEmailHeading}>
+              <div>
+                <p className="mail-overline">DELIVERY CHECK</p>
+                <h2 id="first-email-heading">Test your business email</h2>
+                <p>Confirm both directions work from <strong>{selectedMailbox.address}</strong>.</p>
+              </div>
+              <span className={styles.firstEmailProgress}>{Number(sentFromSelectedMailbox) + Number(receivedBySelectedMailbox)} of 2 checks complete</span>
+            </div>
+            <div className={styles.firstEmailSteps}>
+              <div className={styles.firstEmailStep}>
+                <span className={sentFromSelectedMailbox ? styles.firstEmailStepNumber + " " + styles.firstEmailDone : styles.firstEmailStepNumber}>{sentFromSelectedMailbox ? "✓" : "1"}</span>
+                <div className={styles.firstEmailStepCopy}>
+                  <strong>{sentFromSelectedMailbox ? "Test email sent" : "Send your first test email"}</strong>
+                  <p>{sentFromSelectedMailbox ? "An outbound message is recorded for this mailbox." : "Send a message to an inbox you can check, such as your personal Gmail or Outlook."}</p>
+                </div>
+                {!sentFromSelectedMailbox && <button type="button" className={styles.primaryButton} onClick={openCompose}>Compose test email</button>}
+              </div>
+              <div className={styles.firstEmailStep}>
+                <span className={receivedBySelectedMailbox ? styles.firstEmailStepNumber + " " + styles.firstEmailDone : styles.firstEmailStepNumber}>{receivedBySelectedMailbox ? "✓" : "2"}</span>
+                <div className={styles.firstEmailStepCopy}>
+                  <strong>{receivedBySelectedMailbox ? "Incoming email received" : "Receive a test email"}</strong>
+                  <p>{receivedBySelectedMailbox ? "An inbound message is recorded for this mailbox." : "From a separate email account, send a message to " + selectedMailbox.address + ". Then refresh this inbox to confirm it arrives."}</p>
+                </div>
+                {!receivedBySelectedMailbox && <button type="button" className={styles.secondaryButton} onClick={() => router.refresh()}>Refresh inbox</button>}
+              </div>
+            </div>
+            <p className={styles.firstEmailFootnote}>A sent status confirms Resend accepted a message; delivery events update its status separately. Check the recipient inbox and send a reply to verify both directions.</p>
+          </section>
+        )}
         {!mailboxes.length ? (
           <section className={styles.setupCard}>
             <h2>Finish email setup for this workspace</h2>
