@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
 
   const { data: mailbox, error: mailboxError } = await admin
     .from("mailboxes")
-    .select("id, organization_id, domain_id, address, local_part, status")
+    .select("id, organization_id, domain_id, address, local_part, display_name, status")
     .eq("id", mailboxId)
     .eq("organization_id", organizationId)
     .maybeSingle();
