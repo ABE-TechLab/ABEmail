@@ -119,10 +119,11 @@ export default function WorkspaceSidebar({
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") setMobileOpen(false);
     };
-    closeForViewport();
+    const initialViewportTimer = window.setTimeout(closeForViewport, 0);
     media.addEventListener("change", closeForViewport);
     window.addEventListener("keydown", closeOnEscape);
     return () => {
+      window.clearTimeout(initialViewportTimer);
       media.removeEventListener("change", closeForViewport);
       window.removeEventListener("keydown", closeOnEscape);
     };
