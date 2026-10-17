@@ -56,6 +56,12 @@ export default async function OrganizationWorkspacePage({ params }: Organization
 
   if (organizationError || !organization) notFound();
 
+  // Ottawa's provisioned pilot mailbox is the real workspace inbox, not the
+  // setup-preview dashboard. The mail route rechecks membership and RLS.
+  if (organization.slug === "ottawa-snow-match") {
+    redirect("/dashboard/" + organization.id + "/mail");
+  }
+
   // Postgres RLS filters this list to owner/admin visibility, or to explicitly
   // granted mailboxes for a regular member.
   const { data: mailboxRows, error: mailboxError } = await supabase

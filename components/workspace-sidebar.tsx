@@ -30,6 +30,10 @@ type WorkspaceSidebarProps = {
   onWorkspaceSettings?: () => void;
   disabledMailFeatures?: boolean;
   disableContacts?: boolean;
+  homeHref?: string;
+  mailboxBaseHref?: string;
+  activeMailboxView?: MailboxView;
+  enabledMailboxViews?: MailboxView[];
   workspaceName?: string;
   workspaceDescription?: string;
   workspaceHref?: string;
@@ -45,6 +49,10 @@ export default function WorkspaceSidebar({
   onWorkspaceSettings,
   disabledMailFeatures = false,
   disableContacts = false,
+  homeHref = "/",
+  mailboxBaseHref,
+  activeMailboxView,
+  enabledMailboxViews = [],
   workspaceName = "Acme Studio",
   workspaceDescription = "Sample workspace",
   workspaceHref,
@@ -53,7 +61,7 @@ export default function WorkspaceSidebar({
 
   return (
     <aside className="mail-sidebar">
-      <Link className="mail-brand" href="/" aria-label="ABEmail inbox">
+      <Link className="mail-brand" href={homeHref} aria-label="ABEmail inbox">
         <span className="mail-brand-mark">A</span>
         <span>AB<span>Email</span></span>
       </Link>
@@ -76,7 +84,15 @@ export default function WorkspaceSidebar({
         <div className="mail-nav-label">MAILBOX</div>
         <nav className="mail-nav" aria-label="Mailbox navigation">
           {mailboxLinks.map((item) => {
-            const active = disabledMailFeatures ? item.view === activeView : pathname === "/" && activeView === item.view;
+            const active = mailboxBaseHref
+              ? item.view === activeMailboxView
+              : disabledMailFeatures
+                ? item.view === activeView
+                : pathname === "/" && activeView === item.view;
+            const itemEnabled = !mailboxBaseHref || enabledMailboxViews.includes(item.view);
+            const itemHref = mailboxBaseHref
+              ? `${mailboxBaseHref}?view=${encodeURIComponent(item.view)}`
+              : item.href;
             const count = mailboxCounts[item.view];
             const children = (
               <>
@@ -86,7 +102,7 @@ export default function WorkspaceSidebar({
               </>
             );
 
-            if (disabledMailFeatures) {
+            if (disabledMailFeatures || !itemEnabled) {
               return (
                 <button
                   className={active ? "mail-nav-item active workspace-nav-disabled" : "mail-nav-item workspace-nav-disabled"}
@@ -96,7 +112,7 @@ export default function WorkspaceSidebar({
                   aria-disabled="true"
                 >
                   {children}
-                  <span className="mail-feature-pill">Setup</span>
+                  <span className="mail-feature-pill">{disabledMailFeatures ? "Setup" : "Soon"}</span>
                 </button>
               );
             }
@@ -114,7 +130,7 @@ export default function WorkspaceSidebar({
             ) : (
               <Link
                 className={active ? "mail-nav-item active" : "mail-nav-item"}
-                href={item.href}
+                href={itemHref}
                 key={item.view}
                 aria-current={active ? "page" : undefined}
               >

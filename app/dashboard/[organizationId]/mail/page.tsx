@@ -7,10 +7,15 @@ export const metadata: Metadata = { title: "Pilot mail | ABEmail" };
 export const dynamic = "force-dynamic";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-type MailPageProps = { params: Promise<{ organizationId: string }> };
+type MailPageProps = {
+  params: Promise<{ organizationId: string }>;
+  searchParams?: Promise<{ view?: string }>;
+};
 
-export default async function PilotMailPage({ params }: MailPageProps) {
+export default async function PilotMailPage({ params, searchParams }: MailPageProps) {
   const { organizationId } = await params;
+  const { view } = (await searchParams) ?? {};
+  const activeView = view === "Sent" ? "Sent" : "Inbox";
   if (!UUID_PATTERN.test(organizationId)) notFound();
 
   const supabase = await createClient();
@@ -95,6 +100,7 @@ export default async function PilotMailPage({ params }: MailPageProps) {
       messages={messages}
       allowPilotSetup={membership.role === "owner" || membership.role === "admin"}
       messagesError={messagesError || Boolean(mailboxError)}
+      activeView={activeView}
     />
   );
 }

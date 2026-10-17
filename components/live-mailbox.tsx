@@ -4,7 +4,10 @@ import { useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import PilotSetupButton from "@/components/pilot-setup-button";
+import SignOutButton from "@/components/auth/sign-out-button";
+import WorkspaceSidebar, { type MailboxView } from "@/components/workspace-sidebar";
 import styles from "./live-mailbox.module.css";
+import workspaceStyles from "./workspace-home.module.css";
 
 type Mailbox = { id: string; address: string; display_name: string | null };
 type EmailMessage = {
@@ -28,6 +31,7 @@ type LiveMailboxProps = {
   messages: EmailMessage[];
   allowPilotSetup: boolean;
   messagesError: boolean;
+  activeView?: "Inbox" | "Sent";
 };
 
 function plainText(message: EmailMessage): string {
@@ -53,8 +57,9 @@ function messageDate(message: EmailMessage): string {
 }
 
 export default function LiveMailbox(props: LiveMailboxProps) {
-  const { organizationId, organizationName, mailboxes, messages, allowPilotSetup, messagesError } = props;
+  const { organizationId, organizationName, mailboxes, messages, allowPilotSetup, messagesError, activeView = "Inbox" } = props;
   const router = useRouter();
+  const [query, setQuery] = useState("");
   const [mailboxId, setMailboxId] = useState(mailboxes[0]?.id ?? "");
   const [selectedMessageId, setSelectedMessageId] = useState("");
   const [composeOpen, setComposeOpen] = useState(false);
@@ -65,10 +70,22 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   const [notice, setNotice] = useState("");
   const [requestKey, setRequestKey] = useState<string | null>(null);
 
-  const visibleMessages = useMemo(
-    () => messages.filter((message) => message.mailbox_id === mailboxId),
-    [messages, mailboxId],
-  );
+  const visibleMessages = useMemo(() => {
+    const direction = activeView === "Sent" ? "outbound" : "inbound";
+    const term = query.trim().toLowerCase();
+    return messages.filter((message) => {
+      if (message.mailbox_id !== mailboxId || message.direction !== direction) return false;
+      if (!term) return true;
+      return [
+        message.from_address,
+        message.to_addresses.join(" "),
+        message.subject,
+        message.body_text ?? "",
+        message.body_html ?? "",
+        message.status,
+      ].join(" ").toLowerCase().includes(term);
+    });
+  }, [messages, mailboxId, activeView, query]);
   const selectedMessage = visibleMessages.find((message) => message.id === selectedMessageId) ?? visibleMessages[0];
 
   async function submitMessage(event: FormEvent<HTMLFormElement>) {
@@ -107,19 +124,58 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   }
 
   return (
-    <main className={styles.page}>
-      <header className={styles.header}>
-        <div>
-          <Link className={styles.backLink} href={"/dashboard/" + organizationId}>← {organizationName}</Link>
-          <p className={styles.eyebrow}>CONTROLLED PILOT</p>
-          <h1>Ottawa Snow Match mail</h1>
-          <p className={styles.subtitle}>Text email is enabled only for the verified Ottawa Snow Match sender.</p>
-        </div>
-        <div className={styles.headerActions}>
-          <button type="button" className={styles.secondaryButton} onClick={() => router.refresh()}>Refresh inbox</button>
-          <button type="button" className={styles.primaryButton} onClick={() => { setComposeOpen(true); setNotice(""); }} disabled={!mailboxId}>＋ Compose</button>
-        </div>
-      </header>
+    <div className={"mail-app " + workspaceStyles.app}>
+      <WorkspaceSidebar
+        activeView={activeView}
+        mailboxBaseHref={"/dashboard/" + organizationId + "/mail"}
+        activeMailboxView={activeView as MailboxView}
+        enabledMailboxViews={["Inbox", "Sent"]}
+        disabledMailFeatures={!mailboxes.length}
+        disableContacts
+        onCompose={() => { setComposeOpen(true); setNotice(""); }}
+        homeHref={"/dashboard/" + organizationId + "/mail"}
+        workspaceName={organizationName}
+        workspaceDescription="Live Ottawa pilot"
+        workspaceHref="/dashboard"
+      />
+      <main className="mail-main">
+        <header className="mail-topbar">
+          <div className="mail-breadcrumb">
+            <span>Workspace</span><span className="mail-breadcrumb-slash">/</span><strong>{activeView}</strong>
+          </div>
+          <label className="mail-search">
+            <span className="mail-search-icon" aria-hidden="true">⌕</span>
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={activeView === "Inbox" ? "Search inbox" : "Search sent mail"}
+              aria-label={activeView === "Inbox" ? "Search inbox" : "Search sent mail"}
+            />
+            {query && <button type="button" aria-label="Clear search" onClick={() => setQuery("")}>×</button>}
+            {!query && <kbd>Search</kbd>}
+          </label>
+          <div className="mail-topbar-right">
+            <span className="mail-development-pill"><span /> Live pilot</span>
+            <Link href="/settings" className={workspaceStyles.topbarLink}>Settings</Link>
+            <Link href="/settings/account" className={workspaceStyles.topbarLink}>Account</Link>
+            <SignOutButton className="auth-signout-control" />
+          </div>
+        </header>
+        <div className={workspaceStyles.content}>
+          <div className={styles.page}>
+            <header className={styles.header}>
+              <div>
+                <p className={styles.eyebrow}>OTTAWA SNOW MATCH · LIVE MAIL</p>
+                <h1>{activeView}</h1>
+                <p className={styles.subtitle}>
+                  {organizationName} · {activeView === "Inbox" ? "Received messages" : "Messages sent from the pilot mailbox"}
+                </p>
+              </div>
+              <div className={styles.headerActions}>
+                <button type="button" className={styles.secondaryButton} onClick={() => router.refresh()}>Refresh inbox</button>
+                <button type="button" className={styles.primaryButton} onClick={() => { setComposeOpen(true); setNotice(""); }} disabled={!mailboxId}>＋ Compose</button>
+              </div>
+            </header>
 
       {allowPilotSetup && mailboxes.length === 0 && (
         <section className={styles.setupCard}>
@@ -193,6 +249,9 @@ export default function LiveMailbox(props: LiveMailboxProps) {
           </section>
         </div>
       )}
-    </main>
+          </div>
+        </div>
+      </main>
+    </div>
   );
 }
