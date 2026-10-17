@@ -71,6 +71,7 @@ export default function WorkspaceSidebar({
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -100,10 +101,59 @@ export default function WorkspaceSidebar({
     });
   }
 
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 850px)");
+    const closeForViewport = () => {
+      setMobileOpen(false);
+      if (media.matches) {
+        // Entering a compact viewport should leave navigation closed even
+        // when the viewport is later expanded again.
+        setCollapsed(true);
+        try {
+          window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, "true");
+        } catch {
+          // Navigation remains closed for this session.
+        }
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMobileOpen(false);
+    };
+    closeForViewport();
+    media.addEventListener("change", closeForViewport);
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      media.removeEventListener("change", closeForViewport);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, []);
+
   const isSwitcherOpen = workspaces.length ? switcherOpen : profileOpen;
 
   return (
-    <aside className={"mail-sidebar" + (collapsed ? " is-collapsed" : "")} data-collapsed={collapsed}>
+    <>
+      {!mobileOpen && (
+        <button
+          className="mail-mobile-nav-toggle"
+          type="button"
+          onClick={() => setMobileOpen(true)}
+          aria-label="Open navigation"
+          aria-expanded={false}
+          title="Open navigation"
+        >
+          <span aria-hidden="true">☰</span>
+        </button>
+      )}
+      {mobileOpen && (
+        <button
+          className="mail-sidebar-backdrop"
+          type="button"
+          onClick={() => setMobileOpen(false)}
+          aria-label="Close navigation"
+          tabIndex={-1}
+        />
+      )}
+      <aside className={"mail-sidebar" + (collapsed ? " is-collapsed" : "") + (mobileOpen ? " mobile-open" : "")} data-collapsed={collapsed}>
       <div className="mail-sidebar-brand-row">
         <Link className="mail-brand" href={homeHref} aria-label="ABEmail inbox" title="ABEmail">
           <span className="mail-brand-mark">A</span>
@@ -112,10 +162,16 @@ export default function WorkspaceSidebar({
         <button
           className="mail-sidebar-collapse"
           type="button"
-          onClick={toggleCollapsed}
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          aria-expanded={!collapsed}
-          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          onClick={() => {
+            if (window.matchMedia("(max-width: 850px)").matches) {
+              setMobileOpen(false);
+            } else {
+              toggleCollapsed();
+            }
+          }}
+          aria-label={mobileOpen ? "Close navigation" : collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-expanded={mobileOpen ? true : !collapsed}
+          title={mobileOpen ? "Close navigation" : collapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
           <span aria-hidden="true">{collapsed ? "›" : "‹"}</span>
         </button>
@@ -304,5 +360,6 @@ export default function WorkspaceSidebar({
         <p className="workspace-sidebar-note">{disabledMailFeatures ? "Email setup required" : "Workspace mail"}</p>
       </div>
     </aside>
+    </>
   );
 }
