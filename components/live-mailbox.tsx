@@ -56,6 +56,16 @@ function messageDate(message: EmailMessage): string {
   return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
 }
 
+function initials(value: string): string {
+  const localPart = value.split("@")[0].replace(/[._+-]+/g, " ").trim();
+  return localPart.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "M";
+}
+
+function messagePreview(message: EmailMessage): string {
+  const value = plainText(message).replace(/\s+/g, " ").trim();
+  return value.length > 120 ? value.slice(0, 117) + "…" : value || "No text preview available.";
+}
+
 export default function LiveMailbox(props: LiveMailboxProps) {
   const { organizationId, organizationName, mailboxes, messages, allowPilotSetup, messagesError, activeView = "Inbox" } = props;
   const router = useRouter();
@@ -123,6 +133,17 @@ export default function LiveMailbox(props: LiveMailboxProps) {
     }
   }
 
+  function replyTo(message: EmailMessage) {
+    if (message.direction !== "inbound") return;
+    setTo(message.from_address);
+    setSubject(/^re:/i.test(message.subject) ? message.subject : "Re: " + message.subject);
+    const quoted = plainText(message).split("\n").map((line) => "> " + line).join("\n");
+    setBody("\n\n—\nOn " + messageDate(message) + ", " + message.from_address + " wrote:\n" + quoted);
+    setRequestKey(null);
+    setNotice("");
+    setComposeOpen(true);
+  }
+
   return (
     <div className={"mail-app " + workspaceStyles.app}>
       <WorkspaceSidebar
@@ -161,96 +182,140 @@ export default function LiveMailbox(props: LiveMailboxProps) {
             <SignOutButton className="auth-signout-control" />
           </div>
         </header>
-        <div className={workspaceStyles.content}>
-          <div className={styles.page}>
-            <header className={styles.header}>
-              <div>
-                <p className={styles.eyebrow}>OTTAWA SNOW MATCH · LIVE MAIL</p>
-                <h1>{activeView}</h1>
-                <p className={styles.subtitle}>
-                  {organizationName} · {activeView === "Inbox" ? "Received messages" : "Messages sent from the pilot mailbox"}
-                </p>
-              </div>
-              <div className={styles.headerActions}>
-                <button type="button" className={styles.secondaryButton} onClick={() => router.refresh()}>Refresh inbox</button>
-                <button type="button" className={styles.primaryButton} onClick={() => { setComposeOpen(true); setNotice(""); }} disabled={!mailboxId}>＋ Compose</button>
-              </div>
-            </header>
-
-      {allowPilotSetup && mailboxes.length === 0 && (
-        <section className={styles.setupCard}>
-          <h2>Connect the pilot mailbox</h2>
-          <p>ABEmail verifies the domain with Resend before creating the pilot mailbox.</p>
-          <PilotSetupButton />
-        </section>
-      )}
-      {notice && <p className={styles.notice} role="status">{notice}</p>}
-      {messagesError && <div className={styles.warning} role="alert">The mail database is unavailable in this deployment. Inbox reads are disabled until the pilot migration is applied.</div>}
-
-      {!mailboxes.length ? (
-        <section className={styles.emptyState}>
-          <h2>No active mailbox is assigned</h2>
-          <p>An owner or administrator needs to finish pilot setup before this inbox can receive mail.</p>
-          <Link href={"/dashboard/" + organizationId}>Return to workspace</Link>
-        </section>
-      ) : (
-        <div className={styles.layout}>
-          <section className={styles.listPanel} aria-label="Message list">
-            <div className={styles.listHeader}>
-              <label><span>Mailbox</span>
-                <select value={mailboxId} onChange={(event) => { setMailboxId(event.target.value); setSelectedMessageId(""); }}>
-                  {mailboxes.map((mailbox) => <option key={mailbox.id} value={mailbox.id}>{mailbox.display_name || mailbox.address} · {mailbox.address}</option>)}
-                </select>
-              </label>
-              <span>{visibleMessages.length} messages</span>
-            </div>
-            <div className={styles.messages}>
-              {visibleMessages.map((message) => (
-                <button key={message.id} type="button" className={selectedMessage?.id === message.id ? styles.messageRowSelected : styles.messageRow} onClick={() => setSelectedMessageId(message.id)}>
-                  <span className={styles.direction}>{message.direction === "inbound" ? "↓ Received" : "↑ Sent"}</span>
-                  <strong>{message.subject || "(no subject)"}</strong>
-                  <span>{message.direction === "inbound" ? "From: " + message.from_address : "To: " + message.to_addresses.join(", ")}</span>
-                  <small>{messageDate(message)}</small><em>{message.status}</em>
-                </button>
-              ))}
-              {!visibleMessages.length && <div className={styles.emptyList}><strong>Your inbox is empty</strong><p>Incoming mail appears after the signed Resend webhook is configured.</p></div>}
-            </div>
+        {notice && <p className={styles.notice} role="status">{notice}</p>}
+        {messagesError && <div className={styles.warning} role="alert">The mail database could not be read in this deployment. Refresh the page or contact an administrator.</div>}
+        {!mailboxes.length ? (
+          <section className={styles.setupCard}>
+            <h2>No active mailbox is assigned</h2>
+            <p>An owner or administrator needs to finish pilot setup before this inbox can receive mail.</p>
+            {allowPilotSetup && <PilotSetupButton />}
           </section>
-
-          <section className={styles.detailPanel} aria-label="Message content">
-            {selectedMessage ? (
-              <>
-                <div className={styles.detailHeader}>
-                  <span className={styles.status}>{selectedMessage.status}</span>
-                  <h2>{selectedMessage.subject || "(no subject)"}</h2>
-                  <p><strong>From</strong> {selectedMessage.from_address}</p>
-                  <p><strong>To</strong> {selectedMessage.to_addresses.join(", ")}</p>
-                  <time>{messageDate(selectedMessage)}</time>
+        ) : (
+          <div className="mail-content-layout">
+            <section className="mail-list-pane" aria-label={activeView + " messages"}>
+              <div className="mail-list-heading">
+                <div>
+                  <p className="mail-overline">YOUR MAIL</p>
+                  <h1>{activeView}</h1>
+                  <p className="mail-list-subtitle">{visibleMessages.length} message{visibleMessages.length === 1 ? "" : "s"} in this view</p>
                 </div>
-                <div className={styles.body}>{plainText(selectedMessage) || "(This message has no text body.)"}</div>
-              </>
-            ) : <div className={styles.detailEmpty}><span aria-hidden="true">✉</span><h2>Select a message</h2><p>Choose a message or compose a test email.</p></div>}
-          </section>
-        </div>
-      )}
+                <label className={styles.mailboxPickerLabel}>
+                  <span className="mail-sr-only">Mailbox</span>
+                  <select
+                    value={mailboxId}
+                    onChange={(event) => { setMailboxId(event.target.value); setSelectedMessageId(""); }}
+                    aria-label="Select mailbox"
+                  >
+                    {mailboxes.map((mailbox) => (
+                      <option key={mailbox.id} value={mailbox.id}>{mailbox.display_name || mailbox.address}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <div className="mail-list-toolbar">
+                <span className="mail-toolbar-label">{activeView === "Inbox" ? "Received" : "Sent by this mailbox"}</span>
+                <span className="mail-toolbar-spacer" />
+                <button type="button" className="mail-toolbar-button" onClick={() => router.refresh()} aria-label="Refresh messages">↻</button>
+              </div>
+              <div className="mail-message-list">
+                {visibleMessages.map((message) => (
+                  <article className={selectedMessage?.id === message.id ? "mail-message-row selected" : "mail-message-row"} key={message.id}>
+                    <button
+                      className="mail-message-open"
+                      onClick={() => setSelectedMessageId(message.id)}
+                      type="button"
+                      aria-label={"Open " + (message.subject || "message")}
+                    >
+                      <span className="mail-avatar tone-slate">{initials(message.direction === "inbound" ? message.from_address : organizationName)}</span>
+                      <span className="mail-message-copy">
+                        <span className="mail-message-row-top">
+                          <strong>{message.direction === "inbound" ? message.from_address : message.to_addresses.join(", ")}</strong>
+                          <time>{messageDate(message)}</time>
+                        </span>
+                        <span className="mail-message-subject">{message.subject || "(no subject)"}</span>
+                        <span className="mail-message-preview">{messagePreview(message)}</span>
+                      </span>
+                    </button>
+                    <span className={styles.messageStatus}>{message.status}</span>
+                  </article>
+                ))}
+                {!visibleMessages.length && (
+                  <div className="mail-empty-list">
+                    <span>{activeView === "Inbox" ? "▤" : "↗"}</span>
+                    <strong>{query ? "No matching messages" : "No messages in " + activeView}</strong>
+                    <p>{query ? "Try another search term." : activeView === "Inbox" ? "New incoming messages will appear here." : "Messages you send from this mailbox will appear here."}</p>
+                    {activeView === "Inbox" && !query && <button type="button" onClick={() => { setComposeOpen(true); setNotice(""); }}>Compose a message</button>}
+                  </div>
+                )}
+              </div>
+            </section>
 
-      {composeOpen && (
-        <div className={styles.modalBackdrop}>
-          <section className={styles.composeModal} role="dialog" aria-modal="true" aria-labelledby="compose-title">
-            <header><h2 id="compose-title">New pilot message</h2><button type="button" onClick={() => setComposeOpen(false)} aria-label="Close compose">×</button></header>
-            <p className={styles.senderLine}>From {mailboxes.find((mailbox) => mailbox.id === mailboxId)?.address ?? "pilot mailbox"}</p>
-            <form onSubmit={submitMessage}>
-              <label>To<input type="email" required maxLength={320} value={to} onChange={(event) => { setTo(event.target.value); setRequestKey(null); }} placeholder="Approved test recipient" /></label>
-              <label>Subject<input required maxLength={998} value={subject} onChange={(event) => { setSubject(event.target.value); setRequestKey(null); }} placeholder="Test email from ABEmail" /></label>
-              <label>Message<textarea required maxLength={80000} rows={8} value={body} onChange={(event) => { setBody(event.target.value); setRequestKey(null); }} placeholder="Write your test message…" /></label>
-              <p className={styles.composeHelp}>One recipient, plain text only. Pilot sends are limited to 25 messages per workspace per 24 hours.</p>
-              <footer><button type="button" className={styles.secondaryButton} onClick={() => setComposeOpen(false)} disabled={busy}>Cancel</button><button type="submit" className={styles.primaryButton} disabled={busy || !mailboxId}>{busy ? "Sending…" : "Send test email"}</button></footer>
-            </form>
-          </section>
-        </div>
-      )}
+            <section className="mail-detail-pane" aria-label="Message details">
+              {selectedMessage ? (
+                <div className="mail-message-detail">
+                  <div className="mail-detail-actions">
+                    <span className={styles.messageStatus}>{selectedMessage.status}</span>
+                    <div className="mail-detail-action-group">
+                      <button type="button" className="mail-toolbar-button" onClick={() => router.refresh()} aria-label="Refresh message">↻</button>
+                    </div>
+                  </div>
+                  <div className="mail-detail-scroll">
+                    <div className="mail-subject-line"><h2>{selectedMessage.subject || "(no subject)"}</h2></div>
+                    <div className="mail-message-meta">
+                      <span className="mail-avatar tone-slate">{initials(selectedMessage.from_address)}</span>
+                      <div className="mail-sender-info">
+                        <strong>{selectedMessage.from_address}</strong>
+                        <span>To {selectedMessage.to_addresses.join(", ")}</span>
+                      </div>
+                      <time>{messageDate(selectedMessage)}</time>
+                    </div>
+                    <div className="mail-message-body">
+                      {plainText(selectedMessage).split("\n").map((line, index) => (
+                        line
+                          ? <p key={index}>{line}</p>
+                          : <div key={index} className="mail-body-spacer" />
+                      ))}
+                    </div>
+                    {selectedMessage.direction === "inbound" && (
+                      <div className="mail-reply-actions">
+                        <button type="button" className="mail-primary-action" onClick={() => replyTo(selectedMessage)}>↶ Reply</button>
+                      </div>
+                    )}
+                    <p className="mail-demo-footnote"><span className="mail-demo-dot" /> Live message · {selectedMessage.status}</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="mail-detail-empty">
+                  <span>✉</span><h2>Select a message</h2><p>Choose a message from the list to read it here.</p>
+                </div>
+              )}
+            </section>
           </div>
-        </div>
+        )}
+
+        {composeOpen && (
+          <div className="mail-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) setComposeOpen(false); }}>
+            <section className="mail-compose-modal" role="dialog" aria-modal="true" aria-labelledby="compose-title">
+              <header className="mail-compose-header">
+                <h2 id="compose-title">New message</h2>
+                <button type="button" onClick={() => setComposeOpen(false)} aria-label="Close compose" disabled={busy}>×</button>
+              </header>
+              <form onSubmit={submitMessage}>
+                <label className="mail-compose-field"><span>To</span><input type="email" required maxLength={320} value={to} onChange={(event) => { setTo(event.target.value); setRequestKey(null); }} placeholder="name@example.com" /></label>
+                <label className="mail-compose-field"><span>Subject</span><input required maxLength={998} value={subject} onChange={(event) => { setSubject(event.target.value); setRequestKey(null); }} placeholder="Add a subject" /></label>
+                <label className="mail-compose-body-label">
+                  <span className="mail-sr-only">Message body</span>
+                  <textarea required maxLength={80000} rows={8} value={body} onChange={(event) => { setBody(event.target.value); setRequestKey(null); }} placeholder="Write your message…" />
+                </label>
+                <p className="mail-compose-warning"><span>i</span> Plain-text pilot sending · One recipient · 25 messages per workspace per 24 hours</p>
+                <footer className="mail-compose-footer">
+                  <button type="submit" className="mail-primary-action" disabled={busy || !mailboxId}>{busy ? "Sending…" : "Send"} <span>↗</span></button>
+                  <button type="button" className="mail-compose-discard" onClick={() => setComposeOpen(false)} disabled={busy}>Discard</button>
+                </footer>
+              </form>
+            </section>
+          </div>
+        )}
       </main>
     </div>
   );
