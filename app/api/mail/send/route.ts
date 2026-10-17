@@ -4,10 +4,11 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   getPilotSendApiKey,
-  OTTAWA_PILOT_DOMAIN,
+  OTTAWA_PILOT_ADDRESS,
   ResendPilotError,
   sendPilotEmail,
 } from "@/lib/email/resend-pilot";
+import { decryptProviderSecret, ResendProviderError, sendResendEmail } from "@/lib/email/resend-provider";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,7 +31,7 @@ export async function POST(request: NextRequest) {
   }
 
   const contentLength = Number(request.headers.get("content-length") || "0");
-  if (contentLength > 100000) return json({ error: "Message is too large for the pilot." }, 413);
+  if (contentLength > 100000) return json({ error: "Message is too large for this workspace." }, 413);
 
   const supabase = await createClient();
   const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -39,7 +40,7 @@ export async function POST(request: NextRequest) {
   let payload: unknown;
   try {
     const raw = await request.text();
-    if (raw.length > 100000) return json({ error: "Message is too large for the pilot." }, 413);
+    if (raw.length > 100000) return json({ error: "Message is too large for this workspace." }, 413);
     payload = JSON.parse(raw);
   } catch {
     return json({ error: "Enter valid message details." }, 400);
@@ -86,7 +87,7 @@ export async function POST(request: NextRequest) {
 
   const { data: organization, error: organizationError } = await admin
     .from("organizations")
-    .select("id, status")
+    .select("id, status, slug")
     .eq("id", organizationId)
     .maybeSingle();
   if (organizationError) return json({ error: "Workspace status could not be checked." }, 503);
@@ -103,7 +104,7 @@ export async function POST(request: NextRequest) {
 
   const { data: domain, error: domainError } = await admin
     .from("organization_domains")
-    .select("id, organization_id, domain, status, verified_at")
+    .select("id, organization_id, domain, status, verified_at, provider_domain_id, sending_enabled")
     .eq("id", mailbox.domain_id)
     .eq("organization_id", organizationId)
     .maybeSingle();
@@ -111,11 +112,8 @@ export async function POST(request: NextRequest) {
   if (!domain || domain.status !== "verified" || !domain.verified_at) {
     return json({ error: "The sender domain is not verified in ABEmail." }, 403);
   }
-  if (
-    domain.domain !== OTTAWA_PILOT_DOMAIN ||
-    mailbox.address !== mailbox.local_part + "@" + domain.domain
-  ) {
-    return json({ error: "Only the approved Ottawa Snow Match pilot sender is enabled in this release." }, 403);
+  if (mailbox.address !== mailbox.local_part + "@" + domain.domain) {
+    return json({ error: "The mailbox address does not match its verified sender domain." }, 403);
   }
 
   if (membership.role !== "owner" && membership.role !== "admin") {
@@ -132,8 +130,24 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const sendApiKey = getPilotSendApiKey();
-  if (!sendApiKey) return json({ error: "The Ottawa pilot sending key is not configured in this environment." }, 503);
+  const { data: providerConnection, error: providerConnectionError } = await admin
+    .from("organization_provider_connections")
+    .select("api_key_ciphertext, status")
+    .eq("organization_id", organizationId)
+    .maybeSingle();
+  if (providerConnectionError) return json({ error: "The workspace email provider could not be checked." }, 503);
+
+  const usesWorkspaceKey = providerConnection?.status === "connected";
+  if (providerConnection && !usesWorkspaceKey) {
+    return json({ error: "The workspace Resend connection needs attention. Reconnect it in Settings before sending." }, 503);
+  }
+  const sendApiKey = usesWorkspaceKey
+    ? (() => { try { return decryptProviderSecret(providerConnection.api_key_ciphertext); } catch { return null; } })()
+    : organization.slug === "ottawa-snow-match" ? getPilotSendApiKey() : null;
+  if (!sendApiKey) return json({ error: "Connect a Resend API key in workspace Settings before sending." }, 503);
+  if (usesWorkspaceKey && (!domain.sending_enabled || !domain.provider_domain_id)) {
+    return json({ error: "Resend has not confirmed sending is enabled for this domain. Refresh domain verification in Settings." }, 409);
+  }
 
   const { data: existing, error: existingError } = await admin
     .from("email_messages")
@@ -166,7 +180,9 @@ export async function POST(request: NextRequest) {
       .gte("created_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
 
     if (quotaError) return json({ error: "Pilot sending limits could not be checked." }, 503);
-    if ((count ?? 0) >= 25) return json({ error: "The controlled pilot is limited to 25 messages per workspace per 24 hours." }, 429);
+    const configuredDailyLimit = Number(process.env.ABEMAIL_DEFAULT_DAILY_SEND_LIMIT ?? "250");
+    const dailyLimit = Number.isSafeInteger(configuredDailyLimit) && configuredDailyLimit > 0 ? configuredDailyLimit : 250;
+    if ((count ?? 0) >= dailyLimit) return json({ error: "This workspace has reached its daily sending limit of " + dailyLimit + " messages. Contact the workspace administrator to review its limit." }, 429);
 
     const { data: savedMessage, error: saveError } = await admin
       .from("email_messages")
@@ -195,13 +211,24 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const sent = await sendPilotEmail({
-      apiKey: sendApiKey,
-      to,
-      subject,
-      text,
-      idempotencyKey: organizationId + "/" + idempotencyKey,
-    });
+    const sent = usesWorkspaceKey
+      ? await sendResendEmail({
+          apiKey: sendApiKey,
+          from: (mailbox.display_name || organization.slug) + " <" + mailbox.address + ">",
+          to,
+          subject,
+          text,
+          idempotencyKey: organizationId + "/" + idempotencyKey,
+        })
+      : mailbox.address === OTTAWA_PILOT_ADDRESS
+        ? await sendPilotEmail({
+            apiKey: sendApiKey,
+            to,
+            subject,
+            text,
+            idempotencyKey: organizationId + "/" + idempotencyKey,
+          })
+        : (() => { throw new ResendProviderError("RESEND_WORKSPACE_KEY_REQUIRED"); })();
 
     const { error: updateError } = await admin
       .from("email_messages")
@@ -220,12 +247,12 @@ export async function POST(request: NextRequest) {
 
     return json({ ok: true, status: "accepted", messageId: savedMessageId, providerMessageId: sent.id }, 202);
   } catch (error) {
-    if (error instanceof ResendPilotError && error.providerStatus !== null && error.providerStatus < 500) {
+    if ((error instanceof ResendPilotError || error instanceof ResendProviderError) && error.providerStatus !== null && error.providerStatus < 500) {
       await admin.from("email_messages").update({ status: "failed" }).eq("id", savedMessageId);
       if (error.code === "RESEND_RATE_LIMITED") {
-        return json({ error: "Resend is rate-limiting the pilot. Wait before submitting a new message." }, 429);
+        return json({ error: "Resend is rate-limiting this workspace. Wait before submitting a new message." }, 429);
       }
-      return json({ error: "Resend rejected the message. Check the pilot key and sender settings before retrying." }, 502);
+      return json({ error: "Resend rejected the message. Check the workspace provider connection, domain status, and sender settings before retrying." }, 502);
     }
     // Do not mark an ambiguous network/provider failure as failed: Resend may already
     // have accepted the message. A retry with the same key safely reuses provider idempotency.
