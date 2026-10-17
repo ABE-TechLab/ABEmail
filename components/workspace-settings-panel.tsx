@@ -573,7 +573,7 @@ export default function WorkspaceSettingsPanel({
     if (!canManageWorkspace) return notify("Only workspace owners and admins can invite teammates.");
     const emailAddress = inviteEmail.trim().toLowerCase();
     if (!emailAddress || !emailAddress.includes("@")) return notify("Enter a valid email address.");
-    if (!inviteMailboxIds.length) return notify("Choose at least one mailbox for this teammate.");
+    if (inviteRole === "member" && !inviteMailboxIds.length) return notify("Choose at least one mailbox for this teammate.");
     setInviteBusy(true);
     setToast("");
     setInvitationLink("");
@@ -886,7 +886,7 @@ export default function WorkspaceSettingsPanel({
                         {mailboxFormDomains.map((domain) => <option key={domain.id} value={domain.id} disabled={domain.status !== "verified" || !domain.sendingEnabled || !domain.receivingEnabled}>{domain.domain}{domain.status === "verified" && domain.sendingEnabled && domain.receivingEnabled ? "" : " — not ready"}</option>)}
                       </select>
                     </Field>
-                    <Field label="Display name" hint="Shown as the sender name in recipients&apos; inboxes.">
+                    <Field label="Display name" hint="The sender name recipients will see in their inbox.">
                       <input value={mailboxName} onChange={(event) => setMailboxName(event.target.value)} placeholder={organizationName} maxLength={120} disabled={!canManageWorkspace || mailboxBusy} />
                     </Field>
                     <div className="mailbox-editor-actions">
