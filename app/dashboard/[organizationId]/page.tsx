@@ -3,6 +3,7 @@ import Link from "next/link";
 import SignOutButton from "@/components/auth/sign-out-button";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import WorkspaceHome from "@/components/workspace-home";
 import styles from "../dashboard.module.css";
 
@@ -56,8 +57,8 @@ export default async function OrganizationWorkspacePage({ params }: Organization
 
   if (organizationError || !organization) notFound();
 
-  // Ottawa's provisioned pilot mailbox is the real workspace inbox, not the
-  // setup-preview dashboard. The mail route rechecks membership and RLS.
+  // Ottawa's current business mailbox opens directly. Other workspaces see
+  // a live activation checklist until Resend, a domain and a mailbox are ready.
   if (organization.slug === "ottawa-snow-match") {
     redirect("/dashboard/" + organization.id + "/mail");
   }
@@ -97,6 +98,37 @@ export default async function OrganizationWorkspacePage({ params }: Organization
     .eq("status", "active")
     .order("address");
 
+  const admin = createAdminClient();
+  let providerConnected = false;
+  let workspaceDomains: { id: string; domain: string; status: string; sending_enabled: boolean; receiving_enabled: boolean }[] = [];
+  if (admin) {
+    const { data: providerConnection } = await admin
+      .from("organization_provider_connections")
+      .select("status")
+      .eq("organization_id", organization.id)
+      .maybeSingle();
+    providerConnected = providerConnection?.status === "connected";
+
+    const { data: domainRows } = await admin
+      .from("organization_domains")
+      .select("id, domain, status, sending_enabled, receiving_enabled")
+      .eq("organization_id", organization.id)
+      .order("created_at", { ascending: true });
+    workspaceDomains = (domainRows ?? []).map((domain) => ({
+      id: domain.id,
+      domain: domain.domain,
+      status: domain.status,
+      sending_enabled: Boolean(domain.sending_enabled),
+      receiving_enabled: Boolean(domain.receiving_enabled),
+    }));
+  }
+
+  const currentMailboxCount = (mailboxRows ?? []).filter((mailbox) => mailbox.organization_id === organization.id).length;
+  const verifiedDomainReady = workspaceDomains.some((domain) => domain.status === "verified" && domain.sending_enabled && domain.receiving_enabled);
+  if (providerConnected && verifiedDomainReady && currentMailboxCount > 0) {
+    redirect("/dashboard/" + organization.id + "/mail");
+  }
+
   return (
     <WorkspaceHome
       email={user.email ?? ""}
@@ -109,6 +141,8 @@ export default async function OrganizationWorkspacePage({ params }: Organization
         display_name: mailbox.display_name,
       }))}
       mailboxError={Boolean(mailboxError)}
+      providerConnected={providerConnected}
+      workspaceDomains={workspaceDomains}
     />
   );
 }
