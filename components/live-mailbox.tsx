@@ -63,6 +63,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   const [body, setBody] = useState("");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
+  const [requestKey, setRequestKey] = useState<string | null>(null);
 
   const visibleMessages = useMemo(
     () => messages.filter((message) => message.mailbox_id === mailboxId),
@@ -75,15 +76,20 @@ export default function LiveMailbox(props: LiveMailboxProps) {
     if (busy) return;
     setBusy(true);
     setNotice("");
+    const stableRequestKey = requestKey ?? crypto.randomUUID();
+    setRequestKey(stableRequestKey);
     try {
       const response = await fetch("/api/mail/send", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() },
+        headers: { "Content-Type": "application/json", "Idempotency-Key": stableRequestKey },
         body: JSON.stringify({ organizationId, mailboxId, to: to.trim(), subject: subject.trim(), text: body }),
       });
       const result = await response.json() as { ok?: boolean; error?: string; note?: string };
       if (!response.ok || !result.ok) {
         setNotice(result.error || "The message was not accepted.");
+        // A 503 may mean Resend accepted the message but the response was lost;
+        // retain its idempotency key so retrying unchanged content is safe.
+        if (response.status !== 503) setRequestKey(null);
         return;
       }
       setNotice(result.note || "Resend accepted the message. Delivery updates will appear after the signed webhook arrives.");
@@ -91,9 +97,10 @@ export default function LiveMailbox(props: LiveMailboxProps) {
       setTo("");
       setSubject("");
       setBody("");
+      setRequestKey(null);
       router.refresh();
     } catch {
-      setNotice("The request did not finish. Check the inbox before sending again to avoid a duplicate.");
+      setNotice("The connection was interrupted. Retry the same unchanged message; ABEmail will reuse its idempotency key.");
     } finally {
       setBusy(false);
     }
@@ -177,9 +184,9 @@ export default function LiveMailbox(props: LiveMailboxProps) {
             <header><h2 id="compose-title">New pilot message</h2><button type="button" onClick={() => setComposeOpen(false)} aria-label="Close compose">×</button></header>
             <p className={styles.senderLine}>From {mailboxes.find((mailbox) => mailbox.id === mailboxId)?.address ?? "pilot mailbox"}</p>
             <form onSubmit={submitMessage}>
-              <label>To<input type="email" required maxLength={320} value={to} onChange={(event) => setTo(event.target.value)} placeholder="Approved test recipient" /></label>
-              <label>Subject<input required maxLength={998} value={subject} onChange={(event) => setSubject(event.target.value)} placeholder="Test email from ABEmail" /></label>
-              <label>Message<textarea required maxLength={80000} rows={8} value={body} onChange={(event) => setBody(event.target.value)} placeholder="Write your test message…" /></label>
+              <label>To<input type="email" required maxLength={320} value={to} onChange={(event) => { setTo(event.target.value); setRequestKey(null); }} placeholder="Approved test recipient" /></label>
+              <label>Subject<input required maxLength={998} value={subject} onChange={(event) => { setSubject(event.target.value); setRequestKey(null); }} placeholder="Test email from ABEmail" /></label>
+              <label>Message<textarea required maxLength={80000} rows={8} value={body} onChange={(event) => { setBody(event.target.value); setRequestKey(null); }} placeholder="Write your test message…" /></label>
               <p className={styles.composeHelp}>One recipient, plain text only. Pilot sends are limited to 25 messages per workspace per 24 hours.</p>
               <footer><button type="button" className={styles.secondaryButton} onClick={() => setComposeOpen(false)} disabled={busy}>Cancel</button><button type="submit" className={styles.primaryButton} disabled={busy || !mailboxId}>{busy ? "Sending…" : "Send test email"}</button></footer>
             </form>

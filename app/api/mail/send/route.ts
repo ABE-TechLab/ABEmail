@@ -143,6 +143,7 @@ export async function POST(request: NextRequest) {
     .maybeSingle();
 
   if (existingError) return json({ error: "Message idempotency could not be checked." }, 503);
+  let savedMessageId: string;
   if (existing) {
     if (existing.request_fingerprint !== fingerprint) {
       return json({ error: "This idempotency key was already used for different message content." }, 409);
@@ -150,41 +151,47 @@ export async function POST(request: NextRequest) {
     if (existing.status === "accepted" || existing.status === "delivered" || existing.status === "delayed") {
       return json({ ok: true, duplicate: true, messageId: existing.id, providerMessageId: existing.provider_message_id }, 200);
     }
-    return json({ error: "This message key is already recorded. Create a new message rather than risking a duplicate send." }, 409);
-  }
+    if (existing.status !== "processing") {
+      return json({ error: "Resend previously rejected this message. Correct the issue and retry as a new message." }, 409);
+    }
+    // Reuse the same provider idempotency key after an ambiguous network failure.
+    // Resend deduplicates the retry, preventing a second delivery.
+    savedMessageId = existing.id;
+  } else {
+    const { count, error: quotaError } = await admin
+      .from("email_messages")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", organizationId)
+      .eq("direction", "outbound")
+      .gte("created_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
 
-  const { count, error: quotaError } = await admin
-    .from("email_messages")
-    .select("id", { count: "exact", head: true })
-    .eq("organization_id", organizationId)
-    .eq("direction", "outbound")
-    .gte("created_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
+    if (quotaError) return json({ error: "Pilot sending limits could not be checked." }, 503);
+    if ((count ?? 0) >= 25) return json({ error: "The controlled pilot is limited to 25 messages per workspace per 24 hours." }, 429);
 
-  if (quotaError) return json({ error: "Pilot sending limits could not be checked." }, 503);
-  if ((count ?? 0) >= 25) return json({ error: "The controlled pilot is limited to 25 messages per workspace per 24 hours." }, 429);
+    const { data: savedMessage, error: saveError } = await admin
+      .from("email_messages")
+      .insert({
+        organization_id: organizationId,
+        mailbox_id: mailboxId,
+        provider: "resend",
+        direction: "outbound",
+        from_address: mailbox.address,
+        to_addresses: [to],
+        subject,
+        body_text: text,
+        status: "processing",
+        idempotency_key: idempotencyKey,
+        request_fingerprint: fingerprint,
+        created_by: user.id,
+      })
+      .select("id")
+      .single();
 
-  const { data: savedMessage, error: saveError } = await admin
-    .from("email_messages")
-    .insert({
-      organization_id: organizationId,
-      mailbox_id: mailboxId,
-      provider: "resend",
-      direction: "outbound",
-      from_address: mailbox.address,
-      to_addresses: [to],
-      subject,
-      body_text: text,
-      status: "processing",
-      idempotency_key: idempotencyKey,
-      request_fingerprint: fingerprint,
-      created_by: user.id,
-    })
-    .select("id")
-    .single();
-
-  if (saveError || !savedMessage) {
-    if (saveError?.code === "23505") return json({ error: "A request with this idempotency key is already in progress." }, 409);
-    return json({ error: "The message could not be saved before sending." }, 503);
+    if (saveError || !savedMessage) {
+      if (saveError?.code === "23505") return json({ error: "A request with this idempotency key is already in progress." }, 409);
+      return json({ error: "The message could not be saved before sending." }, 503);
+    }
+    savedMessageId = savedMessage.id;
   }
 
   try {
@@ -199,24 +206,29 @@ export async function POST(request: NextRequest) {
     const { error: updateError } = await admin
       .from("email_messages")
       .update({ status: "accepted", provider_message_id: sent.id, sent_at: new Date().toISOString() })
-      .eq("id", savedMessage.id)
+      .eq("id", savedMessageId)
       .eq("organization_id", organizationId);
 
     if (updateError) {
       return json({
         ok: true,
         status: "accepted_by_provider_persistence_pending",
-        messageId: savedMessage.id,
+        messageId: savedMessageId,
         note: "Resend accepted the message, but ABEmail could not finish saving its provider reference. Do not resend the same content with a new key until the message is checked.",
       }, 202);
     }
 
-    return json({ ok: true, status: "accepted", messageId: savedMessage.id, providerMessageId: sent.id }, 202);
+    return json({ ok: true, status: "accepted", messageId: savedMessageId, providerMessageId: sent.id }, 202);
   } catch (error) {
-    await admin.from("email_messages").update({ status: "failed" }).eq("id", savedMessage.id);
-    if (error instanceof ResendPilotError && error.code === "RESEND_RATE_LIMITED") {
-      return json({ error: "Resend is rate-limiting the pilot. Try again later with a new message." }, 429);
+    if (error instanceof ResendPilotError && error.providerStatus !== null && error.providerStatus < 500) {
+      await admin.from("email_messages").update({ status: "failed" }).eq("id", savedMessageId);
+      if (error.code === "RESEND_RATE_LIMITED") {
+        return json({ error: "Resend is rate-limiting the pilot. Wait before submitting a new message." }, 429);
+      }
+      return json({ error: "Resend rejected the message. Check the pilot key and sender settings before retrying." }, 502);
     }
-    return json({ error: "Resend did not accept the message. Check pilot domain/key settings before retrying." }, 502);
+    // Do not mark an ambiguous network/provider failure as failed: Resend may already
+    // have accepted the message. A retry with the same key safely reuses provider idempotency.
+    return json({ error: "ABEmail could not confirm whether Resend accepted this message. Retry this exact message without changing it; do not start a new message yet." }, 503);
   }
 }
