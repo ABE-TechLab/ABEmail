@@ -288,6 +288,7 @@ export default function WorkspaceSidebar({
               );
             })}
             <div className="mail-workspace-menu-actions">
+              <Link className="mail-workspace-all" href="/dashboard" onClick={() => setSwitcherOpen(false)}>View all workspaces</Link>
               <Link className="mail-workspace-all" href={workspaceBaseHref ? workspaceBaseHref + "/settings" : "/settings"} onClick={() => setSwitcherOpen(false)}>Workspace settings</Link>
               <SignOutButton className="mail-workspace-signout" />
             </div>
