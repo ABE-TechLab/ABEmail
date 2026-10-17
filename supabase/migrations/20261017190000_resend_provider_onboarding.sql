@@ -63,3 +63,27 @@ create unique index if not exists provider_events_legacy_event_unique_idx
 
 create index if not exists organization_provider_connections_status_idx
   on public.organization_provider_connections (status, updated_at desc);
+
+
+-- Workspace-scoped user preferences follow a member across devices without
+-- making personal writing defaults visible to other workspace members.
+create table public.organization_user_preferences (
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  preferences jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key (organization_id, user_id),
+  check (jsonb_typeof(preferences) = 'object')
+);
+
+create trigger organization_user_preferences_touch_updated_at
+  before update on public.organization_user_preferences
+  for each row execute function private.touch_updated_at();
+
+alter table public.organization_user_preferences enable row level security;
+revoke all on table public.organization_user_preferences from public, anon, authenticated;
+grant all on table public.organization_user_preferences to service_role;
+
+comment on table public.organization_user_preferences is
+  'Personal mail, locale, density, and notification preferences scoped to a workspace. Browser roles never access rows directly.';
