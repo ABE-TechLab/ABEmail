@@ -81,6 +81,12 @@ export async function GET(_request: NextRequest, context: RouteContext) {
 
   if (error) return json({ error: "The provider connection status could not be loaded." }, 503);
 
+  const [{ data: verifiedDomains, error: domainsError }, { data: activeMailboxes, error: mailboxesError }] = await Promise.all([
+    auth.admin.from("organization_domains").select("id").eq("organization_id", organizationId).eq("status", "verified"),
+    auth.admin.from("mailboxes").select("id").eq("organization_id", organizationId).eq("status", "active"),
+  ]);
+  if (domainsError || mailboxesError) return json({ error: "Provider disconnection safety checks could not be completed." }, 503);
+
   const legacyAvailable = auth.organization.slug === LEGACY_OTTAWA_SLUG &&
     Boolean(process.env.ABEMAIL_RESEND_OTTAWA_RECEIVE_API_KEY && process.env.ABEMAIL_RESEND_OTTAWA_SEND_API_KEY);
 
@@ -95,6 +101,9 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     lastCheckedAt: connection?.last_checked_at ?? null,
     lastErrorCode: connection?.last_error_code ?? null,
     environmentManaged: legacyAvailable && !connection,
+    canDisconnect: Boolean(connection) && (verifiedDomains ?? []).length === 0 && (activeMailboxes ?? []).length === 0,
+    activeVerifiedDomainCount: (verifiedDomains ?? []).length,
+    activeMailboxCount: (activeMailboxes ?? []).length,
   });
 }
 
@@ -263,6 +272,13 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     .eq("status", "verified");
   if (domainsError) return json({ error: "The workspace domains could not be checked." }, 503);
 
+  const { data: activeMailboxes, error: mailboxError } = await auth.admin
+    .from("mailboxes")
+    .select("id")
+    .eq("organization_id", organizationId)
+    .eq("status", "active");
+  if (mailboxError) return json({ error: "Active mailboxes could not be checked." }, 503);
+
   const { data: connection, error: connectionError } = await auth.admin
     .from("organization_provider_connections")
     .select("organization_id, webhook_id, api_key_ciphertext")
@@ -271,8 +287,8 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
   if (connectionError) return json({ error: "The provider connection could not be checked." }, 503);
   if (!connection) return json({ ok: true, disconnected: true });
 
-  if (domains?.length) {
-    return json({ error: "Disconnecting Resend is blocked while verified domains exist. Remove or suspend the workspace's sending domains first so mail is not silently interrupted." }, 409);
+  if (domains?.length || activeMailboxes?.length) {
+    return json({ error: "Disconnecting Resend is blocked while verified domains or active mailboxes exist. This prevents the workspace from losing sending/receiving without an explicit domain and mailbox migration." }, 409);
   }
 
   try {
