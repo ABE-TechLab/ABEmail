@@ -203,6 +203,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
         .update({
           provider_domain_id: providerDomain.id,
           dns_records: providerDomain.records ?? [],
+          sending_enabled: providerDomain.capabilities?.sending === "enabled",
           receiving_enabled: providerDomain.capabilities?.receiving === "enabled",
           status: providerDomain.status === "verified" ? "verified" : "pending_verification",
           verified_at: providerDomain.status === "verified" ? now : null,
