@@ -157,9 +157,11 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return json({ error: "ABEMAIL_PUBLIC_APP_URL is invalid." }, 503);
     }
     const endpoint = webhookOrigin + "/api/webhooks/resend/" + organizationId;
-    const webhook = await ensureResendWebhook(apiKey, endpoint);
-
+    // Validate encrypted storage before registering a webhook to avoid leaving
+    // an unusable provider webhook behind when the app has no master key.
     const encryptedKey = encryptProviderSecret(apiKey);
+    const providerDomains = await listResendDomains(apiKey);
+    const webhook = await ensureResendWebhook(apiKey, endpoint);
     const encryptedWebhookSecret = encryptProviderSecret(webhook.signingSecret);
     const now = new Date().toISOString();
 
@@ -189,7 +191,6 @@ export async function POST(request: NextRequest, context: RouteContext) {
     // The Ottawa workspace already has a verified domain entry from the original
     // environment-backed transport. Attach its Resend domain ID and current DNS
     // records so it can use the same settings flow as future workspaces.
-    const providerDomains = await listResendDomains(apiKey);
     const { data: localDomains } = await auth.admin
       .from("organization_domains")
       .select("id, domain, status")
