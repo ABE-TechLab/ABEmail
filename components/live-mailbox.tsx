@@ -162,7 +162,6 @@ export default function LiveMailbox(props: LiveMailboxProps) {
     const returnToListOnMobile = () => {
       if (media.matches) setMobileDetailOpen(false);
     };
-    returnToListOnMobile();
     media.addEventListener("change", returnToListOnMobile);
     return () => media.removeEventListener("change", returnToListOnMobile);
   }, []);
@@ -346,7 +345,8 @@ export default function LiveMailbox(props: LiveMailboxProps) {
                 <button type="button" className="mail-toolbar-button" onClick={() => router.refresh()} aria-label="Refresh messages">↻</button>
               </div>
               <div className="mail-message-list">
-                          <section className={styles.firstEmailChecklist} aria-labelledby="first-email-heading">
+                {selectedMailbox && !firstEmailChecksComplete && (
+                  <section className={styles.firstEmailChecklist} aria-labelledby="first-email-heading">
             <div className={styles.firstEmailHeading}>
               <div>
                 <p className="mail-overline">DELIVERY CHECK</p>
@@ -374,7 +374,8 @@ export default function LiveMailbox(props: LiveMailboxProps) {
               </div>
             </div>
             <p className={styles.firstEmailFootnote}>A sent status confirms Resend accepted a message; delivery events update its status separately. Check the recipient inbox and send a reply to verify both directions.</p>
-          </section>
+                  </section>
+                )}
                 {visibleMessages.map((message) => (
                   <article className={selectedMessage?.id === message.id ? "mail-message-row selected" : "mail-message-row"} key={message.id}>
                     <button
