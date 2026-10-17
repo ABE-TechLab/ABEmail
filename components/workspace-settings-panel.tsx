@@ -41,6 +41,9 @@ type ProviderStatus = {
   lastCheckedAt: string | null;
   lastErrorCode: string | null;
   environmentManaged: boolean;
+  canDisconnect: boolean;
+  activeVerifiedDomainCount: number;
+  activeMailboxCount: number;
 };
 
 type DnsRecord = {
@@ -741,7 +744,7 @@ export default function WorkspaceSettingsPanel({
                 </form>
                 <p className="settings-muted">The key is validated against Resend and encrypted before it is stored. ABEmail also registers a signed webhook for this workspace so inbound messages and delivery events can be processed.</p>
                 {providerStatus?.lastErrorCode && <p className="settings-muted">Last provider warning: {providerStatus.lastErrorCode.replaceAll("_", " ")}</p>}
-                {providerStatus?.connected && <div className="settings-form-footer"><span>Connected {providerStatus.connectedAt ? "on " + new Date(providerStatus.connectedAt).toLocaleDateString() : "to this workspace"}.</span><button className="mail-secondary-action" type="button" disabled={!canManageWorkspace || disconnectBusy} onClick={disconnectResend}>{disconnectBusy ? "Disconnecting…" : "Disconnect Resend"}</button></div>}
+                {providerStatus?.connected && <div className="settings-form-footer"><span>Connected {providerStatus.connectedAt ? "on " + new Date(providerStatus.connectedAt).toLocaleDateString() : "to this workspace"}.</span>{providerStatus.canDisconnect ? <button className="mail-secondary-action" type="button" disabled={!canManageWorkspace || disconnectBusy} onClick={disconnectResend}>{disconnectBusy ? "Disconnecting…" : "Disconnect Resend"}</button> : <span className="settings-muted">Disconnect is locked while {providerStatus.activeVerifiedDomainCount > 0 ? providerStatus.activeVerifiedDomainCount + " verified domain(s)" : "active mailboxes"} depend on this connection. Replace keys only after planning a migration.</span>}</div>}
                 <div className="settings-divider" />
                 <form onSubmit={saveMailPreferences}>
                   <p className="settings-subheading">Mail & compose preferences</p>
