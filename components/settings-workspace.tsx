@@ -9,5 +9,5 @@ export default function SettingsWorkspace({
   section: SettingsSection;
   workspace: WorkspaceSettingsContext;
 }) {
-  return <WorkspaceSettingsPanel {...workspace} section={section} />;
+  return <WorkspaceSettingsPanel key={workspace.organizationId} {...workspace} section={section} />;
 }
