@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
-import SignOutButton from "@/components/auth/sign-out-button";
 import WorkspaceSidebar, { type WorkspaceChoice } from "@/components/workspace-sidebar";
 import { useAppearanceMode, type AppearanceMode } from "@/components/appearance-provider";
 import { useDesignTheme } from "@/components/design-theme-provider";
@@ -178,7 +177,7 @@ export default function WorkspaceSettingsPanel({
   const [saving, setSaving] = useState(false);
   const [providerStatus, setProviderStatus] = useState<ProviderStatus | null>(null);
   const [providerKey, setProviderKey] = useState("");
-  const [providerLoading, setProviderLoading] = useState(false);
+  const [providerLoading, setProviderLoading] = useState(true);
   const [providerBusy, setProviderBusy] = useState(false);
   const [domains, setDomains] = useState<WorkspaceDomain[]>([]);
   const [domainsLoading, setDomainsLoading] = useState(false);
@@ -191,6 +190,7 @@ export default function WorkspaceSettingsPanel({
   const [mailboxLocalPart, setMailboxLocalPart] = useState("info");
   const [mailboxDomainId, setMailboxDomainId] = useState("");
   const [mailboxBusy, setMailboxBusy] = useState(false);
+  const [editingMailboxId, setEditingMailboxId] = useState("");
   const [disconnectBusy, setDisconnectBusy] = useState(false);
   const [invitations, setInvitations] = useState<WorkspaceInvitation[]>([]);
   const [invitationsLoading, setInvitationsLoading] = useState(false);
@@ -208,6 +208,11 @@ export default function WorkspaceSettingsPanel({
   const info = SECTION_INFO[section] ?? SECTION_INFO.general;
   const canManageWorkspace = organizationRole === "owner" || organizationRole === "admin";
   const verifiedReceivingDomains = domains.filter((domain) => domain.status === "verified" && domain.sendingEnabled && domain.receivingEnabled);
+  const editingMailbox = mailboxRows.find((mailbox) => mailbox.id === editingMailboxId) ?? null;
+  const editingMailboxDomain = editingMailbox ? domains.find((domain) => domain.id === editingMailbox.domain_id) : undefined;
+  const mailboxFormDomains = editingMailboxDomain && !verifiedReceivingDomains.some((domain) => domain.id === editingMailboxDomain.id)
+    ? [...verifiedReceivingDomains, editingMailboxDomain]
+    : verifiedReceivingDomains;
 
   useEffect(() => {
     let active = true;
@@ -325,20 +330,14 @@ export default function WorkspaceSettingsPanel({
     let active = true;
     const timer = window.setTimeout(() => {
       if (!active) return;
-      if (section === "mail") void refreshProviderStatus(false);
-      if (section === "domains") {
-        void refreshProviderStatus(false);
-        void refreshDomains(false);
-      }
+      // The header status must reflect the real provider state on every Settings section.
+      void refreshProviderStatus(false);
+      if (section === "domains") void refreshDomains(false);
       if (section === "mailboxes") {
-        void refreshProviderStatus(false);
         void refreshDomains(false);
         void refreshMailboxes(false);
       }
-      if (section === "team") {
-        void refreshProviderStatus(false);
-        void refreshInvitations(false);
-      }
+      if (section === "team") void refreshInvitations(false);
     }, 0);
     return () => {
       active = false;
@@ -574,7 +573,7 @@ export default function WorkspaceSettingsPanel({
     if (!canManageWorkspace) return notify("Only workspace owners and admins can invite teammates.");
     const emailAddress = inviteEmail.trim().toLowerCase();
     if (!emailAddress || !emailAddress.includes("@")) return notify("Enter a valid email address.");
-    if (!inviteMailboxIds.length) return notify("Choose at least one mailbox for this teammate.");
+    if (inviteRole === "member" && !inviteMailboxIds.length) return notify("Choose at least one mailbox for this teammate.");
     setInviteBusy(true);
     setToast("");
     setInvitationLink("");
@@ -645,28 +644,50 @@ export default function WorkspaceSettingsPanel({
     }
   }
 
-  async function createMailbox(event: FormEvent<HTMLFormElement>) {
+  function startEditMailbox(mailbox: WorkspaceMailbox) {
+    setEditingMailboxId(mailbox.id);
+    setMailboxLocalPart(mailbox.address.split("@")[0] ?? "");
+    setMailboxDomainId(mailbox.domain_id);
+    setMailboxName(mailbox.display_name ?? "");
+    setToast("");
+  }
+
+  function cancelMailboxEdit() {
+    setEditingMailboxId("");
+    setMailboxLocalPart("info");
+    setMailboxName("");
+    setMailboxDomainId(verifiedReceivingDomains[0]?.id ?? "");
+    setToast("");
+  }
+
+  async function saveMailbox(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!canManageWorkspace) return notify("Only workspace owners and admins can create mailboxes.");
+    if (!canManageWorkspace) return notify("Only workspace owners and admins can manage mailboxes.");
+    const editingId = editingMailboxId;
     setMailboxBusy(true);
     setToast("");
     try {
-      const response = await fetch("/api/organizations/" + organizationId + "/mailboxes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ localPart: mailboxLocalPart, domainId: mailboxDomainId, displayName: mailboxName }),
-      });
+      const response = await fetch(
+        "/api/organizations/" + organizationId + "/mailboxes" + (editingId ? "/" + editingId : ""),
+        {
+          method: editingId ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ localPart: mailboxLocalPart, domainId: mailboxDomainId, displayName: mailboxName }),
+        },
+      );
       const result = await response.json() as { ok?: boolean; mailbox?: WorkspaceMailbox; error?: string; note?: string };
       if (!response.ok || !result.ok) {
-        notify(result.error || "Mailbox could not be created.");
+        notify(result.error || (editingId ? "Mailbox changes could not be saved." : "Mailbox could not be created."));
         return;
       }
+      setEditingMailboxId("");
+      setMailboxLocalPart("info");
       setMailboxName("");
       await refreshMailboxes(false);
       router.refresh();
-      notify(result.note || "Mailbox created.");
+      notify(result.note || (editingId ? "Mailbox updated." : "Mailbox created."));
     } catch {
-      notify("Mailbox could not be created. Check your connection and retry.");
+      notify(editingId ? "Mailbox changes could not be saved. Check your connection and retry." : "Mailbox could not be created. Check your connection and retry.");
     } finally {
       setMailboxBusy(false);
     }
@@ -691,11 +712,17 @@ export default function WorkspaceSettingsPanel({
         <header className="mail-topbar">
           <div className="mail-breadcrumb"><Link href={base}>Workspace</Link><span className="mail-breadcrumb-slash">/</span><strong>{info.title}</strong></div>
           <div className="settings-topbar-title">{organizationName}</div>
-          <div className="mail-topbar-right"><span className="settings-role-pill">{organizationRole}</span><span className="mail-user-avatar" title={email}>{email.split("@")[0].slice(0, 2).toUpperCase() || "U"}</span><SignOutButton className="auth-signout-control" /></div>
+          <div className="mail-topbar-right">
+            <Link href={settingsBase} className="mail-topbar-profile-link" aria-label="Open profile and general settings" title={email + " · General settings"}>
+              <span className="mail-user-avatar">{email.split("@")[0].slice(0, 2).toUpperCase() || "U"}</span>
+            </Link>
+          </div>
         </header>
 
         <div className="settings-page-scroll">
-          <div className="settings-page-heading"><div><p className="mail-overline">WORKSPACE SETTINGS</p><h1>Settings</h1><p>Changes are scoped to {organizationName}; workspace switching does not sign you out.</p></div><span className="settings-preview-chip"><span /> Workspace connected</span></div>
+          <div className="settings-page-heading"><div><p className="mail-overline">WORKSPACE SETTINGS</p><h1>Settings</h1><p>Changes are scoped to {organizationName}; workspace switching does not sign you out.</p></div><span className={"settings-preview-chip " + ((providerStatus?.connected || providerStatus?.environmentManaged) ? "connected" : providerLoading ? "checking" : "not-connected")}>
+            <span />{providerLoading ? "Checking connection" : providerStatus?.connected || providerStatus?.environmentManaged ? "Workspace connected" : providerStatus ? "Workspace not connected" : "Connection status unavailable"}
+          </span></div>
           <div className="settings-layout">
             <nav className="settings-navigation" aria-label="Settings sections">
               {(["PREFERENCES", "WORKSPACE", "ACCESS"] as const).map((group) => (
@@ -834,25 +861,57 @@ export default function WorkspaceSettingsPanel({
               </div>}
 
               {section === "mailboxes" && <div className="workspace-mailboxes-settings">
-                <div className="settings-section-summary"><div><strong>Business email addresses</strong><p>Create an address after its domain is verified and both send/receive capabilities are enabled.</p></div><button className="mail-secondary-action" type="button" onClick={() => { void refreshMailboxes(); }}>Refresh mailboxes</button></div>
+                <div className="settings-section-summary mailbox-section-summary">
+                  <div><strong>Business email addresses</strong><p>Create and manage addresses after their domain is verified and both send/receive capabilities are enabled.</p></div>
+                  <button className="mail-secondary-action" type="button" onClick={() => { void refreshMailboxes(); }} disabled={mailboxesLoading}>{mailboxesLoading ? "Refreshing…" : "Refresh mailboxes"}</button>
+                </div>
                 {!providerStatus?.connected && !providerStatus?.environmentManaged && <div className="settings-info-banner"><span>i</span><p>Connect Resend first, then add and verify your domain in Settings → Domains.</p></div>}
-                <form className="settings-domain-form" onSubmit={createMailbox}>
-                  <Field label="Address name" hint="This is the part before @, for example info, sales, or hello."><input value={mailboxLocalPart} onChange={(event) => setMailboxLocalPart(event.target.value)} required maxLength={64} autoCapitalize="none" autoCorrect="off" disabled={!canManageWorkspace || mailboxBusy} /></Field>
-                  <Field label="Domain"><select value={mailboxDomainId} onChange={(event) => setMailboxDomainId(event.target.value)} required disabled={!canManageWorkspace || mailboxBusy || verifiedReceivingDomains.length === 0}><option value="">Select verified domain</option>{verifiedReceivingDomains.map((domain) => <option key={domain.id} value={domain.id}>{domain.domain}</option>)}</select></Field>
-                  <Field label="Display name"><input value={mailboxName} onChange={(event) => setMailboxName(event.target.value)} placeholder={organizationName} maxLength={120} disabled={!canManageWorkspace || mailboxBusy} /></Field>
-                  <button className="mail-primary-action" type="submit" disabled={!canManageWorkspace || mailboxBusy || verifiedReceivingDomains.length === 0 || !providerStatus?.connected}>{mailboxBusy ? "Creating…" : "Create mailbox"}</button>
-                </form>
+
+                <section className="mailbox-editor-card" aria-labelledby="mailbox-editor-heading">
+                  <div className="mailbox-editor-heading">
+                    <div>
+                      <p className="mail-overline">{editingMailboxId ? "EDIT EXISTING ADDRESS" : "NEW BUSINESS ADDRESS"}</p>
+                      <h3 id="mailbox-editor-heading">{editingMailboxId ? "Edit mailbox details" : "Create a business email"}</h3>
+                      <p>{editingMailboxId ? "Update the email address, domain or sender display name. Changing the address means the old address will stop reaching this mailbox." : "Choose the email address and the name recipients will see when you send a message."}</p>
+                    </div>
+                    {editingMailboxId && <button className="mail-secondary-action" type="button" onClick={cancelMailboxEdit} disabled={mailboxBusy}>Cancel edit</button>}
+                  </div>
+                  <form className="mailbox-editor-form" onSubmit={saveMailbox}>
+                    <Field label="Address name" hint="The part before @, such as info, sales or hello.">
+                      <input value={mailboxLocalPart} onChange={(event) => setMailboxLocalPart(event.target.value)} required maxLength={64} autoCapitalize="none" autoCorrect="off" disabled={!canManageWorkspace || mailboxBusy} />
+                    </Field>
+                    <Field label="Domain" hint={editingMailboxId ? "Address changes require a verified domain with sending and receiving enabled." : "Only verified domains with sending and receiving enabled can be selected."}>
+                      <select value={mailboxDomainId} onChange={(event) => setMailboxDomainId(event.target.value)} required disabled={!canManageWorkspace || mailboxBusy || mailboxFormDomains.length === 0}>
+                        <option value="">Select verified domain</option>
+                        {mailboxFormDomains.map((domain) => <option key={domain.id} value={domain.id} disabled={domain.status !== "verified" || !domain.sendingEnabled || !domain.receivingEnabled}>{domain.domain}{domain.status === "verified" && domain.sendingEnabled && domain.receivingEnabled ? "" : " — not ready"}</option>)}
+                      </select>
+                    </Field>
+                    <Field label="Display name" hint="The sender name recipients will see in their inbox.">
+                      <input value={mailboxName} onChange={(event) => setMailboxName(event.target.value)} placeholder={organizationName} maxLength={120} disabled={!canManageWorkspace || mailboxBusy} />
+                    </Field>
+                    <div className="mailbox-editor-actions">
+                      {editingMailboxId && <button className="mail-secondary-action" type="button" onClick={cancelMailboxEdit} disabled={mailboxBusy}>Cancel</button>}
+                      <button className="mail-primary-action" type="submit" disabled={!canManageWorkspace || mailboxBusy || mailboxFormDomains.length === 0 || !providerStatus?.connected}>
+                        {mailboxBusy ? (editingMailboxId ? "Saving…" : "Creating…") : editingMailboxId ? "Save changes" : "Create mailbox"}
+                      </button>
+                    </div>
+                  </form>
+                </section>
+
                 {verifiedReceivingDomains.length === 0 && <p className="settings-muted">No verified domain with sending and receiving enabled is available. Complete domain verification before creating an address.</p>}
+                <div className="mailbox-list-heading">
+                  <div><h3>Configured mailboxes</h3><p>{mailboxRows.length} address{mailboxRows.length === 1 ? "" : "es"} in this workspace</p></div>
+                </div>
                 {mailboxesLoading && <p className="settings-muted">Loading mailbox status…</p>}
-                {!mailboxesLoading && mailboxRows.length === 0 && <div className="settings-empty-state"><strong>No mailboxes yet</strong><p>Your active email addresses will appear here once created.</p></div>}
-                {mailboxRows.length > 0 && <div className="settings-table-wrap"><table className="settings-table"><thead><tr><th>Address</th><th>Display name</th><th>Status</th></tr></thead><tbody>{mailboxRows.map((mailbox) => <tr key={mailbox.id}><td><strong>{mailbox.address}</strong><small>Mailbox ID {mailbox.id.slice(0, 8)}</small></td><td>{mailbox.display_name || "—"}</td><td><span className={mailbox.status === "active" ? "settings-status active" : "settings-status pending"}><span />{statusLabel(mailbox.status)}</span></td></tr>)}</tbody></table></div>}
-                <div className="settings-info-banner"><span>i</span><p>Incoming email is delivered into ABEmail through the workspace&apos;s signed Resend webhook. Sending and receiving are dependent on the domain capabilities and DNS records shown in Settings → Domains.</p></div>
+                {!mailboxesLoading && mailboxRows.length === 0 && <div className="settings-empty-state"><strong>No mailboxes yet</strong><p>Your active email addresses will appear here. Use the form above to create the first address.</p></div>}
+                {mailboxRows.length > 0 && <div className="settings-table-wrap mailbox-table-wrap"><table className="settings-table mailbox-settings-table"><thead><tr><th>Address</th><th>Display name</th><th>Status</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>{mailboxRows.map((mailbox) => <tr key={mailbox.id} className={editingMailboxId === mailbox.id ? "mailbox-row-editing" : undefined}><td><strong>{mailbox.address}</strong><small>Created {new Date(mailbox.created_at).toLocaleDateString()}</small></td><td>{mailbox.display_name || <span className="settings-table-empty">Not set</span>}</td><td><span className={mailbox.status === "active" ? "settings-status active" : "settings-status pending"}><span />{statusLabel(mailbox.status)}</span></td><td><button className="mail-secondary-action mailbox-edit-action" type="button" onClick={() => startEditMailbox(mailbox)} disabled={!canManageWorkspace || mailboxBusy || mailbox.status !== "active"}>{editingMailboxId === mailbox.id ? "Editing…" : "Edit"}</button></td></tr>)}</tbody></table></div>}
+                <div className="settings-info-banner"><span>i</span><p>Incoming email is delivered into ABEmail through the workspace&apos;s signed Resend webhook. If you change an address or domain, the previous address will no longer be assigned to this mailbox.</p></div>
               </div>}
 
               {section === "security" && <div>
                 <div className="settings-security-card"><span className="settings-security-icon">◇</span><div><strong>Signed in to ABEmail</strong><p>{email || "Current authenticated account"} · Workspace role: {organizationRole}</p></div><span className="settings-summary-chip">Authenticated</span></div>
                 <SettingRow title="Workspace switching" description="Switching organizations keeps this account session active; access is rechecked for each workspace."><span className="settings-status active"><span />Membership checked</span></SettingRow>
-                <SettingRow title="Sign out" description="Sign out of the ABEmail account across all workspaces."><SignOutButton className="mail-secondary-action" /></SettingRow>
+                <SettingRow title="Sign out" description="Sign out from the workspace switcher at the bottom of the left sidebar."><span className="settings-muted">Available in the workspace menu</span></SettingRow>
                 <div className="settings-info-banner"><span>i</span><p>Sessions, multi-factor settings, and audit history require identity-provider support and are not separately managed here yet.</p></div>
               </div>}
             </section>

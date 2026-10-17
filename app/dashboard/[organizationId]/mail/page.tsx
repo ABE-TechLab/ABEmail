@@ -112,6 +112,7 @@ export default async function WorkspaceMailPage({ params, searchParams }: MailPa
     <LiveMailbox
       organizationId={organization.id}
       organizationName={organization.name}
+      userEmail={user.email ?? ""}
       mailboxes={mailboxes}
       messages={messages}
       messagesError={messagesError || Boolean(mailboxError)}
