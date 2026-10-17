@@ -9,6 +9,10 @@
 - Vercel Production, Preview, and Development have the public Supabase URL/key but share one Supabase project. Preview/Development are not isolated.
 - Full gODtECH FORGE 0.7.0 integration is merged through [PR #17](https://github.com/ABE-TechLab/ABEmail/pull/17); strict framework validation passed in run 38601261300, and application CI including tenant-isolation tests passed in run 38601261239.
 
+### Pilot update — 2026-10-17
+
+The operator reports Resend-side domain verification for the Ottawa Snow Match pilot subdomain `ottawasnowmatch.waste2light.com`. This is only provider-dashboard verification; it does not mean commercial ABEmail has an active provider adapter, provisioned application mailbox, or end-to-end sending/receiving. Track implementation in [issue #21](https://github.com/ABE-TechLab/ABEmail/issues/21) and follow [the pilot plan](../product/ottawa-snow-match-pilot.md). The ABE TechLab authentication-email sender domain remains a separate decision.
+
 ## Phase 0 — Repository and architecture foundation
 
 - [x] Establish the commercial repository and proprietary application license.
