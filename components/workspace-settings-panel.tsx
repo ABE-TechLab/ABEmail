@@ -182,64 +182,63 @@ export default function WorkspaceSettingsPanel({
   const verifiedReceivingDomains = domains.filter((domain) => domain.status === "verified" && domain.sendingEnabled && domain.receivingEnabled);
 
   useEffect(() => {
-    setDisplayName(organizationName);
-  }, [organizationName]);
-
-  useEffect(() => {
     let active = true;
-    let localPreferences: Partial<WorkspacePreferenceValues> = {};
-    try {
-      const stored = window.localStorage.getItem(SETTINGS_KEY + organizationId);
-      if (stored) localPreferences = JSON.parse(stored) as Partial<WorkspacePreferenceValues>;
-      if (active) {
-        const local = {
-          ...DEFAULT_PREFERENCES,
-          ...localPreferences,
-          compactMessageList: localPreferences.compactMessageList ?? window.localStorage.getItem(COMPACT_KEY) === "true",
-          notifications: { ...DEFAULT_PREFERENCES.notifications, ...(localPreferences.notifications ?? {}) },
-        };
-        setPreferences(local);
-        setCompactMessageList(local.compactMessageList);
-      }
-    } catch {
-      // Browser storage is only a fallback; the server remains the source of truth.
-    }
-
-    void (async () => {
-      try {
-        const response = await fetch("/api/organizations/" + organizationId + "/preferences", { cache: "no-store" });
-        if (!response.ok) return;
-        const result = await response.json() as { preferences?: Partial<WorkspacePreferenceValues> };
-        const saved = result.preferences ?? {};
-        const hasServerPreferences = Object.keys(saved).length > 0;
-        const base = hasServerPreferences ? saved : localPreferences;
-        const loaded: WorkspacePreferenceValues = {
-          ...DEFAULT_PREFERENCES,
-          ...base,
-          notifications: { ...DEFAULT_PREFERENCES.notifications, ...(base.notifications ?? {}) },
-        };
-        if (!active) return;
-        setPreferences(loaded);
-        setCompactMessageList(loaded.compactMessageList);
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        let localPreferences: Partial<WorkspacePreferenceValues> = {};
         try {
-          window.localStorage.setItem(SETTINGS_KEY + organizationId, JSON.stringify(loaded));
-          window.localStorage.setItem(COMPACT_KEY, String(loaded.compactMessageList));
+          const stored = window.localStorage.getItem(SETTINGS_KEY + organizationId);
+          if (stored) localPreferences = JSON.parse(stored) as Partial<WorkspacePreferenceValues>;
         } catch {
-          // Server preferences are still loaded even if browser storage is blocked.
+          // Local preferences are optional; continue with the backend.
         }
-        if (!hasServerPreferences && Object.keys(localPreferences).length > 0) {
-          await fetch("/api/organizations/" + organizationId + "/preferences", {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(loaded),
-          });
-        }
-      } catch {
-        // Keep local preferences available if the preference endpoint is temporarily unreachable.
-      }
-    })();
 
-    return () => { active = false; };
+        try {
+          const response = await fetch("/api/organizations/" + organizationId + "/preferences", { cache: "no-store" });
+          if (!active) return;
+          const result = response.ok
+            ? await response.json() as { preferences?: Partial<WorkspacePreferenceValues> }
+            : { preferences: undefined };
+          const saved = result.preferences ?? {};
+          const hasServerPreferences = Object.keys(saved).length > 0;
+          const base = hasServerPreferences ? saved : localPreferences;
+          const loaded: WorkspacePreferenceValues = {
+            ...DEFAULT_PREFERENCES,
+            ...base,
+            notifications: { ...DEFAULT_PREFERENCES.notifications, ...(base.notifications ?? {}) },
+          };
+
+          setPreferences(loaded);
+          setCompactMessageList(loaded.compactMessageList);
+          try {
+            window.localStorage.setItem(SETTINGS_KEY + organizationId, JSON.stringify(loaded));
+            window.localStorage.setItem(COMPACT_KEY, String(loaded.compactMessageList));
+          } catch {
+            // Server preferences are still loaded even if browser storage is blocked.
+          }
+          if (response.ok && !hasServerPreferences && Object.keys(localPreferences).length > 0) {
+            await fetch("/api/organizations/" + organizationId + "/preferences", {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(loaded),
+            });
+          }
+        } catch {
+          if (!active) return;
+          const loaded: WorkspacePreferenceValues = {
+            ...DEFAULT_PREFERENCES,
+            ...localPreferences,
+            notifications: { ...DEFAULT_PREFERENCES.notifications, ...(localPreferences.notifications ?? {}) },
+          };
+          setPreferences(loaded);
+          setCompactMessageList(loaded.compactMessageList);
+        }
+      })();
+    }, 0);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
   }, [organizationId]);
 
   async function refreshProviderStatus(showError = true) {
@@ -295,17 +294,24 @@ export default function WorkspaceSettingsPanel({
   }
 
   useEffect(() => {
-    if (section === "mail") void refreshProviderStatus(false);
-    if (section === "domains") {
-      void refreshProviderStatus(false);
-      void refreshDomains(false);
-    }
-    if (section === "mailboxes") {
-      void refreshProviderStatus(false);
-      void refreshDomains(false);
-      void refreshMailboxes(false);
-    }
-    // The active section drives only its own remote reads.
+    let active = true;
+    const timer = window.setTimeout(() => {
+      if (!active) return;
+      if (section === "mail") void refreshProviderStatus(false);
+      if (section === "domains") {
+        void refreshProviderStatus(false);
+        void refreshDomains(false);
+      }
+      if (section === "mailboxes") {
+        void refreshProviderStatus(false);
+        void refreshDomains(false);
+        void refreshMailboxes(false);
+      }
+    }, 0);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [organizationId, section]);
 
@@ -636,7 +642,7 @@ export default function WorkspaceSettingsPanel({
               {section === "team" && <div>
                 <div className="settings-section-summary"><div><strong>Workspace membership</strong><p>{members.length} active membership record{members.length === 1 ? "" : "s"} returned for this organization</p></div><span className="settings-summary-chip">Live records</span></div>
                 <div className="settings-table-wrap"><table className="settings-table"><thead><tr><th>Member</th><th>Role</th><th>Status</th></tr></thead><tbody>{members.map((member) => <tr key={member.user_id}><td><strong>{member.user_id === userId ? "You" : "Workspace member"}</strong><small>{member.user_id === userId ? email : "Member ID " + member.user_id.slice(0, 8)}</small></td><td><span className="settings-role-pill">{member.role}</span></td><td><span className="settings-status active"><span />Active</span></td></tr>)}</tbody></table></div>
-                <div className="settings-info-banner"><span>i</span><p>Memberships above come from the workspace database. Sending invitations and changing another member's role are not enabled from this screen yet.</p></div>
+                <div className="settings-info-banner"><span>i</span><p>Memberships above come from the workspace database. Sending invitations and changing another member&apos;s role are not enabled from this screen yet.</p></div>
               </div>}
 
               {section === "domains" && <div className="workspace-domains-settings">
@@ -689,7 +695,7 @@ export default function WorkspaceSettingsPanel({
                 {mailboxesLoading && <p className="settings-muted">Loading mailbox status…</p>}
                 {!mailboxesLoading && mailboxRows.length === 0 && <div className="settings-empty-state"><strong>No mailboxes yet</strong><p>Your active email addresses will appear here once created.</p></div>}
                 {mailboxRows.length > 0 && <div className="settings-table-wrap"><table className="settings-table"><thead><tr><th>Address</th><th>Display name</th><th>Status</th></tr></thead><tbody>{mailboxRows.map((mailbox) => <tr key={mailbox.id}><td><strong>{mailbox.address}</strong><small>Mailbox ID {mailbox.id.slice(0, 8)}</small></td><td>{mailbox.display_name || "—"}</td><td><span className={mailbox.status === "active" ? "settings-status active" : "settings-status pending"}><span />{statusLabel(mailbox.status)}</span></td></tr>)}</tbody></table></div>}
-                <div className="settings-info-banner"><span>i</span><p>Incoming email is delivered into ABEmail through the workspace's signed Resend webhook. Sending and receiving are dependent on the domain capabilities and DNS records shown in Settings → Domains.</p></div>
+                <div className="settings-info-banner"><span>i</span><p>Incoming email is delivered into ABEmail through the workspace&apos;s signed Resend webhook. Sending and receiving are dependent on the domain capabilities and DNS records shown in Settings → Domains.</p></div>
               </div>}
 
               {section === "security" && <div>
