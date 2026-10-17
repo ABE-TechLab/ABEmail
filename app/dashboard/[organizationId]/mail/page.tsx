@@ -3,14 +3,19 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import LiveMailbox from "@/components/live-mailbox";
 
-export const metadata: Metadata = { title: "Pilot mail | ABEmail" };
+export const metadata: Metadata = { title: "Workspace inbox | ABEmail" };
 export const dynamic = "force-dynamic";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-type MailPageProps = { params: Promise<{ organizationId: string }> };
+type MailPageProps = {
+  params: Promise<{ organizationId: string }>;
+  searchParams?: Promise<{ view?: string }>;
+};
 
-export default async function PilotMailPage({ params }: MailPageProps) {
+export default async function WorkspaceMailPage({ params, searchParams }: MailPageProps) {
   const { organizationId } = await params;
+  const { view } = (await searchParams) ?? {};
+  const activeView = view === "Sent" ? "Sent" : "Inbox";
   if (!UUID_PATTERN.test(organizationId)) notFound();
 
   const supabase = await createClient();
@@ -40,9 +45,25 @@ export default async function PilotMailPage({ params }: MailPageProps) {
     .maybeSingle();
 
   if (organizationError || !organization) notFound();
-  if (organization.slug !== "ottawa-snow-match") {
-    return <main style={{ padding: 28 }}><h1>Pilot mailbox only</h1><p>This first live transport release is limited to the Ottawa Snow Match test workspace.</p></main>;
-  }
+  const { data: workspaceMembershipRows } = await supabase
+    .from("organization_memberships")
+    .select("organization_id, role")
+    .eq("user_id", user.id)
+    .eq("status", "active");
+  const workspaceMemberships = workspaceMembershipRows ?? [];
+  const workspaceIds = [...new Set([...workspaceMemberships.map((row) => row.organization_id), organization.id])];
+  const { data: workspaceRows } = await supabase
+    .from("organizations")
+    .select("id, name, slug, status")
+    .in("id", workspaceIds)
+    .eq("status", "active");
+  const workspaces = (workspaceRows ?? []).map((workspace) => ({
+    id: workspace.id,
+    name: workspace.name,
+    slug: workspace.slug,
+    role: workspaceMemberships.find((row) => row.organization_id === workspace.id)?.role
+      ?? (workspace.id === organization.id ? membership.role : "member"),
+  }));
 
   const { data: mailboxRows, error: mailboxError } = await supabase
     .from("mailboxes")
@@ -93,8 +114,9 @@ export default async function PilotMailPage({ params }: MailPageProps) {
       organizationName={organization.name}
       mailboxes={mailboxes}
       messages={messages}
-      allowPilotSetup={membership.role === "owner" || membership.role === "admin"}
       messagesError={messagesError || Boolean(mailboxError)}
+      activeView={activeView}
+      workspaces={workspaces}
     />
   );
 }

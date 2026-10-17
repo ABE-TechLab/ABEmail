@@ -472,3 +472,71 @@
   .mailboxRow { align-items: flex-start; flex-wrap: wrap; }
   .mailboxState { width: 100%; margin-left: 45px; text-align: left; }
 }
+
+
+/* Keep the live message reader prominent without making the list column dominate. */
+.app :global(.mail-content-layout) {
+  grid-template-columns: minmax(285px, 34%) minmax(0, 1fr);
+}
+
+/* Compact mailbox navigation slightly, independent of message-list density. */
+.app :global(.mail-nav) {
+  gap: 2px;
+}
+.app :global(.mail-nav-item) {
+  min-height: 33px;
+  gap: 9px;
+  padding: 7px 9px;
+  border-radius: 6px;
+}
+.app :global(.mail-nav-icon) {
+  width: 16px;
+  font-size: 14px;
+}
+
+.compactList :global(.mail-list-heading) {
+  min-height: 84px;
+  gap: 8px;
+  padding: 13px 15px 10px;
+}
+.compactList :global(.mail-list-heading h1) {
+  font-size: 21px;
+  letter-spacing: -.65px;
+}
+.compactList :global(.mail-overline) {
+  margin-bottom: 4px;
+}
+.compactList :global(.mail-list-toolbar) {
+  min-height: 34px;
+  gap: 8px;
+  padding: 0 13px;
+}
+.compactList :global(.mail-message-row) {
+  min-height: 72px;
+}
+.compactList :global(.mail-message-open) {
+  gap: 8px;
+  padding: 9px 3px 8px 12px;
+}
+.compactList :global(.mail-message-copy) {
+  gap: 3px;
+}
+.compactList :global(.mail-message-row-top) {
+  gap: 6px;
+}
+.compactList :global(.mail-avatar) {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+}
+
+@media (max-width: 1120px) {
+  .app :global(.mail-content-layout) {
+    grid-template-columns: minmax(275px, 36%) minmax(0, 1fr);
+  }
+}
+@media (max-width: 850px) {
+  .app :global(.mail-content-layout) {
+    grid-template-columns: minmax(260px, 38%) minmax(0, 1fr);
+  }
+}
