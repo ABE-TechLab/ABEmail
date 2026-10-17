@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import PilotSetupButton from "@/components/pilot-setup-button";
 import SignOutButton from "@/components/auth/sign-out-button";
 import WorkspaceSidebar, { type MailboxView, type WorkspaceChoice } from "@/components/workspace-sidebar";
 import styles from "./live-mailbox.module.css";
@@ -34,7 +33,6 @@ type LiveMailboxProps = {
   organizationName: string;
   mailboxes: Mailbox[];
   messages: EmailMessage[];
-  allowPilotSetup: boolean;
   messagesError: boolean;
   activeView?: "Inbox" | "Sent";
   workspaces: WorkspaceChoice[];
@@ -74,7 +72,7 @@ function messagePreview(message: EmailMessage): string {
 }
 
 export default function LiveMailbox(props: LiveMailboxProps) {
-  const { organizationId, organizationName, mailboxes, messages, allowPilotSetup, messagesError, activeView = "Inbox", workspaces } = props;
+  const { organizationId, organizationName, mailboxes, messages, messagesError, activeView = "Inbox", workspaces } = props;
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [compactMessageList, setCompactMessageList] = useState(false);
@@ -206,7 +204,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
         homeHref={"/dashboard/" + organizationId + "/mail"}
         workspaceBaseHref={"/dashboard/" + organizationId}
         workspaceName={organizationName}
-        workspaceDescription="Live Ottawa pilot"
+        workspaceDescription="Business workspace"
         workspaces={workspaces}
         activeWorkspaceId={organizationId}
       />
@@ -227,7 +225,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
             {!query && <kbd>Search</kbd>}
           </label>
           <div className={"mail-topbar-right " + workspaceStyles.topbarActions}>
-            <span className={styles.livePill}><span /> Live pilot</span>
+            <span className={styles.livePill}><span /> Live email</span>
             <Link href={"/dashboard/" + organizationId + "/settings"} className={workspaceStyles.topbarLink}>Settings</Link>
             <Link href={"/dashboard/" + organizationId + "/settings/security"} className={workspaceStyles.topbarLink}>Account</Link>
             <SignOutButton className="auth-signout-control" />
@@ -237,9 +235,12 @@ export default function LiveMailbox(props: LiveMailboxProps) {
         {messagesError && <div className={styles.warning} role="alert">The mail database could not be read in this deployment. Refresh the page or contact an administrator.</div>}
         {!mailboxes.length ? (
           <section className={styles.setupCard}>
-            <h2>No active mailbox is assigned</h2>
-            <p>An owner or administrator needs to finish pilot setup before this inbox can receive mail.</p>
-            {allowPilotSetup && <PilotSetupButton />}
+            <h2>Finish email setup for this workspace</h2>
+            <p>Connect a Resend account, add a domain, publish the requested DNS records and verify both sending and receiving before creating a mailbox.</p>
+            <div className={styles.headerActions}>
+              <Link className={styles.primaryButton} href={"/dashboard/" + organizationId + "/settings/mail"}>Connect Resend</Link>
+              <Link className={styles.secondaryButton} href={"/dashboard/" + organizationId + "/settings/domains"}>Set up a domain</Link>
+            </div>
           </section>
         ) : (
           <div className="mail-content-layout">
@@ -358,7 +359,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
                   <span className="mail-sr-only">Message body</span>
                   <textarea ref={composeBodyRef} required maxLength={80000} rows={8} value={body} style={{ fontFamily: mailPreferences.font === "serif" ? "Georgia, serif" : mailPreferences.font === "mono" ? "ui-monospace, SFMono-Regular, Consolas, monospace" : "inherit" }} onChange={(event) => { setBody(event.target.value); setRequestKey(null); composeCursorPosition.current = null; }} placeholder="Write your message…" />
                 </label>
-                <p className="mail-compose-warning"><span>i</span> Plain-text pilot sending · One recipient · 25 messages per workspace per 24 hours</p>
+                <p className="mail-compose-warning"><span>i</span> Plain-text email · One recipient · Workspace sending limits apply</p>
                 <footer className="mail-compose-footer">
                   <button type="submit" className="mail-primary-action" disabled={busy || !mailboxId}>{busy ? "Sending…" : "Send"} <span>↗</span></button>
                   <button type="button" className="mail-compose-discard" onClick={() => setComposeOpen(false)} disabled={busy}>Discard</button>
