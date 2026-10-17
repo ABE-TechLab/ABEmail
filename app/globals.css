@@ -1362,3 +1362,115 @@ html[data-appearance-mode="system"] {
     display: flex;
   }
 }
+
+
+/* Live provider onboarding and DNS verification in workspace settings. */
+.workspace-provider-settings,
+.workspace-domains-settings,
+.workspace-mailboxes-settings {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+.settings-domain-record {
+  min-width: 0;
+  padding: 13px 15px;
+  margin: 10px 0;
+  border: 1px solid var(--border, #e3eae1);
+  border-radius: 10px;
+  background: var(--card, #fff);
+}
+.settings-domain-record .settings-domain-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.settings-domain-record .settings-domain-name {
+  min-width: 140px;
+  flex: 1 1 180px;
+}
+.settings-domain-record .settings-status {
+  white-space: nowrap;
+}
+.settings-domain-capabilities {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 0 2px 38px;
+}
+.settings-dns-records {
+  margin-top: 15px;
+  padding-top: 13px;
+  border-top: 1px solid var(--border, #e4ebe2);
+}
+.settings-dns-records .settings-subheading {
+  margin-bottom: 10px;
+}
+.settings-dns-records .settings-table-wrap {
+  overflow-x: auto;
+}
+.settings-dns-records .settings-table {
+  min-width: 630px;
+}
+.settings-dns-records code {
+  display: inline-block;
+  max-width: 260px;
+  overflow-wrap: anywhere;
+  color: var(--foreground, #17231b);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 10px;
+}
+.settings-dns-records .settings-dns-value {
+  max-width: 310px;
+}
+.settings-dns-records td small {
+  display: block;
+  margin-top: 3px;
+}
+.settings-domain-record .settings-muted {
+  margin: 12px 0 2px;
+  line-height: 1.6;
+}
+.workspace-provider-settings .settings-domain-form,
+.workspace-domains-settings .settings-domain-form,
+.workspace-mailboxes-settings .settings-domain-form {
+  align-items: flex-end;
+}
+.workspace-provider-settings .settings-domain-form .settings-field,
+.workspace-domains-settings .settings-domain-form .settings-field,
+.workspace-mailboxes-settings .settings-domain-form .settings-field {
+  min-width: 0;
+  flex: 1 1 210px;
+}
+.workspace-provider-settings .settings-domain-form > button,
+.workspace-domains-settings .settings-domain-form > button,
+.workspace-mailboxes-settings .settings-domain-form > button {
+  flex: 0 0 auto;
+}
+.workspace-provider-settings > .settings-muted {
+  line-height: 1.6;
+}
+.workspace-settings-app .settings-page-scroll {
+  min-width: 0;
+}
+@media (max-width: 760px) {
+  .settings-domain-record {
+    padding: 10px;
+  }
+  .settings-domain-capabilities {
+    padding-left: 0;
+  }
+  .workspace-provider-settings .settings-domain-form,
+  .workspace-domains-settings .settings-domain-form,
+  .workspace-mailboxes-settings .settings-domain-form {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .workspace-provider-settings .settings-domain-form > button,
+  .workspace-domains-settings .settings-domain-form > button,
+  .workspace-mailboxes-settings .settings-domain-form > button {
+    width: 100%;
+  }
+}
