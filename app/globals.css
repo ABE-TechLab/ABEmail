@@ -1621,3 +1621,202 @@ html[data-appearance-mode="system"] {
 .mail-topbar-profile-link .mail-user-avatar {
   cursor: pointer;
 }
+
+
+/* Workspace connection badge follows the actual Resend provider state. */
+.settings-preview-chip.connected {
+  border-color: #cfe6d2;
+  background: #f0f9f0;
+  color: #2f7342;
+}
+.settings-preview-chip.connected > span {
+  background: #3e9858;
+}
+.settings-preview-chip.not-connected {
+  border-color: #e4e8e0;
+  background: #f8faf6;
+  color: #7c877b;
+}
+.settings-preview-chip.not-connected > span {
+  background: #a0aaa0;
+}
+.settings-preview-chip.checking {
+  border-color: #e6e9dd;
+  background: #fffdf7;
+  color: #8f8059;
+}
+.settings-preview-chip.checking > span {
+  background: #c79845;
+}
+
+/* Mailbox create/edit form: consistent columns, actions and table alignment. */
+.workspace-mailboxes-settings {
+  align-content: start;
+}
+.workspace-mailboxes-settings .mailbox-section-summary {
+  align-items: center;
+  padding-top: 7px;
+}
+.workspace-mailboxes-settings .mailbox-section-summary > div {
+  min-width: 0;
+}
+.workspace-mailboxes-settings .mailbox-section-summary .mail-secondary-action {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.mailbox-editor-card {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--border, #e3eae1);
+  border-radius: 11px;
+  background: var(--card, #fff);
+}
+.mailbox-editor-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 14px;
+  margin-bottom: 15px;
+  border-bottom: 1px solid var(--border, #edf1ec);
+}
+.mailbox-editor-heading > div {
+  min-width: 0;
+}
+.mailbox-editor-heading .mail-overline {
+  margin: 0 0 6px;
+}
+.mailbox-editor-heading h3,
+.mailbox-list-heading h3 {
+  margin: 0 0 6px;
+  color: var(--foreground, #2d392f);
+  font-size: 14px;
+  font-weight: 750;
+  letter-spacing: -.2px;
+}
+.mailbox-editor-heading p:not(.mail-overline),
+.mailbox-list-heading p {
+  margin: 0;
+  color: var(--muted-foreground, #879387);
+  font-size: 10px;
+  line-height: 1.6;
+}
+.mailbox-editor-heading > button {
+  flex: 0 0 auto;
+}
+.workspace-settings-app .settings-panel form.mailbox-editor-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: end;
+  gap: 0 14px;
+  padding-top: 0;
+  margin: 0;
+}
+.mailbox-editor-form .settings-field {
+  min-width: 0;
+  margin-bottom: 10px;
+}
+.mailbox-editor-form .settings-field > input,
+.mailbox-editor-form .settings-field > select {
+  min-width: 0;
+}
+.mailbox-editor-actions {
+  display: flex;
+  min-width: 0;
+  grid-column: 1 / -1;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 9px;
+  padding-top: 5px;
+}
+.mailbox-editor-actions .mail-primary-action,
+.mailbox-editor-actions .mail-secondary-action {
+  min-height: 36px;
+  white-space: nowrap;
+}
+.mailbox-list-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 0 3px;
+}
+.mailbox-table-wrap {
+  min-width: 0;
+  overflow-x: auto;
+  border: 1px solid var(--border, #e4ebe2);
+  border-radius: 9px;
+}
+.mailbox-settings-table {
+  min-width: 590px;
+}
+.mailbox-settings-table th:first-child {
+  width: 36%;
+}
+.mailbox-settings-table th:nth-child(2) {
+  width: 27%;
+}
+.mailbox-settings-table th:nth-child(3) {
+  width: 22%;
+}
+.mailbox-settings-table th:last-child,
+.mailbox-settings-table td:last-child {
+  width: 90px;
+  text-align: right;
+}
+.mailbox-settings-table td {
+  vertical-align: middle;
+}
+.mailbox-settings-table td:first-child {
+  min-width: 180px;
+}
+.mailbox-settings-table td:nth-child(2) {
+  min-width: 120px;
+  overflow-wrap: anywhere;
+}
+.mailbox-settings-table .settings-table-empty {
+  color: var(--muted-foreground, #8c978b);
+  font-size: 10px;
+  font-style: italic;
+}
+.mailbox-settings-table .mailbox-row-editing {
+  background: var(--accent, #f1f7ef);
+}
+.mailbox-edit-action {
+  min-width: 60px;
+  min-height: 30px;
+  padding: 0 10px;
+}
+@media (max-width: 1080px) {
+  .workspace-settings-app .settings-panel form.mailbox-editor-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .mailbox-editor-actions {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 760px) {
+  .mailbox-editor-card {
+    padding: 13px;
+  }
+  .mailbox-editor-heading {
+    flex-direction: column;
+    gap: 10px;
+  }
+  .workspace-settings-app .settings-panel form.mailbox-editor-form {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+  .mailbox-editor-actions {
+    grid-column: auto;
+    justify-content: stretch;
+  }
+  .mailbox-editor-actions .mail-primary-action,
+  .mailbox-editor-actions .mail-secondary-action {
+    flex: 1 1 0;
+  }
+  .workspace-mailboxes-settings .mailbox-section-summary {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
