@@ -138,6 +138,11 @@ async function resendRequest<T>(
   return payload as T;
 }
 
+export async function listResendDomains(apiKey: string): Promise<ResendDomain[]> {
+  const result = await resendRequest<{ data?: ResendDomain[] }>(apiKey, "/domains?limit=100");
+  return result.data ?? [];
+}
+
 export async function validateResendApiKey(apiKey: string): Promise<void> {
   if (!/^re_[A-Za-z0-9_-]{10,}$/.test(apiKey)) {
     throw new ResendProviderError("RESEND_API_KEY_FORMAT_INVALID");
