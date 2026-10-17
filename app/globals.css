@@ -1568,3 +1568,56 @@ html[data-appearance-mode="system"] {
   flex: 0 0 auto;
   accent-color: var(--primary, #28774c);
 }
+
+
+/* Keep workspace actions together at the bottom of the switcher. */
+.mail-workspace-menu-actions {
+  display: grid;
+  gap: 5px;
+  padding-top: 8px;
+  margin-top: 8px;
+  border-top: 1px solid var(--border, #e4ebe2);
+}
+.mail-profile-menu .mail-workspace-menu-actions .mail-workspace-all {
+  padding: 7px 6px;
+  margin: 0;
+  border: 0;
+  border-radius: 6px;
+}
+.mail-profile-menu .mail-workspace-menu-actions .mail-workspace-all:hover {
+  background: var(--accent, #edf5ee);
+  text-decoration: none;
+}
+.mail-profile-menu .mail-workspace-signout {
+  width: 100%;
+  min-height: 34px;
+  padding: 7px 8px;
+  border: 1px solid var(--border, #dfe7de);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--foreground, #485449);
+  text-align: left;
+  font-size: 10px;
+  font-weight: 650;
+}
+.mail-profile-menu .mail-workspace-signout:hover {
+  border-color: #e1bebe;
+  background: #fff7f6;
+  color: #9e3737;
+}
+.mail-topbar-profile-link {
+  display: inline-grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 50%;
+  text-decoration: none;
+}
+.mail-topbar-profile-link:focus-visible {
+  outline: 2px solid var(--primary, #28774c);
+  outline-offset: 3px;
+}
+.mail-topbar-profile-link .mail-user-avatar {
+  cursor: pointer;
+}
