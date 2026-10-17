@@ -9,6 +9,7 @@ import {
   ResendPilotError,
   verifyResendWebhookSignature,
 } from "@/lib/email/resend-pilot";
+import { decryptProviderSecret, ResendProviderError } from "@/lib/email/resend-provider";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -45,11 +46,35 @@ function toAddressList(value: string[] | string | undefined): string[] {
   return [];
 }
 
-export async function POST(request: NextRequest) {
+export async function handleResendWebhook(request: NextRequest, tenantOrganizationId?: string) {
   const rawBody = await request.text();
   if (rawBody.length > 1_000_000) return json({ error: "Webhook payload is too large." }, 413);
 
-  const secret = getPilotWebhookSecret();
+  const admin = createAdminClient();
+  if (!admin) return json({ error: "Mail storage is not configured." }, 503);
+
+  let secret = getPilotWebhookSecret();
+  let tenantApiKey: string | null = null;
+  if (tenantOrganizationId) {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(tenantOrganizationId)) {
+      return json({ error: "Invalid workspace webhook endpoint." }, 400);
+    }
+    const { data: connection, error: connectionError } = await admin
+      .from("organization_provider_connections")
+      .select("api_key_ciphertext, webhook_secret_ciphertext, status")
+      .eq("organization_id", tenantOrganizationId)
+      .maybeSingle();
+    if (connectionError) return json({ error: "Workspace webhook configuration could not be loaded." }, 503);
+    if (!connection || connection.status !== "connected" || !connection.webhook_secret_ciphertext) {
+      return json({ error: "Workspace webhook is not configured." }, 503);
+    }
+    try {
+      tenantApiKey = decryptProviderSecret(connection.api_key_ciphertext);
+      secret = decryptProviderSecret(connection.webhook_secret_ciphertext);
+    } catch {
+      return json({ error: "Workspace webhook credentials could not be decrypted." }, 503);
+    }
+  }
   if (!secret) return json({ error: "Webhook is not configured." }, 503);
 
   const verified = verifyResendWebhookSignature({
@@ -73,14 +98,12 @@ export async function POST(request: NextRequest) {
     return json({ error: "Webhook event identity is invalid." }, 400);
   }
 
-  const admin = createAdminClient();
-  if (!admin) return json({ error: "Mail storage is not configured." }, 503);
-
   const { data: insertedEvent, error: insertError } = await admin
     .from("provider_events")
     .insert({
       provider: "resend",
       provider_event_id: eventId,
+      organization_id: tenantOrganizationId ?? null,
       event_type: event.type,
       metadata: { email_id: event.data?.email_id ?? event.data?.id ?? null },
       status: "processing",
@@ -90,12 +113,10 @@ export async function POST(request: NextRequest) {
 
   let providerEventRowId = insertedEvent?.id as string | undefined;
   if (insertError?.code === "23505") {
-    const { data: existing, error: lookupError } = await admin
-      .from("provider_events")
-      .select("id, status, attempt_count")
-      .eq("provider", "resend")
-      .eq("provider_event_id", eventId)
-      .maybeSingle();
+    const duplicateLookup = tenantOrganizationId
+      ? admin.from("provider_events").select("id, status, attempt_count").eq("provider", "resend").eq("organization_id", tenantOrganizationId).eq("provider_event_id", eventId).maybeSingle()
+      : admin.from("provider_events").select("id, status, attempt_count").eq("provider", "resend").is("organization_id", null).eq("provider_event_id", eventId).maybeSingle();
+    const { data: existing, error: lookupError } = await duplicateLookup;
 
     if (lookupError) return json({ error: "Webhook deduplication could not be checked." }, 503);
     if (!existing) return json({ error: "Webhook event could not be loaded." }, 503);
@@ -138,31 +159,32 @@ export async function POST(request: NextRequest) {
 
   try {
     if (event.type === "email.received") {
-      const apiKey = getPilotReceiveApiKey();
+      const apiKey = tenantApiKey ?? getPilotReceiveApiKey();
       if (!apiKey) throw new ResendPilotError("RESEND_PILOT_RECEIVE_KEY_MISSING");
       const emailId = event.data?.email_id ?? event.data?.id;
       if (!emailId) throw new ResendPilotError("RESEND_INBOUND_ID_MISSING");
 
       const envelopeRecipients = toAddressList(event.data?.to);
       const received = await fetchReceivedEmail(apiKey, emailId);
-      const recipients = Array.from(new Set([
+      const recipientCandidates = Array.from(new Set([
         ...envelopeRecipients,
         ...toAddressList(received.to),
-      ])).filter(isPilotAddress);
+      ])).filter((address) => tenantOrganizationId
+        ? /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(address)
+        : isPilotAddress(address));
 
-      if (recipients.length) {
-        const { data: mailboxes, error: mailboxError } = await admin
-          .from("mailboxes")
-          .select("id, organization_id, domain_id, address, status")
-          .in("address", recipients)
-          .eq("status", "active");
-
+      if (recipientCandidates.length) {
+        const mailboxQuery = tenantOrganizationId
+          ? admin.from("mailboxes").select("id, organization_id, domain_id, address, status").in("address", recipientCandidates).eq("organization_id", tenantOrganizationId).eq("status", "active")
+          : admin.from("mailboxes").select("id, organization_id, domain_id, address, status").in("address", recipientCandidates).eq("status", "active");
+        const { data: mailboxes, error: mailboxError } = await mailboxQuery;
         if (mailboxError) throw new ResendPilotError("INBOUND_MAILBOX_LOOKUP_FAILED");
+        const recipients = Array.from(new Set((mailboxes ?? []).map((mailbox) => mailbox.address)));
 
         for (const mailbox of mailboxes ?? []) {
           const { data: domain, error: domainError } = await admin
             .from("organization_domains")
-            .select("id, organization_id, domain, status, verified_at")
+            .select("*")
             .eq("id", mailbox.domain_id)
             .eq("organization_id", mailbox.organization_id)
             .maybeSingle();
@@ -175,7 +197,8 @@ export async function POST(request: NextRequest) {
 
           if (domainError || organizationError) throw new ResendPilotError("INBOUND_TENANT_LOOKUP_FAILED");
           if (
-            !domain || domain.domain !== OTTAWA_PILOT_DOMAIN || domain.status !== "verified" || !domain.verified_at ||
+            !domain || domain.status !== "verified" || !domain.verified_at ||
+            (tenantOrganizationId ? domain.receiving_enabled !== true : domain.domain !== OTTAWA_PILOT_DOMAIN) ||
             !organization || organization.status !== "active"
           ) continue;
 
@@ -240,15 +263,16 @@ export async function POST(request: NextRequest) {
         };
         if (event.type === "email.delivered") deliveryUpdate.delivered_at = new Date().toISOString();
 
-        const { data: affected, error: updateError } = await admin
-          .from("email_messages")
-          .update(deliveryUpdate)
-          .eq("provider", "resend")
-          .eq("provider_message_id", providerMessageId)
-          .eq("from_address", OTTAWA_PILOT_ADDRESS)
-          .eq("direction", "outbound")
-          .select("organization_id, mailbox_id")
-          .limit(1);
+        const deliveryQuery = tenantOrganizationId
+          ? admin.from("email_messages").update(deliveryUpdate)
+              .eq("provider", "resend").eq("provider_message_id", providerMessageId)
+              .eq("organization_id", tenantOrganizationId).eq("direction", "outbound")
+              .select("organization_id, mailbox_id").limit(1)
+          : admin.from("email_messages").update(deliveryUpdate)
+              .eq("provider", "resend").eq("provider_message_id", providerMessageId)
+              .eq("from_address", OTTAWA_PILOT_ADDRESS).eq("direction", "outbound")
+              .select("organization_id, mailbox_id").limit(1);
+        const { data: affected, error: updateError } = await deliveryQuery;
 
         if (updateError) throw new ResendPilotError("DELIVERY_STATUS_UPDATE_FAILED");
         if (affected?.[0]) {
@@ -263,7 +287,7 @@ export async function POST(request: NextRequest) {
       .update({
         status: "processed",
         processed_at: new Date().toISOString(),
-        organization_id: resolvedOrganizationId,
+        organization_id: resolvedOrganizationId ?? tenantOrganizationId ?? null,
         mailbox_id: resolvedMailboxId,
         last_error_code: null,
       })
@@ -276,9 +300,14 @@ export async function POST(request: NextRequest) {
       .from("provider_events")
       .update({
         status: "failed",
-        last_error_code: error instanceof ResendPilotError ? error.code : "WEBHOOK_PROCESSING_FAILED",
+        last_error_code: error instanceof ResendPilotError || error instanceof ResendProviderError ? error.code : "WEBHOOK_PROCESSING_FAILED",
       })
       .eq("id", providerEventRowId);
     return json({ error: "Webhook processing failed. Resend may retry this event." }, 500);
   }
+}
+
+
+export async function POST(request: NextRequest) {
+  return handleResendWebhook(request);
 }
