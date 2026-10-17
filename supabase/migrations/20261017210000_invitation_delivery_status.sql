@@ -1,4 +1,4 @@
--- Track invitation email delivery separately from invitation acceptance.
+-- Track invitation delivery separately from invitation acceptance.
 alter table public.organization_invitations
   add column if not exists delivery_status text not null default 'pending'
     check (delivery_status in ('pending', 'sent', 'delivery_unknown', 'failed')),
