@@ -277,6 +277,35 @@ export async function handleResendWebhook(request: NextRequest, tenantOrganizati
           resolvedOrganizationId = affected[0].organization_id;
           resolvedMailboxId = affected[0].mailbox_id;
         }
+
+        if (tenantOrganizationId) {
+          const invitationStatusByType: Record<string, string> = {
+            "email.sent": "sent",
+            "email.delivered": "delivered",
+            "email.delivery_delayed": "delayed",
+            "email.bounced": "bounced",
+            "email.complained": "complained",
+            "email.failed": "failed",
+            "email.suppressed": "suppressed",
+          };
+          const invitationStatus = invitationStatusByType[event.type];
+          if (invitationStatus) {
+            const { data: affectedInvitations, error: invitationUpdateError } = await admin
+              .from("organization_invitations")
+              .update({
+                delivery_status: invitationStatus,
+                delivery_error_code: ["failed", "bounced", "complained", "suppressed"].includes(invitationStatus)
+                  ? "INVITATION_EMAIL_" + invitationStatus.toUpperCase()
+                  : null,
+              })
+              .eq("organization_id", tenantOrganizationId)
+              .eq("provider_message_id", providerMessageId)
+              .select("id")
+              .limit(1);
+            if (invitationUpdateError) throw new ResendPilotError("INVITATION_DELIVERY_STATUS_UPDATE_FAILED");
+            if (affectedInvitations?.[0]) resolvedOrganizationId = tenantOrganizationId;
+          }
+        }
       }
     }
 
