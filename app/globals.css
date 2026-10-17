@@ -1538,3 +1538,33 @@ html[data-appearance-mode="system"] {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+
+.workspace-team-settings .settings-invite-mailbox-scope {
+  min-width: 0;
+  flex: 1 1 100%;
+  display: grid;
+  gap: 4px;
+  padding: 13px;
+  border: 1px solid var(--border, #e2e9e0);
+  border-radius: 9px;
+  background: var(--muted, #f8faf7);
+}
+.settings-invite-mailbox-scope .settings-subheading {
+  margin: 0;
+}
+.settings-invite-mailbox-scope .settings-muted {
+  margin: 0 0 5px;
+  line-height: 1.5;
+}
+.settings-invite-mailbox-scope .settings-radio-row {
+  padding: 8px 0;
+  margin: 0;
+  border-top: 1px solid var(--border, #e4ebe2);
+}
+.settings-invite-mailbox-scope .settings-radio-row input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  accent-color: var(--primary, #28774c);
+}
