@@ -57,6 +57,24 @@ insert into public.mailbox_memberships (
   ('20000000-0000-4000-8000-000000000001', '31000000-0000-4000-8000-000000000002', '10000000-0000-4000-8000-000000000003', true, true, false, 'active', '10000000-0000-4000-8000-000000000001'),
   ('20000000-0000-4000-8000-000000000002', '31000000-0000-4000-8000-000000000003', '10000000-0000-4000-8000-000000000001', true, true, false, 'active', '10000000-0000-4000-8000-000000000002');
 
+insert into public.email_messages (
+  id, organization_id, mailbox_id, provider, provider_message_id, direction,
+  from_address, to_addresses, subject, body_text, status, idempotency_key,
+  request_fingerprint, created_by, sent_at, received_at
+) values
+  ('60000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000001', '31000000-0000-4000-8000-000000000001',
+   'resend', 're_test_tenant_a_owner', 'outbound', 'owner@tenant-a.example.com', ARRAY['recipient@example.net'],
+   'Tenant A owner message', 'Test-only owner message', 'accepted', 'test-a-owner-0001', repeat('a', 64),
+   '10000000-0000-4000-8000-000000000001', now(), null),
+  ('60000000-0000-4000-8000-000000000002', '20000000-0000-4000-8000-000000000001', '31000000-0000-4000-8000-000000000002',
+   'resend', 're_test_tenant_a_team', 'inbound', 'sender@example.net', ARRAY['team@tenant-a.example.com'],
+   'Tenant A team message', 'Test-only team message', 'received', null, null,
+   null, null, now()),
+  ('60000000-0000-4000-8000-000000000003', '20000000-0000-4000-8000-000000000002', '31000000-0000-4000-8000-000000000003',
+   'resend', 're_test_tenant_b_team', 'outbound', 'team@tenant-b.example.com', ARRAY['recipient@example.net'],
+   'Tenant B message', 'Test-only tenant B message', 'accepted', 'test-b-team-0001', repeat('b', 64),
+   '10000000-0000-4000-8000-000000000002', now(), null);
+
 insert into public.organization_invitations (
   id, organization_id, invite_email, role, token_hash, invited_by, expires_at
 ) values
@@ -85,6 +103,9 @@ select is((select count(*)::integer from public.organizations), 2, 'one identity
 select is((select role from public.organization_memberships where organization_id = '20000000-0000-4000-8000-000000000001' and user_id = '10000000-0000-4000-8000-000000000001'), 'owner', 'role is owner in the first organization');
 select is((select role from public.organization_memberships where organization_id = '20000000-0000-4000-8000-000000000002' and user_id = '10000000-0000-4000-8000-000000000001'), 'member', 'the same identity can be a member in the second organization');
 select is((select count(*)::integer from public.mailboxes), 3, 'owner sees all own organization mailboxes and only assigned mailboxes in the second');
+select is((select count(*)::integer from public.email_messages), 3, 'mail reads include own organization and explicitly granted cross-organization mailbox only');
+select is((select count(*)::integer from public.email_messages where organization_id = '20000000-0000-4000-8000-000000000002'), 1, 'mailbox grant exposes only the assigned mailbox messages in the second organization');
+select ok(not has_table_privilege('authenticated', 'public.provider_events', 'select'), 'provider event ledger cannot be read directly by authenticated clients');
 select is((select count(*)::integer from public.organization_domains), 1, 'domain metadata is restricted to organizations the user administers');
 select is((select count(*)::integer from public.organization_invitations where organization_id = '20000000-0000-4000-8000-000000000002'), 0, 'membership alone does not expose another organization invitations');
 select is((select count(*)::integer from public.contacts where organization_id = '20000000-0000-4000-8000-000000000002'), 1, 'member can access tenant contacts in their second organization but only within that tenant');
@@ -112,6 +133,8 @@ with deleted as (
 )
 select is((select count(*)::integer from deleted), 0, 'member cannot delete another tenant contact');
 select is((select count(*)::integer from public.mailboxes), 1, 'member sees only their assigned mailbox');
+select is((select count(*)::integer from public.email_messages), 1, 'member sees only messages in their assigned mailbox');
+select is((select subject from public.email_messages), 'Tenant A team message', 'member cannot infer the other mailbox messages');
 select is((select address from public.mailboxes), 'team@tenant-a.example.com', 'assigned mailbox address is the one shown to the member');
 select is((select count(*)::integer from public.organization_domains), 0, 'regular members cannot read DNS verification details');
 select is((select count(*)::integer from public.organization_invitations), 0, 'regular members cannot read organization invitations');

@@ -4,7 +4,8 @@ import { createClient } from "@supabase/supabase-js";
 
 /**
  * The Supabase secret key is server-only. This client is used only for the
- * narrowly scoped login-alias resolver; tenant authorization remains in RLS.
+ * server-side operations that perform explicit tenant authorization before using privileged access.
+ * Never use this client as a substitute for validating the signed-in actor and tenant.
  */
 export function createAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import SignOutButton from "@/components/auth/sign-out-button";
 import WorkspaceSidebar from "@/components/workspace-sidebar";
+import PilotSetupButton from "@/components/pilot-setup-button";
 import styles from "./workspace-home.module.css";
 
 type WorkspaceOrganization = {
@@ -71,6 +72,7 @@ export default function WorkspaceHome({
   const currentMailboxes = selected
     ? mailboxes.filter((mailbox) => !mailbox.organization_id || mailbox.organization_id === selected.id)
     : mailboxes;
+  const pilotMailboxReady = selected?.slug === "ottawa-snow-match" && currentMailboxes.length > 0;
 
   return (
     <div className={"mail-app " + styles.app}>
@@ -112,7 +114,9 @@ export default function WorkspaceHome({
                   </p>
                 </div>
                 <div className={styles.headingControls}>
-                  <span className={styles.pendingStatus}><span aria-hidden="true">●</span> Mail not connected</span>
+                  {(selected.role === "owner" || selected.role === "admin") && <PilotSetupButton />}
+                  {selected.slug === "ottawa-snow-match" && currentMailboxes.length > 0 && <Link className={styles.topbarLink} href={"/dashboard/" + selected.id + "/mail"}>Open pilot inbox</Link>}
+                  <span className={styles.pendingStatus}><span aria-hidden="true">●</span> {pilotMailboxReady ? "Pilot mailbox configured" : "Mail not connected"}</span>
                   <button className={styles.disabledCompose} type="button" disabled>＋ Compose</button>
                 </div>
               </section>
@@ -121,15 +125,18 @@ export default function WorkspaceHome({
                 <div className={styles.bannerIcon} aria-hidden="true">✉</div>
                 <div className={styles.bannerContent}>
                   <p className={styles.eyebrow}>SETUP REQUIRED</p>
-                  <h2 id="setup-title">Connect your email provider to activate this inbox</h2>
+                  <h2 id="setup-title">{pilotMailboxReady ? "Open the Ottawa Snow Match pilot inbox" : "Connect your email provider to activate this inbox"}</h2>
                   <p>
-                    Your account and organization access are working. Messages, search, compose, and delivery actions
-                    stay unavailable until domain verification, mailbox provisioning, and the mail provider are connected.
+                    {pilotMailboxReady
+                      ? "The pilot mailbox has been provisioned in ABEmail. Real sending and receiving still depend on Production credentials, the applied mail migration, and the signed Resend webhook."
+                      : "Your account and organization access are working. Messages, search, compose, and delivery actions stay unavailable until domain verification, mailbox provisioning, and the mail provider are connected."}
                   </p>
                   <p className={styles.previewDisclaimer}>
-                    The domain, mailbox, and mail settings screens are currently previews; they do not save provider or DNS configuration.
+                    {pilotMailboxReady
+                      ? "This is a controlled text-only pilot. Attachments and scheduled messages are not enabled."
+                      : "The domain, mailbox, and mail settings screens are currently previews; they do not save provider or DNS configuration."}
                   </p>
-                  <Link href="/settings/domains" className={styles.bannerLink}>View setup steps <span aria-hidden="true">→</span></Link>
+                  <Link href={pilotMailboxReady ? "/dashboard/" + selected.id + "/mail" : "/settings/domains"} className={styles.bannerLink}>{pilotMailboxReady ? "Open pilot inbox" : "View setup steps"} <span aria-hidden="true">→</span></Link>
                 </div>
               </section>
 

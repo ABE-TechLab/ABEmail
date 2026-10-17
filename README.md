@@ -93,6 +93,12 @@ The local `supabase/config.toml` does not change hosted Auth URL settings. See [
 
 The app domain and customer mailbox domains are separate. `abemail.vercel.app` is enough for application development. Real Auth email needs a verified ABE TechLab-controlled sender domain and custom SMTP. A customer mailbox such as `person@customer-domain.com` also requires the customer to own or authorize that domain and the chosen provider to provision routing. Resend transport is still not active in commercial ABEmail. The operator reports provider-side domain verification for the Ottawa Snow Match pilot, but the commercial app has not yet proven live sending or receiving. Read [Domain and Mail Readiness](docs/product/domain-and-mail-readiness.md) and the [Ottawa Snow Match Controlled Mail Pilot](docs/product/ottawa-snow-match-pilot.md) before DNS changes or live-email claims.
 
+## Ottawa Snow Match mail pilot
+
+The controlled mail implementation is under review for the commercial app only. It includes pilot setup, authenticated text-only sending, tenant-scoped mail storage, a pilot inbox, and a signed Resend webhook. This code does not by itself activate live mail. The reviewed database migration must be applied intentionally, and Production must contain the server-only Resend API key, webhook signing secret, pilot-operator allowlist, and Supabase secret key. Register https://abemail.vercel.app/api/webhooks/resend as the Resend webhook endpoint for email.received and outbound delivery events, then test with an approved recipient and a reply to info@ottawasnowmatch.waste2light.com. Do not copy secrets from the Waste2Light reference deployment, and do not enable the live key in Preview or Development while they share Production data.
+
+Follow the Ottawa pilot go-live runbook (docs/engineering/ottawa-pilot-go-live.md) and pilot implementation plan (docs/product/ottawa-snow-match-pilot.md).
+
 ## gODtECH FORGE orchestration
 
 This repository vendors the complete **gODtECH FORGE 0.7.0 portable operating framework**, pinned to [source commit 976a19af7ade19551f464c218e6d5535735f6c29](https://github.com/gODtECH-Ctl-Create/gODtECH-FORGE/commit/976a19af7ade19551f464c218e6d5535735f6c29). The full `.forge/` tree contains upstream intelligence modules, policies, workflows, schemas, templates, and verification guidance. `AGENTS.md` merges the canonical agent contract with ABEmail's tenancy and production rules. `.mcp.json` describes the separate FORGE MCP server; `.github/copilot-instructions.md` gives agents another entry point.

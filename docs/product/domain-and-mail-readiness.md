@@ -8,6 +8,7 @@
 - Hosted Auth URL and confirmation/reset email are not verified end-to-end. Custom SMTP is not configured.
 - The operator reports Resend domain verification completed for the Ottawa Snow Match subdomain `ottawasnowmatch.waste2light.com`. Commercial ABEmail has not yet been configured to use that domain; no commercial-app mailbox has been provisioned, and live send/receive is not proven.
 - `/demo` shows static sample mail.
+- The transport branch adds a text-only sender, signed Resend inbound webhook, tenant-filtered message storage, and an Ottawa pilot inbox. This is code under review, not a live release: the mail migration, Production-only keys, webhook registration, and end-to-end send/receive test remain outstanding.
 
 ## Controlled Ottawa Snow Match pilot
 
@@ -41,9 +42,9 @@ Request current DNS values from the selected provider; do not guess or reuse Was
 ## Remaining implementation before live mail
 - [ ] Choose an ABE TechLab-owned sender domain and provider.
 - [ ] Configure hosted Supabase Auth redirects/custom SMTP and test live email.
-- [ ] Add authorized organization domain setup and server-side provider/DNS verification.
+- [x] Add pilot-only server-side Resend domain readiness checks and guarded organization/mailbox provisioning in the transport branch (release and live verification still pending).
 - [ ] Provision actual mailboxes only after provider verification.
-- [ ] Implement server-only send, signed inbound webhooks, idempotency, retries, delivery events, quotas, and abuse controls.
+- [x] Add pilot-only server sending, signed inbound webhook processing, idempotency, delivery status events, and a conservative send cap in the transport branch; verify under CI and release review.
 - [ ] Store messages/attachments privately with tenant-bound authorization.
 - [ ] Isolate Preview/Development from Production.
 - [ ] Test sending and receiving in an isolated tenant before external launch.

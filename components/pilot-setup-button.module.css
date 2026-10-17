@@ -1,0 +1,20 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 420px;
+}
+
+.wrap button:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+.message {
+  max-width: 420px;
+  margin: 0;
+  color: var(--text-secondary, #64748b);
+  font-size: 0.84rem;
+  line-height: 1.5;
+}

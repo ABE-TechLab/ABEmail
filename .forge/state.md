@@ -31,7 +31,7 @@ Secure multi-tenant foundation. Authentication and organization access code exis
 ## Unfinished / release blockers
 - Hosted Supabase Site URL/allowed callback settings and real confirmation/reset email have not been proven end-to-end.
 - Custom SMTP is not configured; invitation email is not automatic.
-- The operator reports that Resend domain verification completed for the Ottawa Snow Match pilot subdomain on 2026-10-17. Commercial ABEmail still has no application-side domain verification, active provider adapter, mailbox provisioning, outbound/inbound delivery, provider webhooks, attachments, or message storage. ABE TechLab's separate authentication-email sender domain remains unselected.
+- The operator reports that Resend domain verification completed for the Ottawa Snow Match pilot subdomain on 2026-10-17. The Issue #21 pilot branch adds a restricted text send path, signed inbound webhook, tenant-filtered message storage, pilot inbox, and guarded mailbox provisioning. The implementation is still awaiting CI/review, an intentional migration, Production-only secrets, webhook registration, and real end-to-end tests. ABE TechLab's separate authentication-email sender domain remains unselected.
 - Platform operator separation, tenant lifecycle control, full audit logging, send limits, and runbooks remain incomplete.
 - Supabase advisor warned about executable SECURITY DEFINER invitation functions; review deliberately, preserving safe invitation acceptance.
 - Preview and Development use the Production Supabase project. Do not load real customer data there until isolation is established.
@@ -43,7 +43,7 @@ Secure multi-tenant foundation. Authentication and organization access code exis
 1. Validate the full FORGE framework, schema, CLI setup, MCP config, and context-aware CI.
 2. Complete hosted Auth redirect/custom SMTP configuration; test signup, confirmation, reset, sign-out, invitation expiry, acceptance, and revocation.
 3. Keep the ABE TechLab authentication-email sender domain decision separate from customer mailbox domains.
-4. Implement tenant-scoped Resend transport and the Ottawa Snow Match controlled pilot tracked in [issue #21](https://github.com/ABE-TechLab/ABEmail/issues/21); provider-side domain verification does not mark the app live.
+4. Finish CI/review for the [Issue #21](https://github.com/ABE-TechLab/ABEmail/issues/21) pilot transport, intentionally apply its mail migration, configure Production-only credentials/webhook, then prove one outbound and one inbound message before calling the pilot live.
 5. Implement verified domain/mailbox provisioning, signed inbound webhooks, idempotent delivery events, send authorization, quotas, and tenant-safe storage.
 6. Separate Preview/Development data from Production and complete operational readiness before customer invitations.
 

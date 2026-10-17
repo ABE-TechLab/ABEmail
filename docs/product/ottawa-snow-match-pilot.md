@@ -39,6 +39,26 @@ Do not describe the pilot mailbox as live until a test message has been sent and
 8. Current Vercel Production, Preview, and Development environments share the commercial Supabase project. Do not put the pilot's live sending key into Preview or Development. Environment isolation and the intended production release path must be reviewed before activating external sends.
 9. Apply database migrations intentionally through the existing review workflow; do not run a new hosted migration as part of DNS setup.
 
+## Pilot implementation added in the transport branch
+
+The pilot implementation adds a signed-in setup endpoint, a text-only send API, tenant-filtered message storage, a basic pilot inbox/compose view, and a signed Resend webhook at:
+
+- Setup: POST /api/pilot/ottawa-snow-match/setup
+- Send: POST /api/mail/send (requires an authenticated browser session and a valid Idempotency-Key header)
+- Resend webhook: POST /api/webhooks/resend (verify the exact Production URL in the Resend dashboard)
+
+The setup endpoint creates or reuses the controlled ottawa-snow-match organization and its info@ mailbox only after the server checks the Resend domain status and sending/receiving capabilities. It is restricted to the comma-separated verified account emails in ABEMAIL_PILOT_OPERATOR_EMAILS. It does not create DNS records, reuse Waste2Light application keys, or trust a browser-provided sender domain.
+
+Required server-only Production environment variables:
+- ABEMAIL_RESEND_OTTAWA_API_KEY: pilot-specific Resend key with permissions to read domain status, send email, and retrieve received message bodies. Do not reuse the reference application's key.
+- ABEMAIL_RESEND_OTTAWA_WEBHOOK_SECRET: signing secret for the webhook created in the Resend dashboard.
+- ABEMAIL_PILOT_OPERATOR_EMAILS: comma-separated exact email addresses of verified ABEmail accounts allowed to provision the pilot.
+- SUPABASE_SECRET_KEY: required for server-only provisioning and provider writes.
+
+The app route and migration code are not the same as a live release. Vercel does not apply database migrations automatically. Merge/release review, intentional application of the new mail migration, Production-only environment configuration, webhook registration, and a real send/receive test remain required. Preview and Development must not receive the live Resend key while they share the Production database.
+
+This first slice supports one text-only recipient per send and a constrained pilot inbox. Attachments, full mailbox management, scheduling, and MCP tools remain later milestones.
+
 ## Delivery sequence
 
 ### 1. Provider boundary and sender authorization
