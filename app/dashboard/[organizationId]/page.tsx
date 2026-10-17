@@ -104,6 +104,7 @@ export default async function OrganizationWorkspacePage({ params }: Organization
       selectedOrganization={currentOrganization}
       mailboxes={(mailboxRows ?? []).map((mailbox) => ({
         id: mailbox.id,
+        organization_id: mailbox.organization_id,
         address: mailbox.address,
         display_name: mailbox.display_name,
       }))}
