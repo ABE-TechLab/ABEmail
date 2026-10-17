@@ -62,26 +62,45 @@ export default async function OrganizationWorkspacePage({ params }: Organization
     redirect("/dashboard/" + organization.id + "/mail");
   }
 
-  // Postgres RLS filters this list to owner/admin visibility, or to explicitly
-  // granted mailboxes for a regular member.
-  const { data: mailboxRows, error: mailboxError } = await supabase
-    .from("mailboxes")
-    .select("id, address, display_name")
-    .eq("organization_id", organization.id)
-    .eq("status", "active")
-    .order("address");
+  const { data: workspaceMembershipRows } = await supabase
+    .from("organization_memberships")
+    .select("organization_id, role")
+    .eq("user_id", user.id)
+    .eq("status", "active");
+  const workspaceMemberships = workspaceMembershipRows ?? [];
+  const workspaceIds = [...new Set([...workspaceMemberships.map((row) => row.organization_id), organization.id])];
+  const { data: workspaceRows } = await supabase
+    .from("organizations")
+    .select("id, name, slug, status")
+    .in("id", workspaceIds)
+    .eq("status", "active");
 
-  const currentOrganization = {
+  const workspaceOrganizations = (workspaceRows ?? []).map((workspace) => ({
+    id: workspace.id,
+    name: workspace.name,
+    slug: workspace.slug,
+    role: workspaceMemberships.find((row) => row.organization_id === workspace.id)?.role
+      ?? (workspace.id === organization.id ? membership.role : "member"),
+  }));
+  const currentOrganization = workspaceOrganizations.find((workspace) => workspace.id === organization.id) ?? {
     id: organization.id,
     name: organization.name,
     slug: organization.slug,
     role: membership.role,
   };
 
+  // Read mailbox records only for organizations this signed-in user belongs to.
+  const { data: mailboxRows, error: mailboxError } = await supabase
+    .from("mailboxes")
+    .select("id, address, display_name, organization_id")
+    .in("organization_id", workspaceIds)
+    .eq("status", "active")
+    .order("address");
+
   return (
     <WorkspaceHome
       email={user.email ?? ""}
-      organizations={[currentOrganization]}
+      organizations={workspaceOrganizations}
       selectedOrganization={currentOrganization}
       mailboxes={(mailboxRows ?? []).map((mailbox) => ({
         id: mailbox.id,
