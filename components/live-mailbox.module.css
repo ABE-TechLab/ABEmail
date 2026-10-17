@@ -189,3 +189,13 @@
     width: 100%;
   }
 }
+
+
+.livePillUnavailable {
+  border-color: #e4e8e0;
+  background: var(--muted, #f8faf6);
+  color: var(--muted-foreground, #7c877b);
+}
+.livePillUnavailable > span {
+  background: #a0aaa0;
+}
