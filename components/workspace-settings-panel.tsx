@@ -75,6 +75,20 @@ type WorkspaceMailbox = {
   created_at: string;
 };
 
+type WorkspaceInvitation = {
+  id: string;
+  email: string;
+  role: "admin" | "member";
+  expiresAt: string;
+  acceptedAt: string | null;
+  revokedAt: string | null;
+  createdAt: string;
+  deliveryStatus: "pending" | "sent" | "delivery_unknown" | "failed";
+  deliveryErrorCode: string | null;
+  sentAt: string | null;
+  state: "pending" | "accepted" | "revoked" | "expired";
+};
+
 const SETTINGS_KEY = "abemail:workspace-settings:";
 const COMPACT_KEY = "abemail:compact-message-list";
 
@@ -173,6 +187,14 @@ export default function WorkspaceSettingsPanel({
   const [mailboxDomainId, setMailboxDomainId] = useState("");
   const [mailboxBusy, setMailboxBusy] = useState(false);
   const [disconnectBusy, setDisconnectBusy] = useState(false);
+  const [invitations, setInvitations] = useState<WorkspaceInvitation[]>([]);
+  const [invitationsLoading, setInvitationsLoading] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<"admin" | "member">("member");
+  const [inviteBusy, setInviteBusy] = useState(false);
+  const [invitationLink, setInvitationLink] = useState("");
+  const [invitationLinkId, setInvitationLinkId] = useState("");
+  const [revokingInvitationId, setRevokingInvitationId] = useState("");
 
   const base = "/dashboard/" + organizationId;
   const settingsBase = base + "/settings";
@@ -307,6 +329,7 @@ export default function WorkspaceSettingsPanel({
         void refreshDomains(false);
         void refreshMailboxes(false);
       }
+      if (section === "team") void refreshInvitations(false);
     }, 0);
     return () => {
       active = false;
@@ -520,6 +543,98 @@ export default function WorkspaceSettingsPanel({
     }
   }
 
+  async function refreshInvitations(showError = true) {
+    setInvitationsLoading(true);
+    try {
+      const response = await fetch("/api/organizations/" + organizationId + "/invitations", { cache: "no-store" });
+      const result = await response.json() as { ok?: boolean; invitations?: WorkspaceInvitation[]; error?: string };
+      if (!response.ok || !result.ok) {
+        if (showError) notify(result.error || "Workspace invitations could not be loaded.");
+        return;
+      }
+      setInvitations(result.invitations ?? []);
+    } catch {
+      if (showError) notify("Workspace invitations could not be loaded. Check your connection and retry.");
+    } finally {
+      setInvitationsLoading(false);
+    }
+  }
+
+  async function createInvitation(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!canManageWorkspace) return notify("Only workspace owners and admins can invite teammates.");
+    const emailAddress = inviteEmail.trim().toLowerCase();
+    if (!emailAddress || !emailAddress.includes("@")) return notify("Enter a valid email address.");
+    setInviteBusy(true);
+    setToast("");
+    setInvitationLink("");
+    setInvitationLinkId("");
+    try {
+      const response = await fetch("/api/organizations/" + organizationId + "/invitations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: emailAddress, role: inviteRole }),
+      });
+      const result = await response.json() as {
+        ok?: boolean;
+        invitation?: { id: string; email: string; role: string; expiresAt: string };
+        inviteUrl?: string;
+        emailStatus?: string;
+        note?: string;
+        error?: string;
+      };
+      if (!response.ok || !result.ok) {
+        notify(result.error || "Invitation could not be created.");
+        return;
+      }
+      setInviteEmail("");
+      await refreshInvitations(false);
+      if (result.inviteUrl) {
+        setInvitationLink(result.inviteUrl);
+        setInvitationLinkId(result.invitation?.id ?? "");
+      }
+      notify(result.note || "Invitation created.");
+    } catch {
+      notify("Invitation could not be created. Check your connection and retry.");
+    } finally {
+      setInviteBusy(false);
+    }
+  }
+
+  async function revokeInvitation(invitation: WorkspaceInvitation) {
+    if (!canManageWorkspace) return notify("Only workspace owners and admins can revoke invitations.");
+    if (!window.confirm("Revoke the invitation for " + invitation.email + "? The existing link will stop working.")) return;
+    setRevokingInvitationId(invitation.id);
+    try {
+      const response = await fetch("/api/organizations/" + organizationId + "/invitations/" + invitation.id, { method: "DELETE" });
+      const result = await response.json() as { ok?: boolean; error?: string };
+      if (!response.ok || !result.ok) {
+        notify(result.error || "Invitation could not be revoked.");
+        return;
+      }
+      if (invitationLinkId === invitation.id) {
+        setInvitationLink("");
+        setInvitationLinkId("");
+      }
+      await refreshInvitations(false);
+      notify("Invitation revoked.");
+    } catch {
+      notify("Invitation could not be revoked. Check your connection and retry.");
+    } finally {
+      setRevokingInvitationId("");
+    }
+  }
+
+  async function copyInvitationLink() {
+    if (!invitationLink) return;
+    try {
+      await navigator.clipboard.writeText(invitationLink);
+      notify("Invitation link copied. Share it only with the invited person.");
+    } catch {
+      notify("Copy is not available in this browser. Select the invitation link and copy it manually.");
+    }
+  }
+
   async function createMailbox(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!canManageWorkspace) return notify("Only workspace owners and admins can create mailboxes.");
@@ -639,10 +754,26 @@ export default function WorkspaceSettingsPanel({
                 <div className="settings-info-banner"><span>i</span><p>These choices sync to this workspace for your account. Browser and weekly-digest notification delivery are not enabled yet.</p></div>
               </div>}
 
-              {section === "team" && <div>
-                <div className="settings-section-summary"><div><strong>Workspace membership</strong><p>{members.length} active membership record{members.length === 1 ? "" : "s"} returned for this organization</p></div><span className="settings-summary-chip">Live records</span></div>
+              {section === "team" && <div className="workspace-team-settings">
+                <div className="settings-section-summary"><div><strong>Workspace membership</strong><p>{members.length} active member{members.length === 1 ? "" : "s"} in this organization</p></div><span className="settings-summary-chip">Live records</span></div>
                 <div className="settings-table-wrap"><table className="settings-table"><thead><tr><th>Member</th><th>Role</th><th>Status</th></tr></thead><tbody>{members.map((member) => <tr key={member.user_id}><td><strong>{member.user_id === userId ? "You" : "Workspace member"}</strong><small>{member.user_id === userId ? email : "Member ID " + member.user_id.slice(0, 8)}</small></td><td><span className="settings-role-pill">{member.role}</span></td><td><span className="settings-status active"><span />Active</span></td></tr>)}</tbody></table></div>
-                <div className="settings-info-banner"><span>i</span><p>Memberships above come from the workspace database. Sending invitations and changing another member&apos;s role are not enabled from this screen yet.</p></div>
+
+                <div className="settings-divider" />
+                <div className="settings-section-summary"><div><strong>Invite a teammate</strong><p>Send an invitation email from this workspace&apos;s verified business address. Invitations expire after seven days.</p></div><span className="settings-summary-chip">{invitations.filter((invitation) => invitation.state === "pending").length} pending</span></div>
+                {!providerStatus?.connected && <div className="settings-info-banner"><span>i</span><p>Connect Resend in Settings → Mail & compose, verify a sending domain and create an active mailbox before sending invitations.</p></div>}
+                <form className="settings-domain-form" onSubmit={createInvitation}>
+                  <Field label="Teammate email address"><input type="email" value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} placeholder="teammate@company.com" required maxLength={254} autoCapitalize="none" autoCorrect="off" disabled={!canManageWorkspace || inviteBusy} /></Field>
+                  <Field label="Workspace role"><select value={inviteRole} onChange={(event) => setInviteRole(event.target.value as "admin" | "member")} disabled={!canManageWorkspace || inviteBusy}><option value="member">Member</option><option value="admin">Admin</option></select></Field>
+                  <button className="mail-primary-action" type="submit" disabled={!canManageWorkspace || inviteBusy}>{inviteBusy ? "Sending invitation…" : "Send invitation"}</button>
+                </form>
+                {invitationLink && <div className="settings-info-banner settings-invitation-link" role="status"><span>↗</span><div><strong>Invitation link available</strong><p>The email was not fully confirmed, or this link was also returned for manual sharing. Share it only with the intended recipient.</p><input value={invitationLink} readOnly aria-label="Invitation link" /><button type="button" className="mail-secondary-action" onClick={copyInvitationLink}>Copy invitation link</button></div></div>}
+
+                <div className="settings-divider" />
+                <div className="settings-section-summary"><div><strong>Invitations</strong><p>Sent, pending, accepted and expired invitations for this workspace.</p></div><button type="button" className="mail-secondary-action" onClick={() => { void refreshInvitations(); }}>Refresh</button></div>
+                {invitationsLoading && <p className="settings-muted">Loading invitations…</p>}
+                {!invitationsLoading && invitations.length === 0 && <div className="settings-empty-state"><strong>No invitations yet</strong><p>When you invite a teammate, its delivery and acceptance status will appear here.</p></div>}
+                {invitations.length > 0 && <div className="settings-table-wrap"><table className="settings-table"><thead><tr><th>Email</th><th>Role</th><th>Delivery</th><th>Invitation</th><th>Expires</th><th /></tr></thead><tbody>{invitations.map((invitation) => <tr key={invitation.id}><td><strong>{invitation.email}</strong>{invitation.deliveryErrorCode && <small>{invitation.deliveryErrorCode.replaceAll("_", " ")}</small>}</td><td><span className="settings-role-pill">{invitation.role}</span></td><td><span className={invitation.deliveryStatus === "sent" ? "settings-status active" : invitation.deliveryStatus === "failed" ? "settings-status pending" : "settings-status pending"}><span />{invitation.deliveryStatus.replaceAll("_", " ")}</span></td><td><span className={invitation.state === "accepted" ? "settings-status active" : invitation.state === "pending" ? "settings-status pending" : "settings-status"}><span />{invitation.state}</span></td><td><time dateTime={invitation.expiresAt}>{new Date(invitation.expiresAt).toLocaleDateString()}</time></td><td>{invitation.state === "pending" && <button type="button" className="mail-secondary-action" onClick={() => { void revokeInvitation(invitation); }} disabled={!canManageWorkspace || revokingInvitationId === invitation.id}>{revokingInvitationId === invitation.id ? "Revoking…" : "Revoke"}</button>}</td></tr>)}</tbody></table></div>}
+                <div className="settings-info-banner"><span>i</span><p>Invited users must create or sign into an ABEmail account using the invited email address, verify it, then accept the invitation. Members have access only to the workspace and mailboxes granted to them.</p></div>
               </div>}
 
               {section === "domains" && <div className="workspace-domains-settings">
