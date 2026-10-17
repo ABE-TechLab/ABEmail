@@ -177,7 +177,7 @@ export default function WorkspaceSettingsPanel({
   const [saving, setSaving] = useState(false);
   const [providerStatus, setProviderStatus] = useState<ProviderStatus | null>(null);
   const [providerKey, setProviderKey] = useState("");
-  const [providerLoading, setProviderLoading] = useState(false);
+  const [providerLoading, setProviderLoading] = useState(true);
   const [providerBusy, setProviderBusy] = useState(false);
   const [domains, setDomains] = useState<WorkspaceDomain[]>([]);
   const [domainsLoading, setDomainsLoading] = useState(false);
