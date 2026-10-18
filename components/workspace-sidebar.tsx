@@ -157,7 +157,14 @@ export default function WorkspaceSidebar({
       <aside className={"mail-sidebar" + (collapsed ? " is-collapsed" : "") + (mobileOpen ? " mobile-open" : "")} data-collapsed={collapsed}>
       <div className="mail-sidebar-brand-row">
         <Link className="mail-brand" href={homeHref} aria-label="ABEmail inbox" title="ABEmail">
-          <span className="mail-brand-mark">A</span>
+          <span className="mail-brand-mark" aria-hidden="true">
+            <svg className="mail-brand-symbol" viewBox="0 0 32 32" role="img" focusable="false">
+              <path d="M6.5 23.5 12.2 8.8h2.1l5.6 14.7" fill="none" stroke="currentColor" strokeWidth="2.7" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M10 17.7h7" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+              <rect x="16.2" y="16.2" width="12" height="8.2" rx="1.7" fill="currentColor" stroke="currentColor" strokeWidth="1" />
+              <path d="m17.4 17.5 4.8 3.8 4.8-3.8" fill="none" stroke="#26764b" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </span>
           <span>AB<span>Email</span></span>
         </Link>
         <button
