@@ -18,7 +18,7 @@ Work is being carried out on `feat/mailer-functionality-audit` only. Automation 
 
 The feature branch now contains an additive migration and application code for per-user read/unread, starred, archive, trash, and spam state. An authenticated RPC validates active organization membership, mailbox read grants, and stronger mailbox-management permission for permanent deletion. The mailbox UI exposes the six implemented folders and supports single-message and bulk actions.
 
-The branch also includes synthetic database tests for bulk operations, restore/permanent-delete restrictions, cross-tenant denial, mailbox grants, direct-write denial, and preservation of provider transport status. These tests have **not yet been executed** in this environment. The migration has **not** been applied to any Supabase project, and the branch has not been merged or deployed.
+The branch also includes synthetic database tests for bulk operations, restore/permanent-delete restrictions, cross-tenant denial, mailbox grants, direct-write denial, and preservation of provider transport status. GitHub Actions passed lint, TypeScript type-checking, the production build, and `supabase test db` against an isolated local database for commit `bed7c48961f42a4752fdf3c8f487389cd20e50f3` ([CI run](https://github.com/ABE-TechLab/ABEmail/actions/runs/39163546054)). This verifies the repository code in CI; it does not validate or modify the hosted database. The migration has **not** been applied to any Supabase project, and the branch has not been merged or deployed.
 
 ## Remaining implementation order
 
