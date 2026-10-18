@@ -2462,3 +2462,29 @@ html.dark .mail-appearance-toggle {
     transition: none;
   }
 }
+
+
+/* Keep a persistent desktop control available outside the collapsed rail. */
+@media (min-width: 851px) {
+  .mail-mobile-nav-toggle {
+    position: fixed;
+    z-index: 92;
+    top: 14px;
+    left: 14px;
+    display: inline-grid;
+    width: 32px;
+    height: 32px;
+    place-items: center;
+    border: 1px solid var(--border, #dfe7dd);
+    border-radius: 8px;
+    background: var(--card, #fff);
+    color: var(--foreground, #354337);
+    box-shadow: 0 2px 8px rgba(20, 40, 24, .08);
+    cursor: pointer;
+  }
+  .mail-app:not(:has(.mail-sidebar.is-collapsed)) .mail-mobile-nav-toggle {
+    left: 264px;
+    opacity: 0;
+    pointer-events: none;
+  }
+}
