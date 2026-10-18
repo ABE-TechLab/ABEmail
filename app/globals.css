@@ -323,7 +323,8 @@ h1 {
 }
 .mail-brand { display: inline-flex; width: fit-content; align-items: center; gap: 9px; margin: 0 8px 28px; color: #1c2a20; font-family: "Manrope", sans-serif; font-size: 20px; font-weight: 800; letter-spacing: -.7px; text-decoration: none; }
 .mail-brand > span:last-child > span { color: var(--mail-green); }
-.mail-brand-mark { display: inline-grid; width: 31px; height: 31px; place-items: center; border-radius: 9px; background: var(--mail-green); color: #fff; font-size: 16px; }
+.mail-brand-mark { display: inline-grid; width: 34px; height: 34px; flex: 0 0 auto; place-items: center; overflow: hidden; border-radius: 10px; background: var(--mail-green); color: #fff; }
+.mail-brand-symbol { display: block; width: 30px; height: 30px; }
 .mail-compose-button { display: flex; height: 43px; align-items: center; justify-content: center; gap: 9px; margin: 0 3px 29px; border: 0; border-radius: 9px; background: var(--mail-green); color: #fff; font-weight: 700; box-shadow: 0 3px 8px rgba(35, 100, 60, .12); transition: background .15s ease, transform .15s ease; }
 .mail-compose-button:hover { background: var(--mail-green-dark); transform: translateY(-1px); }
 .compose-plus { font-size: 21px; line-height: 1; font-weight: 400; }
@@ -1190,10 +1191,22 @@ html[data-appearance-mode="system"] {
 }
 .mail-sidebar.is-collapsed .mail-sidebar-brand-row {
   width: 100%;
+  min-height: 36px;
   justify-content: center;
-  flex-direction: column;
-  gap: 12px;
+  flex-direction: row;
+  gap: 0;
   margin-bottom: 23px;
+}
+.mail-sidebar.is-collapsed .mail-sidebar-brand-row .mail-brand {
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 34px;
+}
+.mail-sidebar.is-collapsed .mail-sidebar-collapse {
+  display: none;
 }
 .mail-sidebar.is-collapsed .mail-sidebar-brand-row .mail-brand {
   margin: 0;
