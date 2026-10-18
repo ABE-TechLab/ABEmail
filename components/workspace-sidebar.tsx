@@ -13,6 +13,7 @@ const mailboxLinks = [
   { view: "Scheduled", href: "/?view=Scheduled", label: "Scheduled", icon: "◷" },
   { view: "Archive", href: "/?view=Archive", label: "Archive", icon: "▱" },
   { view: "Trash", href: "/?view=Trash", label: "Trash", icon: "⌫" },
+  { view: "Spam", href: "/?view=Spam", label: "Spam", icon: "⊘" },
 ] as const;
 
 export type MailboxView = (typeof mailboxLinks)[number]["view"];

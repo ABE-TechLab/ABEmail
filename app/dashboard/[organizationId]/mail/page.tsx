@@ -7,6 +7,8 @@ export const metadata: Metadata = { title: "Workspace inbox | ABEmail" };
 export const dynamic = "force-dynamic";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const MAILBOX_VIEWS = ["Inbox", "Sent", "Starred", "Archive", "Trash", "Spam"] as const;
+type ActiveMailboxView = (typeof MAILBOX_VIEWS)[number];
 type MailPageProps = {
   params: Promise<{ organizationId: string }>;
   searchParams?: Promise<{ view?: string }>;
@@ -15,7 +17,7 @@ type MailPageProps = {
 export default async function WorkspaceMailPage({ params, searchParams }: MailPageProps) {
   const { organizationId } = await params;
   const { view } = (await searchParams) ?? {};
-  const activeView = view === "Sent" ? "Sent" : "Inbox";
+  const activeView: ActiveMailboxView = MAILBOX_VIEWS.includes(view as ActiveMailboxView) ? (view as ActiveMailboxView) : "Inbox";
   if (!UUID_PATTERN.test(organizationId)) notFound();
 
   const supabase = await createClient();
@@ -72,10 +74,27 @@ export default async function WorkspaceMailPage({ params, searchParams }: MailPa
     .eq("status", "active")
     .order("address");
 
-  const mailboxes = (mailboxRows ?? []).map((mailbox) => ({
+  const rawMailboxes = (mailboxRows ?? []).map((mailbox) => ({
     id: mailbox.id,
     address: mailbox.address,
     display_name: mailbox.display_name,
+  }));
+  const isOrganizationMailAdmin = membership.role === "owner" || membership.role === "admin";
+  let manageableMailboxIds = new Set<string>();
+  if (!isOrganizationMailAdmin && rawMailboxes.length) {
+    const { data: manageRows } = await supabase
+      .from("mailbox_memberships")
+      .select("mailbox_id")
+      .eq("organization_id", organizationId)
+      .eq("user_id", user.id)
+      .eq("status", "active")
+      .eq("can_manage", true)
+      .in("mailbox_id", rawMailboxes.map((mailbox) => mailbox.id));
+    manageableMailboxIds = new Set((manageRows ?? []).map((row) => row.mailbox_id));
+  }
+  const mailboxes = rawMailboxes.map((mailbox) => ({
+    ...mailbox,
+    canManage: isOrganizationMailAdmin || manageableMailboxIds.has(mailbox.id),
   }));
 
   type MailRow = {
@@ -92,7 +111,21 @@ export default async function WorkspaceMailPage({ params, searchParams }: MailPa
     received_at: string | null;
     sent_at: string | null;
   };
-  let messages: MailRow[] = [];
+  type MailStateRow = {
+    message_id: string;
+    is_read: boolean;
+    is_starred: boolean;
+    archived_at: string | null;
+    trashed_at: string | null;
+    spam_at: string | null;
+  };
+  let messages: (MailRow & {
+    is_read: boolean;
+    is_starred: boolean;
+    archived_at: string | null;
+    trashed_at: string | null;
+    spam_at: string | null;
+  })[] = [];
   let messagesError = false;
 
   if (mailboxes.length) {
@@ -104,8 +137,37 @@ export default async function WorkspaceMailPage({ params, searchParams }: MailPa
       .order("created_at", { ascending: false })
       .limit(60);
 
-    if (error) messagesError = true;
-    else messages = (data ?? []) as MailRow[];
+    if (error) {
+      messagesError = true;
+    } else {
+      const messageRows = (data ?? []) as MailRow[];
+      let stateRows: MailStateRow[] = [];
+      if (messageRows.length) {
+        const { data: persistedState, error: stateError } = await supabase
+          .from("email_message_user_state")
+          .select("message_id, is_read, is_starred, archived_at, trashed_at, spam_at")
+          .eq("organization_id", organizationId)
+          .eq("user_id", user.id)
+          .in("message_id", messageRows.map((message) => message.id));
+        if (stateError) messagesError = true;
+        else stateRows = (persistedState ?? []) as MailStateRow[];
+      }
+
+      const stateByMessage = new Map<string, MailStateRow>(
+        stateRows.map((state) => [state.message_id, state])
+      );
+      messages = messageRows.map((message) => {
+        const state = stateByMessage.get(message.id);
+        return {
+          ...message,
+          is_read: state?.is_read ?? message.direction === "outbound",
+          is_starred: state?.is_starred ?? false,
+          archived_at: state?.archived_at ?? null,
+          trashed_at: state?.trashed_at ?? null,
+          spam_at: state?.spam_at ?? null,
+        };
+      });
+    }
   }
 
   return (

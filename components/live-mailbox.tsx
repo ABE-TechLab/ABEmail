@@ -13,7 +13,9 @@ const WORKSPACE_SETTINGS_KEY = "abemail:workspace-settings:";
 type MailPreferences = { timezone: string; language: string; font: string; signature: string; replyStyle: string; compactMessageList: boolean };
 const DEFAULT_MAIL_PREFERENCES: MailPreferences = { timezone: "Africa/Lagos", language: "en", font: "sans", signature: "", replyStyle: "reply", compactMessageList: false };
 
-type Mailbox = { id: string; address: string; display_name: string | null };
+type Mailbox = { id: string; address: string; display_name: string | null; canManage: boolean };
+type ActiveMailboxView = "Inbox" | "Sent" | "Starred" | "Archive" | "Trash" | "Spam";
+type LifecycleAction = "mark_read" | "mark_unread" | "star" | "unstar" | "archive" | "unarchive" | "trash" | "restore" | "spam" | "not_spam" | "permanent_delete";
 type EmailMessage = {
   id: string;
   mailbox_id: string;
@@ -27,6 +29,11 @@ type EmailMessage = {
   created_at: string;
   received_at: string | null;
   sent_at: string | null;
+  is_read: boolean;
+  is_starred: boolean;
+  archived_at: string | null;
+  trashed_at: string | null;
+  spam_at: string | null;
 };
 type LiveMailboxProps = {
   organizationId: string;
@@ -35,7 +42,7 @@ type LiveMailboxProps = {
   mailboxes: Mailbox[];
   messages: EmailMessage[];
   messagesError: boolean;
-  activeView?: "Inbox" | "Sent";
+  activeView?: ActiveMailboxView;
   workspaces: WorkspaceChoice[];
 };
 
@@ -148,6 +155,8 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   }, [organizationId]);
 
   const [selectedMessageId, setSelectedMessageId] = useState("");
+  const [selectedMessageIds, setSelectedMessageIds] = useState<string[]>([]);
+  const [lifecycleBusy, setLifecycleBusy] = useState(false);
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);
   const [to, setTo] = useState("");
@@ -180,10 +189,24 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   }, [composeOpen, body]);
 
   const visibleMessages = useMemo(() => {
-    const direction = activeView === "Sent" ? "outbound" : "inbound";
     const term = query.trim().toLowerCase();
     return messages.filter((message) => {
-      if (message.mailbox_id !== mailboxId || message.direction !== direction) return false;
+      if (message.mailbox_id !== mailboxId) return false;
+      const inTrash = Boolean(message.trashed_at);
+      const inSpam = Boolean(message.spam_at);
+      const inArchive = Boolean(message.archived_at);
+      const inFolder = activeView === "Inbox"
+        ? message.direction === "inbound" && !inTrash && !inSpam && !inArchive
+        : activeView === "Sent"
+          ? message.direction === "outbound" && !inTrash && !inSpam
+          : activeView === "Starred"
+            ? message.is_starred && !inTrash && !inSpam
+            : activeView === "Archive"
+              ? inArchive && !inTrash && !inSpam
+              : activeView === "Trash"
+                ? inTrash
+                : inSpam && !inTrash;
+      if (!inFolder) return false;
       if (!term) return true;
       return [
         message.from_address,
@@ -200,6 +223,37 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   const sentFromSelectedMailbox = messages.some((message) => message.mailbox_id === mailboxId && message.direction === "outbound");
   const receivedBySelectedMailbox = messages.some((message) => message.mailbox_id === mailboxId && message.direction === "inbound");
   const firstEmailChecksComplete = sentFromSelectedMailbox && receivedBySelectedMailbox;
+
+  useEffect(() => {
+    setSelectedMessageIds([]);
+  }, [activeView, mailboxId]);
+
+  async function runLifecycle(messageIds: string[], action: LifecycleAction) {
+    const ids = [...new Set(messageIds)];
+    if (!ids.length || ids.length > 100 || lifecycleBusy || !mailboxId) return;
+    setLifecycleBusy(true);
+    setNotice("");
+    try {
+      const response = await fetch("/api/mail/lifecycle", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ organizationId, mailboxId, messageIds: ids, action }),
+      });
+      const result = await response.json() as { ok?: boolean; affected?: number; error?: string };
+      if (!response.ok || !result.ok) {
+        setNotice(result.error || "The message state could not be updated.");
+        return;
+      }
+      setSelectedMessageIds((current) => current.filter((id) => !ids.includes(id)));
+      const affected = Number.isFinite(result.affected) ? Number(result.affected) : ids.length;
+      setNotice(affected + " message" + (affected === 1 ? "" : "s") + " updated.");
+      router.refresh();
+    } catch {
+      setNotice("The connection was interrupted. Refresh the mailbox to confirm the saved message state.");
+    } finally {
+      setLifecycleBusy(false);
+    }
+  }
 
   function openCompose() {
     setComposeOpen(true);
@@ -268,7 +322,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
         activeView={activeView}
         mailboxBaseHref={"/dashboard/" + organizationId + "/mail"}
         activeMailboxView={activeView as MailboxView}
-        enabledMailboxViews={["Inbox", "Sent"]}
+        enabledMailboxViews={["Inbox", "Sent", "Starred", "Archive", "Trash", "Spam"]}
         disabledMailFeatures={!mailboxes.length}
         disableContacts
         onCompose={openCompose}
@@ -289,8 +343,8 @@ export default function LiveMailbox(props: LiveMailboxProps) {
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder={activeView === "Inbox" ? "Search inbox" : "Search sent mail"}
-              aria-label={activeView === "Inbox" ? "Search inbox" : "Search sent mail"}
+              placeholder={activeView === "Sent" ? "Search sent mail" : "Search " + activeView.toLowerCase()}
+              aria-label={"Search " + activeView.toLowerCase()}
             />
             {query && <button type="button" aria-label="Clear search" onClick={() => setQuery("")}>×</button>}
             {!query && <kbd>Search</kbd>}
@@ -340,12 +394,46 @@ export default function LiveMailbox(props: LiveMailboxProps) {
                 </label>
               </div>
               <div className="mail-list-toolbar">
-                <span className="mail-toolbar-label">{activeView === "Inbox" ? "Received" : "Sent by this mailbox"}</span>
+                <span className="mail-toolbar-label">{activeView === "Inbox" ? "Received" : activeView === "Sent" ? "Sent by this mailbox" : "Personal " + activeView.toLowerCase() + " view"}</span>
+                {visibleMessages.length > 0 && (
+                  <label className={styles.selectVisibleLabel}>
+                    <input
+                      type="checkbox"
+                      checked={visibleMessages.length > 0 && visibleMessages.every((message) => selectedMessageIds.includes(message.id))}
+                      onChange={(event) => setSelectedMessageIds(event.target.checked ? visibleMessages.map((message) => message.id) : [])}
+                      aria-label="Select all visible messages"
+                    />
+                    <span>Select visible</span>
+                  </label>
+                )}
                 <span className="mail-toolbar-spacer" />
                 <button type="button" className="mail-toolbar-button" onClick={() => router.refresh()} aria-label="Refresh messages">↻</button>
               </div>
+              {selectedMessageIds.length > 0 && (
+                <div className={styles.bulkActions} role="group" aria-label="Bulk message actions">
+                  <strong>{selectedMessageIds.length} selected</strong>
+                  <button type="button" className={styles.secondaryButton} disabled={lifecycleBusy} onClick={() => void runLifecycle(selectedMessageIds, "mark_read")}>Mark read</button>
+                  <button type="button" className={styles.secondaryButton} disabled={lifecycleBusy} onClick={() => void runLifecycle(selectedMessageIds, "mark_unread")}>Mark unread</button>
+                  {activeView === "Trash" ? (
+                    <>
+                      <button type="button" className={styles.secondaryButton} disabled={lifecycleBusy} onClick={() => void runLifecycle(selectedMessageIds, "restore")}>Restore</button>
+                      {selectedMailbox?.canManage && <button type="button" className={styles.dangerButton} disabled={lifecycleBusy} onClick={() => void runLifecycle(selectedMessageIds, "permanent_delete")}>Delete permanently</button>}
+                    </>
+                  ) : activeView === "Spam" ? (
+                    <button type="button" className={styles.secondaryButton} disabled={lifecycleBusy} onClick={() => void runLifecycle(selectedMessageIds, "not_spam")}>Not spam</button>
+                  ) : (
+                    <>
+                      {activeView === "Archive"
+                        ? <button type="button" className={styles.secondaryButton} disabled={lifecycleBusy} onClick={() => void runLifecycle(selectedMessageIds, "unarchive")}>Unarchive</button>
+                        : <button type="button" className={styles.secondaryButton} disabled={lifecycleBusy} onClick={() => void runLifecycle(selectedMessageIds, "archive")}>Archive</button>}
+                      {activeView === "Inbox" && <button type="button" className={styles.secondaryButton} disabled={lifecycleBusy} onClick={() => void runLifecycle(selectedMessageIds, "spam")}>Mark spam</button>}
+                      <button type="button" className={styles.secondaryButton} disabled={lifecycleBusy} onClick={() => void runLifecycle(selectedMessageIds, "trash")}>Trash</button>
+                    </>
+                  )}
+                </div>
+              )}
               <div className="mail-message-list">
-                {selectedMailbox && !firstEmailChecksComplete && (
+                {selectedMailbox && !firstEmailChecksComplete && (activeView === "Inbox" || activeView === "Sent") && (
                   <section className={styles.firstEmailChecklist} aria-labelledby="first-email-heading">
             <div className={styles.firstEmailHeading}>
               <div>
@@ -378,9 +466,20 @@ export default function LiveMailbox(props: LiveMailboxProps) {
                 )}
                 {visibleMessages.map((message) => (
                   <article className={selectedMessage?.id === message.id ? "mail-message-row selected" : "mail-message-row"} key={message.id}>
+                    <input
+                      className={styles.messageSelect}
+                      type="checkbox"
+                      checked={selectedMessageIds.includes(message.id)}
+                      onChange={(event) => setSelectedMessageIds((current) => event.target.checked ? [...new Set([...current, message.id])] : current.filter((id) => id !== message.id))}
+                      aria-label={"Select " + (message.subject || "message")}
+                    />
                     <button
                       className="mail-message-open"
-                      onClick={() => { setSelectedMessageId(message.id); setMobileDetailOpen(true); }}
+                      onClick={() => {
+                        setSelectedMessageId(message.id);
+                        setMobileDetailOpen(true);
+                        if (!message.is_read) void runLifecycle([message.id], "mark_read");
+                      }}
                       type="button"
                       aria-label={"Open " + (message.subject || "message")}
                     >
@@ -395,13 +494,30 @@ export default function LiveMailbox(props: LiveMailboxProps) {
                       </span>
                     </button>
                     <span className={styles.messageStatus}>{message.status}</span>
+                    <div className={styles.rowActions} role="group" aria-label="Message actions">
+                      <button type="button" className="mail-toolbar-button" disabled={lifecycleBusy} onClick={() => void runLifecycle([message.id], message.is_starred ? "unstar" : "star")} aria-label={message.is_starred ? "Remove star" : "Star message"} title={message.is_starred ? "Remove star" : "Star message"}>{message.is_starred ? "★" : "☆"}</button>
+                      {activeView === "Trash" ? (
+                        <>
+                          <button type="button" className="mail-toolbar-button" disabled={lifecycleBusy} onClick={() => void runLifecycle([message.id], "restore")} aria-label="Restore message" title="Restore">↶</button>
+                          {selectedMailbox?.canManage && <button type="button" className="mail-toolbar-button" disabled={lifecycleBusy} onClick={() => void runLifecycle([message.id], "permanent_delete")} aria-label="Delete permanently" title="Delete permanently">×</button>}
+                        </>
+                      ) : activeView === "Spam" ? (
+                        <button type="button" className="mail-toolbar-button" disabled={lifecycleBusy} onClick={() => void runLifecycle([message.id], "not_spam")} aria-label="Mark as not spam" title="Not spam">✓</button>
+                      ) : (
+                        <>
+                          <button type="button" className="mail-toolbar-button" disabled={lifecycleBusy} onClick={() => void runLifecycle([message.id], activeView === "Archive" ? "unarchive" : "archive")} aria-label={activeView === "Archive" ? "Unarchive message" : "Archive message"} title={activeView === "Archive" ? "Unarchive" : "Archive"}>{activeView === "Archive" ? "↩" : "▱"}</button>
+                          {activeView === "Inbox" && message.direction === "inbound" && <button type="button" className="mail-toolbar-button" disabled={lifecycleBusy} onClick={() => void runLifecycle([message.id], "spam")} aria-label="Mark as spam" title="Mark spam">⊘</button>}
+                          <button type="button" className="mail-toolbar-button" disabled={lifecycleBusy} onClick={() => void runLifecycle([message.id], "trash")} aria-label="Move to Trash" title="Trash">⌫</button>
+                        </>
+                      )}
+                    </div>
                   </article>
                 ))}
                 {!visibleMessages.length && (
                   <div className="mail-empty-list">
-                    <span>{activeView === "Inbox" ? "▤" : "↗"}</span>
+                    <span>{activeView === "Inbox" ? "▤" : activeView === "Sent" ? "↗" : activeView === "Starred" ? "☆" : activeView === "Archive" ? "▱" : activeView === "Trash" ? "⌫" : "⊘"}</span>
                     <strong>{query ? "No matching messages" : "No messages in " + activeView}</strong>
-                    <p>{query ? "Try another search term." : activeView === "Inbox" ? "New incoming messages will appear here." : "Messages you send from this mailbox will appear here."}</p>
+                    <p>{query ? "Try another search term." : activeView === "Inbox" ? "New incoming messages will appear here." : activeView === "Sent" ? "Messages you send from this mailbox will appear here." : "Messages in this personal " + activeView.toLowerCase() + " view will appear here."}</p>
                     {activeView === "Inbox" && !query && <button type="button" onClick={openCompose}>Compose a message</button>}
                   </div>
                 )}

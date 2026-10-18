@@ -14,11 +14,20 @@ Work is being carried out on `feat/mailer-functionality-audit` only. Automation 
 - The authenticated composer currently supports plain-text sending and reply, but reply-all, forwarding, attachments, and scheduling remain unverified or incomplete.
 - The existing outbound send path uses idempotency keys. Preserve that protection when extending message workflows.
 
-## Implementation order
+## Lifecycle implementation checkpoint
 
-1. Add lifecycle state with an additive migration: read/unread, starred, archived, trash, and spam state. Preserve transport delivery status as a separate concern.
-2. Add authorized server-side lifecycle actions and mailbox queries for Inbox, Sent, Starred, Archive, Trash, and Spam. Validate organization membership and mailbox-level permissions for every operation; implement restore and permanent-delete semantics explicitly.
-3. Add tests for cross-tenant access, mailbox grants, invalid transitions, bulk actions, and ensuring delete/archive never triggers sending.
+The feature branch now contains an additive migration and application code for per-user read/unread, starred, archive, trash, and spam state. An authenticated RPC validates active organization membership, mailbox read grants, and stronger mailbox-management permission for permanent deletion. The mailbox UI exposes the six implemented folders and supports single-message and bulk actions.
+
+The branch also includes synthetic database tests for bulk operations, restore/permanent-delete restrictions, cross-tenant denial, mailbox grants, direct-write denial, and preservation of provider transport status. These tests have **not yet been executed** in this environment. The migration has **not** been applied to any Supabase project, and the branch has not been merged or deployed.
+
+## Remaining implementation order
+
+1. Run the lifecycle database tests in an isolated local Supabase/Postgres environment and fix any failures. Do not point this test run at the shared hosted project.
+2. Verify lint, type checks, and production build; review authorization, folder behavior, and desktop/mobile UI.
+3. Replace loaded-page-only search with server-side search/pagination and complete read-state refresh behavior for more than the latest 60 messages.
+4. Audit and finish contacts, drafts, replies, forwarding, attachments, and settings.
+5. Implement scheduled sending only with a durable queue/worker, time-zone-safe scheduling, cancellation guarantees, and idempotent delivery.
+6. Verify end-to-end sending/receiving in an isolated non-production environment before proposing release.
 4. Replace loaded-page-only search with server-side search/pagination and connect refresh/read status to persisted data.
 5. Audit and finish contacts, drafts, replies, forwarding, attachments, and settings.
 6. Implement scheduled sending only with a durable queue/worker, time-zone-safe scheduling, cancellation guarantees, and idempotent delivery.
