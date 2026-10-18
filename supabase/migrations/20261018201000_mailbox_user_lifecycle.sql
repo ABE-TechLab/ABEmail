@@ -97,7 +97,7 @@ begin
     raise exception 'Provide between 1 and 100 unique message IDs' using errcode = '22023';
   end if;
 
-  if lifecycle_action not in (
+  if lifecycle_action is null or lifecycle_action not in (
     'mark_read', 'mark_unread', 'star', 'unstar',
     'archive', 'unarchive', 'trash', 'restore',
     'spam', 'not_spam', 'permanent_delete'

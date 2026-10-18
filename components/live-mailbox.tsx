@@ -155,7 +155,20 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   }, [organizationId]);
 
   const [selectedMessageId, setSelectedMessageId] = useState("");
-  const [selectedMessageIds, setSelectedMessageIds] = useState<string[]>([]);
+  const [selection, setSelection] = useState<{ context: string; ids: string[] }>({
+    context: activeView + ":" + (mailboxes[0]?.id ?? ""),
+    ids: [],
+  });
+  const selectionContext = activeView + ":" + mailboxId;
+  const selectedMessageIds = selection.context === selectionContext ? selection.ids : [];
+  function setSelectedMessageIds(next: string[] | ((current: string[]) => string[])) {
+    setSelection((current) => ({
+      context: selectionContext,
+      ids: typeof next === "function"
+        ? next(current.context === selectionContext ? current.ids : [])
+        : next,
+    }));
+  }
   const [lifecycleBusy, setLifecycleBusy] = useState(false);
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);
@@ -223,10 +236,6 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   const sentFromSelectedMailbox = messages.some((message) => message.mailbox_id === mailboxId && message.direction === "outbound");
   const receivedBySelectedMailbox = messages.some((message) => message.mailbox_id === mailboxId && message.direction === "inbound");
   const firstEmailChecksComplete = sentFromSelectedMailbox && receivedBySelectedMailbox;
-
-  useEffect(() => {
-    setSelectedMessageIds([]);
-  }, [activeView, mailboxId]);
 
   async function runLifecycle(messageIds: string[], action: LifecycleAction) {
     const ids = [...new Set(messageIds)];
