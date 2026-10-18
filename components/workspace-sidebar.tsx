@@ -137,12 +137,18 @@ export default function WorkspaceSidebar({
         <button
           className="mail-mobile-nav-toggle"
           type="button"
-          onClick={() => setMobileOpen(true)}
-          aria-label="Open navigation"
-          aria-expanded={false}
-          title="Open navigation"
+          onClick={() => {
+            if (window.matchMedia("(max-width: 850px)").matches) {
+              setMobileOpen(true);
+            } else {
+              toggleCollapsed();
+            }
+          }}
+          aria-label={collapsed ? "Open navigation" : "Collapse navigation"}
+          aria-expanded={!collapsed}
+          title={collapsed ? "Open navigation" : "Collapse navigation"}
         >
-          <span aria-hidden="true">☰</span>
+          <span aria-hidden="true">{collapsed ? "☰" : "‹"}</span>
         </button>
       )}
       {mobileOpen && (
