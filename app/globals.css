@@ -2254,6 +2254,86 @@ html.dark .mail-appearance-toggle {
     content: "×";
     font-size: 20px;
   }
+
+  /* A mobile drawer is always fully expanded, regardless of the desktop
+     collapsed preference saved in localStorage. */
+  .mail-app .mail-sidebar.mobile-open.is-collapsed {
+    width: min(292px, 86vw);
+    min-width: 0;
+    flex-basis: auto;
+    align-items: stretch;
+    padding: 18px 14px 12px;
+  }
+  .mail-app .mail-sidebar.mobile-open.is-collapsed .mail-sidebar-brand-row {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 28px;
+  }
+  .mail-app .mail-sidebar.mobile-open.is-collapsed .mail-sidebar-brand-row .mail-brand {
+    width: auto;
+    height: auto;
+    flex: 0 1 auto;
+    justify-content: flex-start;
+    margin: 0 0 0 8px;
+  }
+  .mail-app .mail-sidebar.mobile-open.is-collapsed .mail-sidebar-collapse {
+    display: inline-grid;
+    width: 27px;
+    height: 27px;
+    flex: 0 0 auto;
+  }
+  .mail-app .mail-sidebar.mobile-open.is-collapsed .mail-sidebar-collapse span {
+    display: none;
+  }
+  .mail-app .mail-sidebar.mobile-open.is-collapsed .mail-sidebar-collapse::after {
+    content: "×";
+    font-size: 20px;
+  }
+  .mail-app .mail-sidebar.mobile-open.is-collapsed .mail-compose-button {
+    width: 100%;
+    height: 42px;
+    justify-content: flex-start;
+    gap: 10px;
+    margin: 0 0 25px;
+    padding: 0 12px;
+    border-radius: 10px;
+  }
+  .mail-app .mail-sidebar.mobile-open.is-collapsed .mail-nav-section,
+  .mail-app .mail-sidebar.mobile-open.is-collapsed .mail-sidebar-bottom {
+    width: 100%;
+  }
+  .mail-app .mail-sidebar.mobile-open.is-collapsed .mail-nav-section {
+    margin-bottom: 23px;
+  }
+  .mail-app .mail-sidebar.mobile-open.is-collapsed .mail-nav-item {
+    min-height: 38px;
+    justify-content: flex-start;
+    gap: 11px;
+    padding: 8px 10px;
+  }
+  .mail-app .mail-sidebar.mobile-open.is-collapsed .mail-nav-icon {
+    width: 20px;
+  }
+  .mail-app .mail-sidebar.mobile-open.is-collapsed .mail-workspace-switcher {
+    justify-content: flex-start;
+    padding: 8px 4px;
+  }
+  .mail-app .mail-sidebar.mobile-open.is-collapsed .mail-sidebar-bottom .mail-workspace-copy {
+    display: flex;
+  }
+  .mail-app .mail-sidebar.mobile-open.is-collapsed .mail-brand > span:last-child,
+  .mail-app .mail-sidebar.mobile-open.is-collapsed .mail-compose-label,
+  .mail-app .mail-sidebar.mobile-open.is-collapsed .mail-nav-label,
+  .mail-app .mail-sidebar.mobile-open.is-collapsed .mail-nav-item > span:not(.mail-nav-icon),
+  .mail-app .mail-sidebar.mobile-open.is-collapsed .mail-sidebar-bottom .mail-workspace-copy,
+  .mail-app .mail-sidebar.mobile-open.is-collapsed .mail-chevron {
+    display: inline;
+  }
+  .mail-app .mail-sidebar.mobile-open.is-collapsed .mail-nav-label {
+    display: block;
+  }
   .mail-app .mail-main > .mail-topbar {
     padding-left: 58px;
   }
