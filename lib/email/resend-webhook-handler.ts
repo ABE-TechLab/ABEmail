@@ -1,6 +1,8 @@
+import { randomUUID } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
+  fetchReceivedAttachment,
   fetchReceivedEmail,
   getPilotReceiveApiKey,
   getPilotWebhookSecret,
@@ -42,6 +44,57 @@ function toAddressList(value: string[] | string | undefined): string[] {
   if (Array.isArray(value)) return value.filter((item) => typeof item === "string").map(normalizeAddress);
   if (typeof value === "string") return [normalizeAddress(value)];
   return [];
+}
+
+
+async function persistReceivedAttachments(
+  admin: NonNullable<ReturnType<typeof createAdminClient>>,
+  apiKey: string,
+  emailId: string,
+  attachments: Array<{ id: string; filename: string; contentType: string; sizeBytes: number }>,
+  organizationId: string,
+  mailboxId: string,
+  messageId: string,
+) {
+  let totalBytes = 0;
+  let storedCount = 0;
+  for (const item of attachments.slice(0, 5)) {
+    if (item.sizeBytes > 4 * 1024 * 1024) continue;
+    const { data: existing } = await admin.from("email_message_attachments").select("id")
+      .eq("organization_id", organizationId).eq("mailbox_id", mailboxId)
+      .eq("message_id", messageId).eq("provider_attachment_id", item.id).maybeSingle();
+    if (existing) continue;
+    const downloaded = await fetchReceivedAttachment(apiKey, emailId, item.id);
+    if (downloaded.bytes.length > 4 * 1024 * 1024 || totalBytes + downloaded.bytes.length > 20 * 1024 * 1024) continue;
+    const filename = downloaded.filename.replace(/[\\/\u0000-\u001f\u007f]/g, "_").replace(/\s+/g, " ").trim().slice(0, 180) || "attachment";
+    const contentType = /^[a-z0-9!#export async function handleResendWebhook(request: NextRequest, tenantOrganizationId?: string) {^_.+-]+\/[a-z0-9!#export async function handleResendWebhook(request: NextRequest, tenantOrganizationId?: string) {^_.+-]+$/i.test(downloaded.contentType)
+      ? downloaded.contentType : "application/octet-stream";
+    const storagePath = [organizationId, mailboxId, messageId, randomUUID() + "-" + filename].join("/");
+    const { error: uploadError } = await admin.storage.from("mail-attachments").upload(storagePath, downloaded.bytes, {
+      contentType, cacheControl: "3600", upsert: false,
+    });
+    if (uploadError) throw new ResendPilotError("INBOUND_ATTACHMENT_STORE_FAILED");
+    const { error: insertError } = await admin.from("email_message_attachments").insert({
+      organization_id: organizationId,
+      mailbox_id: mailboxId,
+      user_id: null,
+      message_id: messageId,
+      provider_attachment_id: item.id,
+      filename,
+      content_type: contentType,
+      size_bytes: downloaded.bytes.length,
+      storage_path: storagePath,
+      expires_at: null,
+    });
+    if (insertError) {
+      await admin.storage.from("mail-attachments").remove([storagePath]);
+      if (insertError.code === "23505") continue;
+      throw new ResendPilotError("INBOUND_ATTACHMENT_METADATA_FAILED");
+    }
+    totalBytes += downloaded.bytes.length;
+    storedCount += 1;
+  }
+  return storedCount;
 }
 
 export async function handleResendWebhook(request: NextRequest, tenantOrganizationId?: string) {
@@ -209,8 +262,9 @@ export async function handleResendWebhook(request: NextRequest, tenantOrganizati
             .maybeSingle();
 
           if (existingMessageError) throw new ResendPilotError("INBOUND_DEDUPLICATION_FAILED");
+          let storedMessageId: string | null = existingMessage?.id ?? null;
           if (!existingMessage) {
-            const { error: messageError } = await admin.from("email_messages").insert({
+            const { data: savedMessage, error: messageError } = await admin.from("email_messages").insert({
               organization_id: mailbox.organization_id,
               mailbox_id: mailbox.id,
               provider: "resend",
@@ -223,11 +277,24 @@ export async function handleResendWebhook(request: NextRequest, tenantOrganizati
               body_html: received.html,
               status: "received",
               received_at: new Date().toISOString(),
-            });
+            }).select("id").single();
 
             if (messageError && messageError.code !== "23505") {
               throw new ResendPilotError("INBOUND_MESSAGE_STORE_FAILED");
             }
+            storedMessageId = savedMessage?.id ?? null;
+            if (!storedMessageId && messageError?.code === "23505") {
+              const { data: racedMessage, error: racedError } = await admin.from("email_messages").select("id")
+                .eq("provider", "resend").eq("provider_message_id", received.id ?? emailId)
+                .eq("mailbox_id", mailbox.id).maybeSingle();
+              if (racedError || !racedMessage) throw new ResendPilotError("INBOUND_DEDUPLICATION_FAILED");
+              storedMessageId = racedMessage.id;
+            }
+          }
+
+          if (!storedMessageId) throw new ResendPilotError("INBOUND_MESSAGE_STORE_FAILED");
+          if (received.attachments.length) {
+            await persistReceivedAttachments(admin, apiKey, emailId, received.attachments, mailbox.organization_id, mailbox.id, storedMessageId);
           }
 
           if (!resolvedOrganizationId) {
