@@ -7,6 +7,7 @@ const TAG_PATTERN = /^[a-z0-9][a-z0-9_-]{0,39}$/;
 function parseTags(value: unknown): { value: string[]; error?: never } | { value?: never; error: string } {
   if (value === undefined || value === null) return { value: [] };
   if (!Array.isArray(value)) return { error: "Tags must be a list of labels." };
+  if (value.length > 12) return { error: "A contact can have up to 12 tags." };
 
   const tags: string[] = [];
   for (const rawTag of value) {
