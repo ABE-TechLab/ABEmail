@@ -11,8 +11,33 @@ import workspaceStyles from "./workspace-home.module.css";
 
 const COMPACT_MESSAGE_LIST_KEY = "abemail:compact-message-list";
 const WORKSPACE_SETTINGS_KEY = "abemail:workspace-settings:";
-type MailPreferences = { timezone: string; language: string; font: string; signature: string; replyStyle: string; compactMessageList: boolean };
-const DEFAULT_MAIL_PREFERENCES: MailPreferences = { timezone: "Africa/Lagos", language: "en", font: "sans", signature: "", replyStyle: "reply", compactMessageList: false };
+type SavedSignature = { id: string; name: string; content: string };
+type MailboxSignaturePreference = { enabled: boolean; defaultSignatureId: string | null; signatures: SavedSignature[] };
+type MailPreferences = { timezone: string; language: string; font: string; signature: string; mailboxSignatures: Record<string, MailboxSignaturePreference>; replyStyle: string; compactMessageList: boolean };
+const DEFAULT_MAIL_PREFERENCES: MailPreferences = { timezone: "Africa/Lagos", language: "en", font: "sans", signature: "", mailboxSignatures: {}, replyStyle: "reply", compactMessageList: false };
+
+function availableMailboxSignatures(preferences: MailPreferences, mailboxId: string) {
+  const config = preferences.mailboxSignatures[mailboxId];
+  return [
+    ...(preferences.signature.trim() ? [{ id: "workspace-default", name: "Workspace default", content: preferences.signature.trim() }] : []),
+    ...(config?.signatures ?? []),
+  ];
+}
+
+function resolveMailboxSignature(preferences: MailPreferences, mailboxId: string, selectedSignatureId: string | null): string {
+  const config = preferences.mailboxSignatures[mailboxId];
+  if (!config) return preferences.signature.trim();
+  if (!config.enabled) return "";
+  const id = selectedSignatureId ?? config.defaultSignatureId ?? "";
+  if (id === "workspace-default") return preferences.signature.trim();
+  if (!id) return "";
+  return config.signatures.find((signature) => signature.id === id)?.content.trim() ?? "";
+}
+
+function appendSignature(body: string, signature: string): string {
+  const trimmedBody = body.trimEnd();
+  return signature && !trimmedBody.endsWith(signature) ? trimmedBody + "\n\n" + signature : trimmedBody;
+}
 
 type Mailbox = { id: string; address: string; display_name: string | null; canManage: boolean };
 type ActiveMailboxView = "Inbox" | "Sent" | "Starred" | "Drafts" | "Scheduled" | "Archive" | "Trash" | "Spam";
@@ -195,6 +220,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   const [lifecycleBusy, setLifecycleBusy] = useState(false);
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);
+  const [composeSignatureId, setComposeSignatureId] = useState<string | null>(null);
   const [to, setTo] = useState("");
   const [contactSuggestions, setContactSuggestions] = useState<Contact[]>([]);
   const [contactSuggestionsOpen, setContactSuggestionsOpen] = useState(false);
@@ -509,6 +535,7 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
 
   function resetComposerAfterClose(attachmentsAlreadyLinked = false) {
     setComposeOpen(false);
+    setComposeSignatureId(null);
     setContactSuggestions([]);
     setContactSuggestionsOpen(false);
     setTo("");
@@ -633,6 +660,7 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
     draftUpdatedAtRef.current = null;
     setDraftId(null);
     setComposeOpen(true);
+    setComposeSignatureId(null);
     setNotice("");
     setTo("");
     setSubject("");
@@ -661,8 +689,8 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
     if (!scheduledAt || !Number.isFinite(Date.parse(scheduledAt))) { setNotice("Choose a date and time for delivery."); return; }
     setBusy(true); setNotice("");
     try {
-      const signature = mailPreferences.signature.trim();
-      const finalBody = body.trimEnd() + (signature && !body.trimEnd().endsWith(signature) ? "\n\n" + signature : "");
+      const signature = resolveMailboxSignature(mailPreferences, mailboxId, composeSignatureId);
+      const finalBody = appendSignature(body, signature);
       const response = await fetch("/api/mail/scheduled", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ organizationId, mailboxId, to: to.trim(), subject: subject.trim(), text: finalBody, scheduledAt: new Date(scheduledAt).toISOString() }) });
       const result = await response.json() as { ok?: boolean; error?: string; scheduled?: ScheduledEmail };
       if (!response.ok || !result.ok || !result.scheduled) { setNotice(result.error || "The message could not be scheduled."); return; }
@@ -739,8 +767,8 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
     const stableRequestKey = requestKey ?? crypto.randomUUID();
     setRequestKey(stableRequestKey);
     try {
-      const signature = mailPreferences.signature.trim();
-      const finalBody = body.trimEnd() + (signature && !body.trimEnd().endsWith(signature) ? "\n\n" + signature : "");
+      const signature = resolveMailboxSignature(mailPreferences, mailboxId, composeSignatureId);
+      const finalBody = appendSignature(body, signature);
       const response = await fetch("/api/mail/send", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Idempotency-Key": stableRequestKey },
@@ -795,6 +823,7 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
     setDraftId(draft.id);
     setPendingAttachments([]);
     setTo(draft.to_address);
+    setComposeSignatureId(null);
     setSubject(draft.subject);
     setBody(draft.body_text);
     setRequestKey(null);
@@ -830,6 +859,7 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
         .filter((address) => address && address !== ownAddress)))
       : replyTargets;
     setTo(recipients.join(", "));
+    setComposeSignatureId(null);
     setSubject(/^re:/i.test(message.subject) ? message.subject : "Re: " + message.subject);
     const quoted = plainText(message).split("\n").map((line) => "> " + line).join("\n");
     const quoteBlock = "—\nOn " + messageDate(message, mailPreferences.timezone, mailPreferences.language) + ", " + message.from_address + " wrote:\n" + quoted;
@@ -849,6 +879,7 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
     draftIdRef.current = null;
     draftUpdatedAtRef.current = null;
     setTo("");
+    setComposeSignatureId(null);
     setSubject(/^fwd:/i.test(message.subject) ? message.subject : "Fwd: " + message.subject);
     setBody("\n\n---------- Forwarded message ----------\nFrom: " + message.from_address +
       "\nDate: " + messageDate(message, mailPreferences.timezone, mailPreferences.language) +
@@ -942,7 +973,7 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
                   <span className="mail-sr-only">Mailbox</span>
                   <select
                     value={mailboxId}
-                    onChange={(event) => { setMailboxId(event.target.value); setSelectedMessageId(""); setMobileDetailOpen(false); }}
+                    onChange={(event) => { setMailboxId(event.target.value); setComposeSignatureId(null); setSelectedMessageId(""); setMobileDetailOpen(false); }}
                     aria-label="Select mailbox"
                   >
                     {mailboxes.map((mailbox) => (
@@ -1254,6 +1285,21 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
                   <span className="mail-sr-only">Message body</span>
                   <textarea ref={composeBodyRef} required maxLength={80000} rows={8} disabled={busy} value={body} style={{ fontFamily: mailPreferences.font === "serif" ? "Georgia, serif" : mailPreferences.font === "mono" ? "ui-monospace, SFMono-Regular, Consolas, monospace" : "inherit" }} onChange={(event) => { setBody(event.target.value); setRequestKey(null); composeCursorPosition.current = null; }} placeholder="Write your message…" />
                 </label>
+                {mailPreferences.mailboxSignatures[mailboxId] && (
+                  <label className="mail-compose-field">
+                    <span>Signature</span>
+                    <select
+                      value={composeSignatureId ?? mailPreferences.mailboxSignatures[mailboxId].defaultSignatureId ?? ""}
+                      onChange={(event) => setComposeSignatureId(event.target.value)}
+                      disabled={busy || !mailPreferences.mailboxSignatures[mailboxId].enabled}
+                    >
+                      <option value="">No signature</option>
+                      {availableMailboxSignatures(mailPreferences, mailboxId).map((signature) => (
+                        <option key={signature.id} value={signature.id}>{signature.name}</option>
+                      ))}
+                    </select>
+                  </label>
+                )}
                 <p className="mail-compose-warning"><span>i</span> Plain-text email · Up to 10 recipients separated by commas · Attachments up to 4 MB each / 20 MB total · {draftSaving ? "Saving draft…" : draftId ? "Draft saved" : "Changes save automatically"}</p>
                 {!scheduleMode && (
                   <section className={styles.composeAttachments} aria-label="Compose attachments">
