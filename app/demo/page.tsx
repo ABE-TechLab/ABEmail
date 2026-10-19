@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import WorkspaceSidebar from "@/components/workspace-sidebar";
 
-type Folder = "Inbox" | "Sent" | "Drafts" | "Scheduled" | "Archive" | "Trash" | "Spam";
+type Folder = "Inbox" | "Sent" | "Drafts" | "Scheduled" | "Snoozed" | "Archive" | "Trash" | "Spam";
 type View = Folder | "Starred" | "Contacts";
 type Tone = "green" | "amber" | "violet" | "blue" | "rose" | "slate";
 
@@ -54,6 +55,7 @@ const FOLDERS: { name: View; icon: string }[] = [
   { name: "Sent", icon: "↗" },
   { name: "Drafts", icon: "▧" },
   { name: "Scheduled", icon: "◷" },
+  { name: "Snoozed", icon: "◴" },
   { name: "Archive", icon: "▱" },
   { name: "Trash", icon: "⌫" },
   { name: "Spam", icon: "⊘" },
@@ -64,15 +66,25 @@ function initials(name: string) {
 }
 
 export default function HomePage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [messages, setMessages] = useState<Mail[]>(DEMO_MAIL);
   const [activeView, setActiveView] = useState<View>("Inbox");
 
   useEffect(() => {
-    const requestedView = new URLSearchParams(window.location.search).get("view");
+    const requestedView = searchParams.get("view");
     const matchingFolder = FOLDERS.find((folder) => folder.name === requestedView);
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- Read route intent after hydration to avoid a server/client mismatch.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Mirror route state in the interactive sample.
     if (matchingFolder) setActiveView(matchingFolder.name);
-  }, []);
+    else if (requestedView === "Starred") setActiveView("Starred");
+
+    if (searchParams.get("compose") === "1") {
+      setComposeOpen(true);
+      const currentUrl = new URL(window.location.href);
+      currentUrl.searchParams.delete("compose");
+      router.replace(currentUrl.pathname + currentUrl.search, { scroll: false });
+    }
+  }, [searchParams, router]);
   const [selectedId, setSelectedId] = useState<string | null>("m1");
   const [selectedContactId, setSelectedContactId] = useState("c1");
   const [query, setQuery] = useState("");
@@ -81,10 +93,7 @@ export default function HomePage() {
   const [composeSubject, setComposeSubject] = useState("");
   const [composeBody, setComposeBody] = useState("");
   const [toast, setToast] = useState("");
-  const [profileOpen, setProfileOpen] = useState(false);
 
-  const unreadCount = messages.filter((message) => message.folder === "Inbox" && message.unread).length;
-  const draftCount = messages.filter((message) => message.folder === "Drafts").length;
   const visibleMessages = useMemo(() => {
     if (activeView === "Contacts") return [];
     const list = messages.filter((message) => activeView === "Starred" ? message.starred && message.folder !== "Trash" : message.folder === activeView);
@@ -101,17 +110,6 @@ export default function HomePage() {
   function notify(text: string) {
     setToast(text);
     window.setTimeout(() => setToast(""), 3000);
-  }
-
-  function openView(view: View) {
-    setActiveView(view);
-    setSelectedId(null);
-    setQuery("");
-    window.history.replaceState(
-      null,
-      "",
-      view === "Inbox" ? "/" : `/?view=${encodeURIComponent(view)}`,
-    );
   }
 
   function openMessage(message: Mail) {
@@ -161,23 +159,22 @@ export default function HomePage() {
   return (
     <main className="mail-app">
       <WorkspaceSidebar
-        activeView={activeView}
-        mailboxCounts={{ Inbox: unreadCount, Drafts: draftCount }}
-        onMailboxNavigate={openView}
-        onCompose={() => compose()}
-        profileOpen={profileOpen}
-        onWorkspaceToggle={() => setProfileOpen((open) => !open)}
-        onWorkspaceSettings={() => {
-          setProfileOpen(false);
-          notify("Workspace settings will follow authentication and membership controls.");
-        }}
+        composeHref="/demo?compose=1"
+        homeHref="/demo"
+        mailboxBaseHref="/demo"
+        workspaceName="ABEmail demo"
+        workspaceDescription="Sample workspace"
+        workspaceBaseHref="/demo"
+        workspaces={[]}
+        activeWorkspaceId=""
+        showWorkspaceLinks={false}
       />
 
       <section className="mail-main">
         <header className="mail-topbar">
           <div className="mail-breadcrumb"><span>Workspace</span><span className="mail-breadcrumb-slash">/</span><strong>{activeView}</strong></div>
           <label className="mail-search"><span className="mail-search-icon" aria-hidden="true">⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={activeView === "Contacts" ? "Search contacts..." : "Search mail"} aria-label={activeView === "Contacts" ? "Search contacts" : "Search mail"} />{query && <button type="button" aria-label="Clear search" onClick={() => setQuery("")}>×</button>}{!query && <kbd>⌘ K</kbd>}</label>
-          <div className="mail-topbar-right"><span className="mail-development-pill"><span /> Demo mode</span><button className="mail-icon-button" type="button" aria-label="Notifications" onClick={() => notify("Notifications will be connected to platform events later.")}>♧</button><button className="mail-user-avatar" type="button" aria-label="Account menu" onClick={() => setProfileOpen((open) => !open)}>AR</button></div>
+          <div className="mail-topbar-right"><span className="mail-development-pill"><span /> Demo mode</span><button className="mail-icon-button" type="button" aria-label="Notifications" onClick={() => notify("Notifications will be connected to platform events later.")}>♧</button><button className="mail-user-avatar" type="button" aria-label="Account menu" onClick={() => notify("Sign in to manage your workspace account.")}>AR</button></div>
         </header>
 
         <div className="mail-content-layout">
