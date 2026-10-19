@@ -240,18 +240,6 @@ export async function POST(request: NextRequest) {
       if (attachmentBytes > 20 * 1024 * 1024 || attachmentRows.some((row) => row.size_bytes > 4 * 1024 * 1024)) {
         return json({ error: "Attachments exceed the allowed message size." }, 413);
       }
-      const pendingIds = attachmentRows.filter((row) => row.message_id === null).map((row) => row.id);
-      if (pendingIds.length) {
-        const { data: linked, error: linkError } = await admin.from("email_message_attachments")
-          .update({ message_id: savedMessageId, expires_at: null })
-          .in("id", pendingIds).eq("organization_id", organizationId).eq("mailbox_id", mailboxId)
-          .eq("user_id", user.id).is("message_id", null)
-          .select("id");
-        if (linkError || (linked?.length ?? 0) !== pendingIds.length) {
-          return json({ error: "Attachments could not be linked safely to this message." }, 503);
-        }
-        attachmentRows = attachmentRows.map((row) => pendingIds.includes(row.id) ? { ...row, message_id: savedMessageId, expires_at: null } : row);
-      }
     }
     const providerAttachments: Array<{ filename: string; contentType: string; content: string }> = [];
     for (const attachment of attachmentRows) {
@@ -262,6 +250,19 @@ export async function POST(request: NextRequest) {
         return json({ error: "An attachment failed its size check. Remove and upload it again." }, 409);
       }
       providerAttachments.push({ filename: attachment.filename, contentType: attachment.content_type, content: content.toString("base64") });
+    }
+
+    const pendingIds = attachmentRows.filter((row) => row.message_id === null).map((row) => row.id);
+    if (pendingIds.length) {
+      const { data: linked, error: linkError } = await admin.from("email_message_attachments")
+        .update({ message_id: savedMessageId, expires_at: null })
+        .in("id", pendingIds).eq("organization_id", organizationId).eq("mailbox_id", mailboxId)
+        .eq("user_id", user.id).is("message_id", null)
+        .select("id");
+      if (linkError || (linked?.length ?? 0) !== pendingIds.length) {
+        return json({ error: "Attachments could not be linked safely to this message." }, 503);
+      }
+      attachmentRows = attachmentRows.map((row) => pendingIds.includes(row.id) ? { ...row, message_id: savedMessageId, expires_at: null } : row);
     }
 
     const sent = usesWorkspaceKey
@@ -304,6 +305,13 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     if ((error instanceof ResendPilotError || error instanceof ResendProviderError) && error.providerStatus !== null && error.providerStatus < 500) {
       await admin.from("email_messages").update({ status: "failed" }).eq("id", savedMessageId);
+      if (attachmentIds.length) {
+        const { error: detachError } = await admin.from("email_message_attachments")
+          .update({ message_id: null, expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() })
+          .eq("organization_id", organizationId).eq("mailbox_id", mailboxId).eq("message_id", savedMessageId)
+          .eq("user_id", user.id).in("id", attachmentIds);
+        if (detachError) return json({ error: "The provider rejected this email and attachment cleanup needs attention. Refresh the composer before retrying." }, 503);
+      }
       if (error.code === "RESEND_RATE_LIMITED") {
         return json({ error: "Resend is rate-limiting this workspace. Wait before submitting a new message." }, 429);
       }
