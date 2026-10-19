@@ -17,6 +17,10 @@ const SETTINGS_SECTIONS: SettingsSection[] = [
   "domains",
   "mailboxes",
   "security",
+  "rules",
+  "out-of-office",
+  "branding",
+  "integrations",
 ];
 
 type WorkspaceSettingsPageProps = {
