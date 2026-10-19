@@ -178,7 +178,15 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   const [body, setBody] = useState("");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
-  const [requestKey, setRequestKey] = useState<string | null>(null);\n  const [drafts, setDrafts] = useState<EmailDraft[]>([]);\n  const [draftId, setDraftId] = useState<string | null>(null);\n  const [draftUpdatedAt, setDraftUpdatedAt] = useState<string | null>(null);\n  const [draftSaving, setDraftSaving] = useState(false);\n  const draftSaveQueue = useRef<Promise<void>>(Promise.resolve());\n  const draftMutationVersion = useRef(0);\n  const draftIdRef = useRef<string | null>(null);\n  const draftUpdatedAtRef = useRef<string | null>(null);
+  const [requestKey, setRequestKey] = useState<string | null>(null);
+  const [drafts, setDrafts] = useState<EmailDraft[]>([]);
+  const [draftId, setDraftId] = useState<string | null>(null);
+  const [draftUpdatedAt, setDraftUpdatedAt] = useState<string | null>(null);
+  const [draftSaving, setDraftSaving] = useState(false);
+  const draftSaveQueue = useRef<Promise<void>>(Promise.resolve());
+  const draftMutationVersion = useRef(0);
+  const draftIdRef = useRef<string | null>(null);
+  const draftUpdatedAtRef = useRef<string | null>(null);
 
   useEffect(() => {
     const media = window.matchMedia("(max-width: 760px)");
@@ -202,7 +210,33 @@ export default function LiveMailbox(props: LiveMailboxProps) {
     return () => window.cancelAnimationFrame(frame);
   }, [composeOpen, body]);
 
-  useEffect(() => {\n    if (activeView !== "Drafts" || !mailboxId) { setDrafts([]); return; }\n    let active = true;\n    void fetch("/api/mail/drafts?organizationId=" + encodeURIComponent(organizationId) + "&mailboxId=" + encodeURIComponent(mailboxId), { cache: "no-store" })\n      .then(async (response) => { const result = await response.json() as { drafts?: EmailDraft[]; error?: string }; if (!response.ok) throw new Error(result.error || "Drafts could not be loaded."); if (active) setDrafts(result.drafts ?? []); })\n      .catch((error: unknown) => { if (active) setNotice(error instanceof Error ? error.message : "Drafts could not be loaded."); });\n    return () => { active = false; };\n  }, [activeView, mailboxId, organizationId]);\n\n  useEffect(() => {\n    if (!composeOpen || !mailboxId || (!to.trim() && !subject.trim() && !body.trim())) return;\n    const version = ++draftMutationVersion.current;\n    const timer = window.setTimeout(() => {\n      setDraftSaving(true);\n      draftSaveQueue.current = draftSaveQueue.current.then(async () => {\n        const payload = { organizationId, mailboxId, id: draftIdRef.current, expectedUpdatedAt: draftUpdatedAtRef.current, to, subject, text: body };\n        const response = await fetch("/api/mail/drafts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });\n        const result = await response.json() as { ok?: boolean; draft?: EmailDraft; error?: string; conflict?: boolean };\n        if (!response.ok || !result.ok || !result.draft) { if (version === draftMutationVersion.current) setNotice(result.error || "Draft could not be saved."); return; }\n        draftIdRef.current = result.draft.id; draftUpdatedAtRef.current = result.draft.updated_at;\n        if (version === draftMutationVersion.current) { setDraftId(result.draft.id); setDraftUpdatedAt(result.draft.updated_at); setDrafts((current) => [result.draft!, ...current.filter((item) => item.id !== result.draft!.id)]); }\n      }).catch(() => { if (version === draftMutationVersion.current) setNotice("Draft save failed. Keep this window open and try again."); }).finally(() => { if (version === draftMutationVersion.current) setDraftSaving(false); });\n    }, 650);\n    return () => window.clearTimeout(timer);\n  }, [composeOpen, organizationId, mailboxId, to, subject, body]);\n\n  const visibleMessages = useMemo(() => {
+  useEffect(() => {
+    if (activeView !== "Drafts" || !mailboxId) { setDrafts([]); return; }
+    let active = true;
+    void fetch("/api/mail/drafts?organizationId=" + encodeURIComponent(organizationId) + "&mailboxId=" + encodeURIComponent(mailboxId), { cache: "no-store" })
+      .then(async (response) => { const result = await response.json() as { drafts?: EmailDraft[]; error?: string }; if (!response.ok) throw new Error(result.error || "Drafts could not be loaded."); if (active) setDrafts(result.drafts ?? []); })
+      .catch((error: unknown) => { if (active) setNotice(error instanceof Error ? error.message : "Drafts could not be loaded."); });
+    return () => { active = false; };
+  }, [activeView, mailboxId, organizationId]);
+
+  useEffect(() => {
+    if (!composeOpen || !mailboxId || (!to.trim() && !subject.trim() && !body.trim())) return;
+    const version = ++draftMutationVersion.current;
+    const timer = window.setTimeout(() => {
+      setDraftSaving(true);
+      draftSaveQueue.current = draftSaveQueue.current.then(async () => {
+        const payload = { organizationId, mailboxId, id: draftIdRef.current, expectedUpdatedAt: draftUpdatedAtRef.current, to, subject, text: body };
+        const response = await fetch("/api/mail/drafts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+        const result = await response.json() as { ok?: boolean; draft?: EmailDraft; error?: string; conflict?: boolean };
+        if (!response.ok || !result.ok || !result.draft) { if (version === draftMutationVersion.current) setNotice(result.error || "Draft could not be saved."); return; }
+        draftIdRef.current = result.draft.id; draftUpdatedAtRef.current = result.draft.updated_at;
+        if (version === draftMutationVersion.current) { setDraftId(result.draft.id); setDraftUpdatedAt(result.draft.updated_at); setDrafts((current) => [result.draft!, ...current.filter((item) => item.id !== result.draft!.id)]); }
+      }).catch(() => { if (version === draftMutationVersion.current) setNotice("Draft save failed. Keep this window open and try again."); }).finally(() => { if (version === draftMutationVersion.current) setDraftSaving(false); });
+    }, 650);
+    return () => window.clearTimeout(timer);
+  }, [composeOpen, organizationId, mailboxId, to, subject, body]);
+
+  const visibleMessages = useMemo(() => {
     const term = query.trim().toLowerCase();
     return messages.filter((message) => {
       if (message.mailbox_id !== mailboxId) return false;
@@ -312,7 +346,18 @@ export default function LiveMailbox(props: LiveMailboxProps) {
     }
   }
 
-  function openDraft(draft: EmailDraft) {\n    draftIdRef.current = draft.id; draftUpdatedAtRef.current = draft.updated_at; setDraftId(draft.id); setDraftUpdatedAt(draft.updated_at); setTo(draft.to_address); setSubject(draft.subject); setBody(draft.body_text); setRequestKey(null); setNotice(""); setComposeOpen(true); composeCursorPosition.current = draft.body_text.length;\n  }\n\n  async function deleteDraft(draft: EmailDraft) {\n    const response = await fetch("/api/mail/drafts?organizationId=" + encodeURIComponent(organizationId) + "&mailboxId=" + encodeURIComponent(mailboxId) + "&id=" + encodeURIComponent(draft.id), { method: "DELETE" });\n    const result = await response.json() as { ok?: boolean; error?: string };\n    if (!response.ok || !result.ok) { setNotice(result.error || "Draft could not be deleted."); return; }\n    setDrafts((current) => current.filter((item) => item.id !== draft.id));\n  }\n\n  function replyTo(message: EmailMessage) {
+  function openDraft(draft: EmailDraft) {
+    draftIdRef.current = draft.id; draftUpdatedAtRef.current = draft.updated_at; setDraftId(draft.id); setDraftUpdatedAt(draft.updated_at); setTo(draft.to_address); setSubject(draft.subject); setBody(draft.body_text); setRequestKey(null); setNotice(""); setComposeOpen(true); composeCursorPosition.current = draft.body_text.length;
+  }
+
+  async function deleteDraft(draft: EmailDraft) {
+    const response = await fetch("/api/mail/drafts?organizationId=" + encodeURIComponent(organizationId) + "&mailboxId=" + encodeURIComponent(mailboxId) + "&id=" + encodeURIComponent(draft.id), { method: "DELETE" });
+    const result = await response.json() as { ok?: boolean; error?: string };
+    if (!response.ok || !result.ok) { setNotice(result.error || "Draft could not be deleted."); return; }
+    setDrafts((current) => current.filter((item) => item.id !== draft.id));
+  }
+
+  function replyTo(message: EmailMessage) {
     if (message.direction !== "inbound") return;
     setTo(message.from_address);
     setSubject(/^re:/i.test(message.subject) ? message.subject : "Re: " + message.subject);
@@ -475,7 +520,14 @@ export default function LiveMailbox(props: LiveMailboxProps) {
             <p className={styles.firstEmailFootnote}>A sent status confirms Resend accepted a message; delivery events update its status separately. Check the recipient inbox and send a reply to verify both directions.</p>
                   </section>
                 )}
-                {activeView === "Drafts" && drafts.map((draft) => (\n                  <article className="mail-message-row" key={draft.id}>\n                    <button className="mail-message-open" type="button" onClick={() => openDraft(draft)} aria-label={"Edit draft " + (draft.subject || "no subject")}>\n                      <span className="mail-avatar tone-slate">✎</span><span className="mail-message-copy"><span className="mail-message-row-top"><strong>{draft.to_address || "Draft recipient"}</strong><time>{new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(draft.updated_at))}</time></span><span className="mail-message-subject">{draft.subject || "(no subject)"}</span><span className="mail-message-preview">{draft.body_text.replace(/\\s+/g, " ").slice(0, 120) || "No message text yet."}</span></span>\n                    </button><div className={styles.rowActions}><button type="button" className="mail-toolbar-button" onClick={() => void deleteDraft(draft)} aria-label="Delete draft" title="Delete draft">⌫</button></div>\n                  </article>\n                ))}\n                {visibleMessages.map((message) => (
+                {activeView === "Drafts" && drafts.map((draft) => (
+                  <article className="mail-message-row" key={draft.id}>
+                    <button className="mail-message-open" type="button" onClick={() => openDraft(draft)} aria-label={"Edit draft " + (draft.subject || "no subject")}>
+                      <span className="mail-avatar tone-slate">✎</span><span className="mail-message-copy"><span className="mail-message-row-top"><strong>{draft.to_address || "Draft recipient"}</strong><time>{new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(draft.updated_at))}</time></span><span className="mail-message-subject">{draft.subject || "(no subject)"}</span><span className="mail-message-preview">{draft.body_text.replace(/\\s+/g, " ").slice(0, 120) || "No message text yet."}</span></span>
+                    </button><div className={styles.rowActions}><button type="button" className="mail-toolbar-button" onClick={() => void deleteDraft(draft)} aria-label="Delete draft" title="Delete draft">⌫</button></div>
+                  </article>
+                ))}
+                {visibleMessages.map((message) => (
                   <article className={selectedMessage?.id === message.id ? "mail-message-row selected" : "mail-message-row"} key={message.id}>
                     <input
                       className={styles.messageSelect}
@@ -524,7 +576,10 @@ export default function LiveMailbox(props: LiveMailboxProps) {
                     </div>
                   </article>
                 ))}
-                {activeView === "Drafts" && !drafts.length && (\n                  <div className="mail-empty-list"><span>▧</span><strong>No drafts yet</strong><p>Unfinished messages are saved here automatically while you compose.</p><button type="button" onClick={openCompose}>Compose a draft</button></div>\n                )}\n                {activeView !== "Drafts" && !visibleMessages.length && (
+                {activeView === "Drafts" && !drafts.length && (
+                  <div className="mail-empty-list"><span>▧</span><strong>No drafts yet</strong><p>Unfinished messages are saved here automatically while you compose.</p><button type="button" onClick={openCompose}>Compose a draft</button></div>
+                )}
+                {activeView !== "Drafts" && !visibleMessages.length && (
                   <div className="mail-empty-list">
                     <span>{activeView === "Inbox" ? "▤" : activeView === "Sent" ? "↗" : activeView === "Starred" ? "☆" : activeView === "Archive" ? "▱" : activeView === "Trash" ? "⌫" : "⊘"}</span>
                     <strong>{query ? "No matching messages" : "No messages in " + activeView}</strong>
