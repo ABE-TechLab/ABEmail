@@ -63,8 +63,32 @@ insert into public.email_messages (
    'Lifecycle B inbound', 'Synthetic cross-tenant body', 'received', null, null, null, null, now())
 on conflict (id) do nothing;
 
+insert into public.scheduled_email_messages (
+  id, organization_id, mailbox_id, user_id, to_address, subject, body_text, scheduled_at, status
+) values
+  ('70000000-0000-4000-8000-000000000101', '20000000-0000-4000-8000-000000000101', '31000000-0000-4000-8000-000000000101',
+   '10000000-0000-4000-8000-000000000101', 'future@example.net', 'Due scheduled test', 'Synthetic scheduled body', now() - interval '1 minute', 'scheduled'),
+  ('70000000-0000-4000-8000-000000000102', '20000000-0000-4000-8000-000000000101', '31000000-0000-4000-8000-000000000101',
+   '10000000-0000-4000-8000-000000000103', 'member@example.net', 'Member scheduled test', 'Synthetic scheduled body', now() + interval '1 day', 'scheduled'),
+  ('70000000-0000-4000-8000-000000000103', '20000000-0000-4000-8000-000000000102', '31000000-0000-4000-8000-000000000102',
+   '10000000-0000-4000-8000-000000000102', 'other@example.net', 'Other tenant scheduled test', 'Synthetic scheduled body', now() + interval '1 day', 'scheduled')
+on conflict (id) do nothing;
+
 -- Owner performs bulk lifecycle actions. Provider status remains unchanged.
 set local role authenticated;
+-- Scheduled mail remains private to its creator and requires service-side writes.
+select is(
+  (select count(*)::integer from public.scheduled_email_messages),
+  1,
+  'owner sees only their own scheduled email'
+);
+select ok(
+  not has_table_privilege('authenticated', 'public.scheduled_email_messages', 'insert')
+  and not has_table_privilege('authenticated', 'public.scheduled_email_messages', 'update')
+  and not has_table_privilege('authenticated', 'public.scheduled_email_messages', 'delete'),
+  'browser role cannot write scheduled email rows directly'
+);
+
 select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000101', true);
 select set_config('request.jwt.claim.role', 'authenticated', true);
 select set_config('request.jwt.claims', '{"sub":"10000000-0000-4000-8000-000000000101","role":"authenticated","email":"alice@lifecycle-a.invalid"}', true);
@@ -219,6 +243,23 @@ select is(
   (select status from public.email_messages where id = '60000000-0000-4000-8000-000000000102'),
   'received',
   'other messages keep their original transport status after deletion'
+);
+
+reset role;
+select is(
+  (select count(*)::integer from public.claim_due_scheduled_email_messages(25)),
+  1,
+  'worker atomically claims only due scheduled messages'
+);
+select is(
+  (select status from public.scheduled_email_messages where id = '70000000-0000-4000-8000-000000000101'),
+  'processing',
+  'claimed scheduled message is locked for delivery'
+);
+select is(
+  (select status from public.scheduled_email_messages where id = '70000000-0000-4000-8000-000000000102'),
+  'scheduled',
+  'future scheduled message is not claimed early'
 );
 
 select * from finish();
