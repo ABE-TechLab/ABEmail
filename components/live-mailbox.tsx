@@ -198,6 +198,8 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   const [busy, setBusy] = useState(false);
   const [uploadingAttachments, setUploadingAttachments] = useState(false);
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
+  const pendingAttachmentsRef = useRef<PendingAttachment[]>([]);
+  pendingAttachmentsRef.current = pendingAttachments;
   const [messageAttachments, setMessageAttachments] = useState<MessageAttachment[]>([]);
   const [messageAttachmentsMessageId, setMessageAttachmentsMessageId] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
@@ -377,7 +379,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
       setDraftId(result.draft.id);
       setDrafts((current) => [result.draft!, ...current.filter((item) => item.id !== result.draft!.id)]);
     }
-    const attachmentIds = pendingAttachments.map((attachment) => attachment.id);
+    const attachmentIds = pendingAttachmentsRef.current.map((attachment) => attachment.id);
     if (attachmentIds.length) {
       const attachmentResponse = await fetch("/api/mail/attachments", {
         method: "POST",
@@ -389,10 +391,18 @@ export default function LiveMailbox(props: LiveMailboxProps) {
         if (version === draftMutationVersion.current) setNotice(attachmentResult.error || "Attachments could not be saved with this draft.");
         return false;
       }
-      if (version === draftMutationVersion.current) setPendingAttachments(attachmentResult.attachments ?? pendingAttachments);
+      if (version === draftMutationVersion.current) {
+        const nextAttachments = attachmentResult.attachments ?? [];
+        setPendingAttachments((current) =>
+          current.length === nextAttachments.length &&
+          current.every((attachment, index) => attachment.id === nextAttachments[index]?.id)
+            ? current
+            : nextAttachments
+        );
+      }
     }
     return true;
-  }, [organizationId, mailboxId, pendingAttachments]);
+  }, [organizationId, mailboxId]);
 
   const queueDraftSnapshot = useCallback((toValue: string, subjectValue: string, bodyValue: string, version: number): Promise<boolean> => {
     let saved = false;
