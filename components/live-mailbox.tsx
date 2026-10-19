@@ -342,6 +342,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
         workspaces={workspaces}
         activeWorkspaceId={organizationId}
       />
+      <button type="button" className="mail-mobile-compose-fab" onClick={openCompose} aria-label="Compose a new message" title="Compose a new message">+</button>
       <main className="mail-main">
         <header className={"mail-topbar " + workspaceStyles.topbar}>
           <div className="mail-breadcrumb">
