@@ -1338,6 +1338,18 @@ html[data-appearance-mode="system"] {
 .mail-workspace-menu .mail-workspace-option.active {
   background: var(--accent, #edf5ee);
 }
+/* Workspace options must keep their names visible even when the parent rail is collapsed. */
+.mail-sidebar.is-collapsed .mail-profile-menu.mail-workspace-menu .mail-workspace-option .mail-workspace-copy,
+.mail-sidebar.is-collapsed .mail-profile-menu.mail-workspace-menu .mail-workspace-option .mail-workspace-copy strong,
+.mail-sidebar.is-collapsed .mail-profile-menu.mail-workspace-menu .mail-workspace-option .mail-workspace-copy small {
+  display: flex;
+}
+.mail-sidebar.is-collapsed .mail-profile-menu.mail-workspace-menu .mail-workspace-option .mail-workspace-copy strong {
+  display: block;
+}
+.mail-sidebar.is-collapsed .mail-profile-menu.mail-workspace-menu .mail-workspace-option .mail-workspace-copy small {
+  display: block;
+}
 .mail-workspace-menu .mail-workspace-option .mail-workspace-copy {
   min-width: 0;
 }
