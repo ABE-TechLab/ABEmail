@@ -17,7 +17,7 @@ type MailPageProps = {
 export default async function WorkspaceMailPage({ params, searchParams }: MailPageProps) {
   const { organizationId } = await params;
   const { view, composeTo } = (await searchParams) ?? {};
-  const initialRecipient = typeof composeTo === "string" && composeTo.length <= 254 && /^[^\\s@,;<>]+@[^\\s@,;<>]+\\.[^\\s@,;<>]+$/.test(composeTo.trim()) ? composeTo.trim().toLowerCase() : undefined;
+  const initialRecipient = typeof composeTo === "string" && composeTo.length <= 254 && /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/.test(composeTo.trim()) ? composeTo.trim().toLowerCase() : undefined;
   const activeView: ActiveMailboxView = MAILBOX_VIEWS.includes(view as ActiveMailboxView) ? (view as ActiveMailboxView) : "Inbox";
   if (!UUID_PATTERN.test(organizationId)) notFound();
 

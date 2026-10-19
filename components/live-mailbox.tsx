@@ -200,7 +200,34 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   const [contactSuggestionsOpen, setContactSuggestionsOpen] = useState(false);
   const [contactSuggestionsLoading, setContactSuggestionsLoading] = useState(false);
   const [activeContactSuggestionIndex, setActiveContactSuggestionIndex] = useState(0);
-  const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
+  const [subject, setSubject] = useState("");
+  const [body, setBody] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [uploadingAttachments, setUploadingAttachments] = useState(false);
+  const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
+  const pendingAttachmentsRef = useRef<PendingAttachment[]>([]);
+  useEffect(() => {
+    pendingAttachmentsRef.current = pendingAttachments;
+  }, [pendingAttachments]);
+  const [messageAttachments, setMessageAttachments] = useState<MessageAttachment[]>([]);
+  const [messageAttachmentsMessageId, setMessageAttachmentsMessageId] = useState<string | null>(null);
+  const [notice, setNotice] = useState("");
+  const [requestKey, setRequestKey] = useState<string | null>(null);
+  const [drafts, setDrafts] = useState<EmailDraft[]>([]);
+  const [scheduledMessages, setScheduledMessages] = useState<ScheduledEmail[]>([]);
+  const [scheduleMode, setScheduleMode] = useState(false);
+  const [scheduledAt, setScheduledAt] = useState("");
+  const [scheduledBusyId, setScheduledBusyId] = useState("");
+  const [scheduledTimeEdits, setScheduledTimeEdits] = useState<Record<string, string>>({});
+  const [draftId, setDraftId] = useState<string | null>(null);
+  const [draftSaving, setDraftSaving] = useState(false);
+  const draftSaveQueue = useRef<Promise<void>>(Promise.resolve());
+  const draftSaveTimer = useRef<number | null>(null);
+  const draftMutationVersion = useRef(0);
+  const draftIdRef = useRef<string | null>(null);
+  const draftUpdatedAtRef = useRef<string | null>(null);
+
+const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
 
   useEffect(() => {
     if (!initialRecipient || initialComposeHandledRef.current) return;
@@ -254,32 +281,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
     };
   }, [composeOpen, organizationId, recipientQuery]);
 
-  const [subject, setSubject] = useState("");
-  const [body, setBody] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [uploadingAttachments, setUploadingAttachments] = useState(false);
-  const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
-  const pendingAttachmentsRef = useRef<PendingAttachment[]>([]);
-  useEffect(() => {
-    pendingAttachmentsRef.current = pendingAttachments;
-  }, [pendingAttachments]);
-  const [messageAttachments, setMessageAttachments] = useState<MessageAttachment[]>([]);
-  const [messageAttachmentsMessageId, setMessageAttachmentsMessageId] = useState<string | null>(null);
-  const [notice, setNotice] = useState("");
-  const [requestKey, setRequestKey] = useState<string | null>(null);
-  const [drafts, setDrafts] = useState<EmailDraft[]>([]);
-  const [scheduledMessages, setScheduledMessages] = useState<ScheduledEmail[]>([]);
-  const [scheduleMode, setScheduleMode] = useState(false);
-  const [scheduledAt, setScheduledAt] = useState("");
-  const [scheduledBusyId, setScheduledBusyId] = useState("");
-  const [scheduledTimeEdits, setScheduledTimeEdits] = useState<Record<string, string>>({});
-  const [draftId, setDraftId] = useState<string | null>(null);
-  const [draftSaving, setDraftSaving] = useState(false);
-  const draftSaveQueue = useRef<Promise<void>>(Promise.resolve());
-  const draftSaveTimer = useRef<number | null>(null);
-  const draftMutationVersion = useRef(0);
-  const draftIdRef = useRef<string | null>(null);
-  const draftUpdatedAtRef = useRef<string | null>(null);
+
 
   useEffect(() => {
     const media = window.matchMedia("(max-width: 760px)");
