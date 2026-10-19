@@ -126,6 +126,28 @@ const SECTION_INFO: Record<string, { title: string; description: string }> = {
   security: { title: "Security", description: "Review your current access and account-session controls." },
 };
 
+const SETTINGS_NAV_GROUPS = [
+  {
+    heading: "WORKSPACE",
+    items: [
+      { id: "general", label: "General", icon: "⚙" },
+      { id: "appearance", label: "Appearance", icon: "◐" },
+      { id: "notifications", label: "Notifications", icon: "♧" },
+      { id: "team", label: "Team & access", icon: "♙" },
+      { id: "security", label: "Security", icon: "◇" },
+    ],
+  },
+  {
+    heading: "EMAIL",
+    items: [
+      { id: "mail", label: "Mail & compose", icon: "✉" },
+      { id: "domains", label: "Domains", icon: "◎" },
+      { id: "mailboxes", label: "Mailboxes", icon: "▤" },
+    ],
+  },
+] as const;
+
+
 const APPEARANCE_MODES: { id: AppearanceMode; label: string; glyph: string }[] = [
   { id: "light", label: "Light", glyph: "☼" },
   { id: "dark", label: "Dark", glyph: "☾" },
@@ -760,6 +782,28 @@ export default function WorkspaceSettingsPanel({
             <span />{providerLoading ? "Checking connection" : providerStatus?.connected || providerStatus?.environmentManaged ? "Workspace connected" : providerStatus ? "Workspace not connected" : "Connection status unavailable"}
           </span></div>
           <div className="settings-layout">
+            <nav className="settings-navigation" aria-label="Settings sections">
+              {SETTINGS_NAV_GROUPS.map((group) => (
+                <div className="settings-nav-group" key={group.heading}>
+                  <p>{group.heading}</p>
+                  {group.items.map((item) => {
+                    const href = settingsBase + (item.id === "general" ? "" : "/" + item.id);
+                    const active = section === item.id;
+                    return (
+                      <Link
+                        key={item.id}
+                        href={href}
+                        className={active ? "settings-nav-link active" : "settings-nav-link"}
+                        aria-current={active ? "page" : undefined}
+                        title={item.label}
+                      >
+                        <span aria-hidden="true">{item.icon}</span>{item.label}
+                      </Link>
+                    );
+                  })}
+                </div>
+              ))}
+            </nav>
             <section className="settings-panel" aria-labelledby="settings-heading">
               <header className="settings-panel-heading"><div><h2 id="settings-heading">{info.title}</h2><p>{info.description}</p></div></header>
 
