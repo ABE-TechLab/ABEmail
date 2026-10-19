@@ -67,7 +67,7 @@ async function persistReceivedAttachments(
     const downloaded = await fetchReceivedAttachment(apiKey, emailId, item.id);
     if (downloaded.bytes.length > 4 * 1024 * 1024 || totalBytes + downloaded.bytes.length > 20 * 1024 * 1024) continue;
     const filename = downloaded.filename.replace(/[\\/\u0000-\u001f\u007f]/g, "_").replace(/\s+/g, " ").trim().slice(0, 180) || "attachment";
-    const contentType = /^[a-z0-9!#export async function handleResendWebhook(request: NextRequest, tenantOrganizationId?: string) {^_.+-]+\/[a-z0-9!#export async function handleResendWebhook(request: NextRequest, tenantOrganizationId?: string) {^_.+-]+$/i.test(downloaded.contentType)
+    const contentType = /^[a-z0-9.+-]+\/[a-z0-9.+-]+$/i.test(downloaded.contentType)
       ? downloaded.contentType : "application/octet-stream";
     const storagePath = [organizationId, mailboxId, messageId, randomUUID() + "-" + filename].join("/");
     const { error: uploadError } = await admin.storage.from("mail-attachments").upload(storagePath, downloaded.bytes, {
