@@ -417,7 +417,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
     setBusy(true); setNotice("");
     try {
       const signature = mailPreferences.signature.trim();
-      const finalBody = body.trimEnd() + (signature && !body.trimEnd().endsWith(signature) ? "\\n\\n" + signature : "");
+      const finalBody = body.trimEnd() + (signature && !body.trimEnd().endsWith(signature) ? "\n\n" + signature : "");
       const response = await fetch("/api/mail/scheduled", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ organizationId, mailboxId, to: to.trim(), subject: subject.trim(), text: finalBody, scheduledAt: new Date(scheduledAt).toISOString() }) });
       const result = await response.json() as { ok?: boolean; error?: string; scheduled?: ScheduledEmail };
       if (!response.ok || !result.ok || !result.scheduled) { setNotice(result.error || "The message could not be scheduled."); return; }
@@ -883,7 +883,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
                   <textarea ref={composeBodyRef} required maxLength={80000} rows={8} disabled={busy} value={body} style={{ fontFamily: mailPreferences.font === "serif" ? "Georgia, serif" : mailPreferences.font === "mono" ? "ui-monospace, SFMono-Regular, Consolas, monospace" : "inherit" }} onChange={(event) => { setBody(event.target.value); setRequestKey(null); composeCursorPosition.current = null; }} placeholder="Write your message…" />
                 </label>
                 <p className="mail-compose-warning"><span>i</span> Plain-text email · One recipient · Workspace sending limits apply · {draftSaving ? "Saving draft…" : draftId ? "Draft saved" : "Changes save automatically"}</p>
-                {scheduleMode && <label className="mail-compose-field"><span>Send at</span><input type="datetime-local" required min={new Date(Date.now() + 60_000).toISOString().slice(0, 16)} value={scheduledAt} onChange={(event) => setScheduledAt(event.target.value)} disabled={busy} /></label>}
+                {scheduleMode && <label className="mail-compose-field"><span>Send at</span><input type="datetime-local" required min={(() => { const minDate = new Date(Date.now() + 60_000); minDate.setMinutes(minDate.getMinutes() - minDate.getTimezoneOffset()); return minDate.toISOString().slice(0, 16); })()} value={scheduledAt} onChange={(event) => setScheduledAt(event.target.value)} disabled={busy} /></label>}
                 <footer className="mail-compose-footer">
                   {scheduleMode ? <button type="button" className="mail-primary-action" disabled={busy || !mailboxId || !scheduledAt} onClick={() => void scheduleMessage()}>{busy ? "Scheduling…" : "Schedule email"} <span>◷</span></button> : <><button type="submit" className="mail-primary-action" disabled={busy || !mailboxId}>{busy ? "Sending…" : "Send"} <span>↗</span></button><button type="button" className="mail-compose-discard" disabled={busy} onClick={() => { setScheduleMode(true); const date = new Date(Date.now() + 60 * 60 * 1000); date.setMinutes(date.getMinutes() - date.getTimezoneOffset()); setScheduledAt(date.toISOString().slice(0, 16)); }}>Schedule</button></>}
                   <button type="button" className="mail-compose-discard" onClick={() => void closeComposer()} disabled={busy}>Close</button>
