@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
-import WorkspaceSidebar, { type WorkspaceChoice } from "@/components/workspace-sidebar";
 import { useAppearanceMode, type AppearanceMode } from "@/components/appearance-provider";
 import { useDesignTheme } from "@/components/design-theme-provider";
 import { DESIGN_THEMES, type DesignThemeId } from "@/lib/design-system";
@@ -15,7 +14,6 @@ export type WorkspaceSettingsContext = {
   organizationRole: string;
   email: string;
   userId: string;
-  workspaces: WorkspaceChoice[];
   mailboxes: { id: string; address: string; display_name: string | null }[];
   members: { user_id: string; role: string; status: string }[];
 };
@@ -183,7 +181,6 @@ export default function WorkspaceSettingsPanel({
   organizationRole,
   email,
   userId,
-  workspaces,
   mailboxes,
   members,
 }: WorkspaceSettingsContext & { section: string }) {
@@ -753,19 +750,7 @@ export default function WorkspaceSettingsPanel({
   }
 
   return (
-    <div className="mail-app workspace-settings-app">
-      <WorkspaceSidebar
-        homeHref={liveMailAvailable ? base + "/mail" : base}
-        mailboxBaseHref={base + "/mail"}
-        enabledMailboxViews={liveMailAvailable ? ["Inbox", "Sent"] : []}
-        disabledMailFeatures={!liveMailAvailable}
-        activeView="Inbox"
-        workspaceBaseHref={base}
-        workspaceName={organizationName}
-        workspaceDescription={organizationRole + " workspace"}
-        workspaces={workspaces}
-        activeWorkspaceId={organizationId}
-      />
+    <div className="workspace-settings-app">
       <main className="mail-main">
         <header className="mail-topbar">
           <div className="mail-breadcrumb"><Link href={base}>Workspace</Link><span className="mail-breadcrumb-slash">/</span><strong>{info.title}</strong></div>
@@ -1042,7 +1027,6 @@ export default function WorkspaceSettingsPanel({
           </div>
           {toast && <div className="mail-toast settings-toast" role="status"><span>i</span>{toast}<button type="button" aria-label="Dismiss notice" onClick={() => setToast("")}>×</button></div>}
         </div>
-      </main>
     </div>
   );
 }
