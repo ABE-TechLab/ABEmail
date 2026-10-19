@@ -522,7 +522,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
                 {activeView === "Drafts" && drafts.map((draft) => (
                   <article className="mail-message-row" key={draft.id}>
                     <button className="mail-message-open" type="button" onClick={() => openDraft(draft)} aria-label={"Edit draft " + (draft.subject || "no subject")}>
-                      <span className="mail-avatar tone-slate">✎</span><span className="mail-message-copy"><span className="mail-message-row-top"><strong>{draft.to_address || "Draft recipient"}</strong><time>{new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(draft.updated_at))}</time></span><span className="mail-message-subject">{draft.subject || "(no subject)"}</span><span className="mail-message-preview">{draft.body_text.replace(/\\s+/g, " ").slice(0, 120) || "No message text yet."}</span></span>
+                      <span className="mail-avatar tone-slate">✎</span><span className="mail-message-copy"><span className="mail-message-row-top"><strong>{draft.to_address || "Draft recipient"}</strong><time>{new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(draft.updated_at))}</time></span><span className="mail-message-subject">{draft.subject || "(no subject)"}</span><span className="mail-message-preview">{draft.body_text.replace(/\s+/g, " ").slice(0, 120) || "No message text yet."}</span></span>
                     </button><div className={styles.rowActions}><button type="button" className="mail-toolbar-button" onClick={() => void deleteDraft(draft)} aria-label="Delete draft" title="Delete draft">⌫</button></div>
                   </article>
                 ))}
