@@ -1127,8 +1127,8 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
                 {activeView !== "Drafts" && activeView !== "Scheduled" && !visibleMessages.length && (
                   <div className="mail-empty-list">
                     <span>{activeView === "Inbox" ? "▤" : activeView === "Sent" ? "↗" : activeView === "Starred" ? "☆" : activeView === "Snoozed" ? "◴" : activeView === "Archive" ? "▱" : activeView === "Trash" ? "⌫" : "⊘"}</span>
-                    <strong>{query ? "No matching messages" : "No messages in " + activeView}</strong>
-                    <p>{query ? "Try another search term." : activeView === "Inbox" ? "New incoming messages will appear here." : activeView === "Sent" ? "Messages you send from this mailbox will appear here." : "Messages in this personal " + activeView.toLowerCase() + " view will appear here."}</p>
+                    <strong>{query ? "No matching messages" : activeView === "Snoozed" ? "Snooze workflow not enabled" : "No messages in " + activeView}</strong>
+                    <p>{query ? "Try another search term." : activeView === "Inbox" ? "New incoming messages will appear here." : activeView === "Sent" ? "Messages you send from this mailbox will appear here." : activeView === "Snoozed" ? "The Snoozed destination is reserved in the workspace navigation. Message snoozing and automatic return scheduling still need to be implemented." : "Messages in this personal " + activeView.toLowerCase() + " view will appear here."}</p>
                     {activeView === "Inbox" && !query && <button type="button" onClick={openCompose}>Compose a message</button>}
                   </div>
                 )}
