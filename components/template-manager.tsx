@@ -47,14 +47,14 @@ export default function TemplateManager({ organizationId }: { organizationId: st
   useEffect(() => {
     let active = true;
     const controller = new AbortController();
-    setLoading(true);
-    setLoadError("");
-
     void fetch(endpoint, { cache: "no-store", signal: controller.signal })
       .then(async (response) => {
         const payload = await response.json() as ApiPayload;
         if (!response.ok || !payload.ok) throw new Error(payload.error || "Templates could not be loaded.");
-        if (active) setTemplates(payload.templates ?? []);
+        if (active) {
+          setTemplates(payload.templates ?? []);
+          setLoadError("");
+        }
       })
       .catch((error: unknown) => {
         if (!active || (error instanceof Error && error.name === "AbortError")) return;
