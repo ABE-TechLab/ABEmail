@@ -411,13 +411,8 @@
   .content { padding: 22px 16px 32px; }
   .headingRow { align-items: flex-start; flex-direction: column; }
 }
-@media (max-width: 560px) {  .app :global(.mail-brand > span:last-child),
-  .app :global(.mail-compose-label),
-  .app :global(.mail-nav-label),
-  .app :global(.mail-nav-item > span:not(.mail-nav-icon)),
-  .app :global(.mail-workspace-copy),
-  .app :global(.workspace-sidebar-note),
-  .app :global(.mail-chevron),  .topbarActions { gap: 8px; }
+@media (max-width: 560px) {
+  .topbarActions { gap: 8px; }
   .topbarLink { font-size: 10px; }
   .headingControls { justify-content: flex-start; }
   .pendingStatus { font-size: 8px; }
@@ -433,7 +428,7 @@
   grid-template-columns: minmax(285px, 34%) minmax(0, 1fr);
 }
 
-/* Compact mailbox navigation slightly, independent of message-list density. */
+/* Compact message-list density without changing the global sidebar. */
 
 .compactList :global(.mail-list-heading) {
   min-height: 84px;
