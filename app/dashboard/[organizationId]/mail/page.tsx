@@ -7,16 +7,17 @@ export const metadata: Metadata = { title: "Workspace inbox | ABEmail" };
 export const dynamic = "force-dynamic";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const MAILBOX_VIEWS = ["Inbox", "Sent", "Starred", "Drafts", "Scheduled", "Archive", "Trash", "Spam"] as const;
+const MAILBOX_VIEWS = ["Inbox", "Sent", "Starred", "Drafts", "Scheduled", "Snoozed", "Archive", "Trash", "Spam"] as const;
 type ActiveMailboxView = (typeof MAILBOX_VIEWS)[number];
 type MailPageProps = {
   params: Promise<{ organizationId: string }>;
-  searchParams?: Promise<{ view?: string; composeTo?: string }>;
+  searchParams?: Promise<{ view?: string; composeTo?: string; compose?: string }>;
 };
 
 export default async function WorkspaceMailPage({ params, searchParams }: MailPageProps) {
   const { organizationId } = await params;
-  const { view, composeTo } = (await searchParams) ?? {};
+  const { view, composeTo, compose } = (await searchParams) ?? {};
+  const initialCompose = compose === "1";
   const initialRecipient = typeof composeTo === "string" && composeTo.length <= 254 && /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/.test(composeTo.trim()) ? composeTo.trim().toLowerCase() : undefined;
   const activeView: ActiveMailboxView = MAILBOX_VIEWS.includes(view as ActiveMailboxView) ? (view as ActiveMailboxView) : "Inbox";
   if (!UUID_PATTERN.test(organizationId)) notFound();
@@ -48,26 +49,6 @@ export default async function WorkspaceMailPage({ params, searchParams }: MailPa
     .maybeSingle();
 
   if (organizationError || !organization) notFound();
-  const { data: workspaceMembershipRows } = await supabase
-    .from("organization_memberships")
-    .select("organization_id, role")
-    .eq("user_id", user.id)
-    .eq("status", "active");
-  const workspaceMemberships = workspaceMembershipRows ?? [];
-  const workspaceIds = [...new Set([...workspaceMemberships.map((row) => row.organization_id), organization.id])];
-  const { data: workspaceRows } = await supabase
-    .from("organizations")
-    .select("id, name, slug, status")
-    .in("id", workspaceIds)
-    .eq("status", "active");
-  const workspaces = (workspaceRows ?? []).map((workspace) => ({
-    id: workspace.id,
-    name: workspace.name,
-    slug: workspace.slug,
-    role: workspaceMemberships.find((row) => row.organization_id === workspace.id)?.role
-      ?? (workspace.id === organization.id ? membership.role : "member"),
-  }));
-
   const { data: mailboxRows, error: mailboxError } = await supabase
     .from("mailboxes")
     .select("id, address, display_name")
@@ -182,8 +163,8 @@ export default async function WorkspaceMailPage({ params, searchParams }: MailPa
       messages={messages}
       messagesError={messagesError || Boolean(mailboxError)}
       activeView={activeView}
-      workspaces={workspaces}
       initialRecipient={initialRecipient}
+      initialCompose={initialCompose}
     />
   );
 }
