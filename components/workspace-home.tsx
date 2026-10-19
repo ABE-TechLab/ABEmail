@@ -58,8 +58,7 @@ export default function WorkspaceHome({
         mailboxBaseHref={workspaceBase ? workspaceBase + "/mail" : undefined}
         enabledMailboxViews={emailReady ? ["Inbox", "Sent"] : []}
         disabledMailFeatures={!emailReady}
-        disableContacts
-        workspaceName={selected?.name ?? "Your workspaces"}
+                workspaceName={selected?.name ?? "Your workspaces"}
         workspaceDescription={selected ? emailReady ? "Business email ready" : "Email setup required" : "Choose an organization"}
         homeHref={workspaceBase ?? "/dashboard"}
         workspaceBaseHref={workspaceBase}
