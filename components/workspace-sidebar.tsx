@@ -312,7 +312,9 @@ export default function WorkspaceSidebar({
                   <div className="mail-settings-subnav" aria-label="Settings sections">
                     {settingsSectionLinks.map((section) => {
                       const sectionHref = section.id === "general" ? scopedHref : scopedHref + "/" + section.id;
-                      const sectionActive = pathname === sectionHref || pathname.startsWith(sectionHref + "/");
+                      const sectionActive = section.id === "general"
+                        ? pathname === sectionHref
+                        : pathname === sectionHref || pathname.startsWith(sectionHref + "/");
                       return (
                         <Link
                           key={section.id}
