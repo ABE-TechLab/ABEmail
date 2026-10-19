@@ -2508,28 +2508,32 @@ html.dark .mail-appearance-toggle {
 }
 
 
-/* Keep a persistent desktop control available outside the collapsed rail. */
+/* On desktop, the collapsed rail's compose slot becomes its expand control. */
 @media (min-width: 851px) {
-  .mail-mobile-nav-toggle {
-    position: fixed;
-    z-index: 92;
-    top: 14px;
-    left: 14px;
+  .mail-mobile-nav-toggle { display: none; }
+  .mail-sidebar.is-collapsed .mail-sidebar-reopen-button {
     display: inline-grid;
-    width: 32px;
-    height: 32px;
     place-items: center;
+    width: 42px;
+    height: 42px;
+    min-height: 42px;
+    margin: 0 0 24px;
+    padding: 0;
     border: 1px solid var(--border, #dfe7dd);
-    border-radius: 8px;
+    border-radius: 10px;
     background: var(--card, #fff);
     color: var(--foreground, #354337);
-    box-shadow: 0 2px 8px rgba(20, 40, 24, .08);
+    font-size: 25px;
+    line-height: 1;
     cursor: pointer;
   }
-  .mail-app:not(:has(.mail-sidebar.is-collapsed)) .mail-mobile-nav-toggle {
-    left: 264px;
-    opacity: 0;
-    pointer-events: none;
+  .mail-sidebar.is-collapsed .mail-sidebar-reopen-button:hover {
+    border-color: var(--ring, #93c5a0);
+    background: var(--accent, #edf5ee);
+    color: var(--accent-foreground, #1d603b);
+  }
+  .mail-app.mailbox-live-app:has(.mail-sidebar.is-collapsed) .mail-mobile-compose-fab {
+    display: inline-flex;
   }
 }
 
