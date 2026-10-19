@@ -421,10 +421,10 @@ export default function LiveMailbox(props: LiveMailboxProps) {
       const response = await fetch("/api/mail/scheduled", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ organizationId, mailboxId, to: to.trim(), subject: subject.trim(), text: finalBody, scheduledAt: new Date(scheduledAt).toISOString() }) });
       const result = await response.json() as { ok?: boolean; error?: string; scheduled?: ScheduledEmail };
       if (!response.ok || !result.ok || !result.scheduled) { setNotice(result.error || "The message could not be scheduled."); return; }
-      const savedDraftId = draftIdRef.current;
       draftMutationVersion.current += 1;
       if (draftSaveTimer.current !== null) { window.clearTimeout(draftSaveTimer.current); draftSaveTimer.current = null; }
       await draftSaveQueue.current;
+      const savedDraftId = draftIdRef.current;
       if (savedDraftId) {
         const deleted = await fetch("/api/mail/drafts?organizationId=" + encodeURIComponent(organizationId) + "&mailboxId=" + encodeURIComponent(mailboxId) + "&id=" + encodeURIComponent(savedDraftId), { method: "DELETE" }).catch(() => null);
         if (!deleted?.ok) setNotice("Message scheduled, but its old draft could not be removed.");
