@@ -1,3 +1,7 @@
+alter table public.email_drafts drop constraint if exists email_drafts_to_address_check;
+alter table public.email_drafts add constraint email_drafts_to_address_check
+  check (char_length(to_address) <= 4000);
+
 -- Private, tenant-scoped email attachments for received and sent messages.
 -- File bytes live in a private Supabase Storage bucket; browser clients never receive the service key.
 insert into storage.buckets (id, name, public, file_size_limit)
