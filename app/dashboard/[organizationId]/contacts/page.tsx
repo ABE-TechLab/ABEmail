@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import ContactManager from "@/components/contact-manager";
-import type { WorkspaceChoice } from "@/components/workspace-sidebar";
 
 export const metadata: Metadata = { title: "Contacts | ABEmail" };
 export const dynamic = "force-dynamic";
@@ -45,35 +44,13 @@ export default async function WorkspaceContactsPage({ params }: ContactsPageProp
 
   if (organizationError || !organization) notFound();
 
-  const { data: workspaceMembershipRows } = await supabase
-    .from("organization_memberships")
-    .select("organization_id, role")
-    .eq("user_id", user.id)
-    .eq("status", "active")
-    .order("created_at", { ascending: true });
 
-  const memberships = workspaceMembershipRows ?? [];
-  const workspaceIds = [...new Set(memberships.map((row) => row.organization_id))];
-  const { data: workspaceRows } = workspaceIds.length
-    ? await supabase.from("organizations")
-      .select("id, name, slug, status")
-      .in("id", workspaceIds)
-      .eq("status", "active")
-    : { data: [] as { id: string; name: string; slug: string; status: string }[] };
-
-  const workspaces: WorkspaceChoice[] = (workspaceRows ?? []).map((workspace) => ({
-    id: workspace.id,
-    name: workspace.name,
-    slug: workspace.slug,
-    role: memberships.find((row) => row.organization_id === workspace.id)?.role ?? "member",
-  }));
 
   return (
     <ContactManager
       organizationId={organization.id}
       organizationName={organization.name}
       userEmail={user.email ?? ""}
-      workspaces={workspaces}
     />
   );
 }
