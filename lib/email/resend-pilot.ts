@@ -172,6 +172,8 @@ export async function fetchReceivedEmail(apiKey: string, emailId: string): Promi
   id?: string;
   from?: string;
   to?: string[];
+  cc?: string[];
+  replyTo?: string[];
   subject?: string;
   text?: string | null;
   html?: string | null;
@@ -220,6 +222,8 @@ export async function fetchReceivedEmail(apiKey: string, emailId: string): Promi
     id: typeof record.id === "string" ? record.id : emailId,
     from: typeof record.from === "string" ? record.from : undefined,
     to: Array.isArray(record.to) ? record.to.filter((item): item is string => typeof item === "string") : undefined,
+    cc: Array.isArray(record.cc) ? record.cc.filter((item): item is string => typeof item === "string") : undefined,
+    replyTo: Array.isArray(record.reply_to) ? record.reply_to.filter((item): item is string => typeof item === "string") : undefined,
     subject: typeof record.subject === "string" ? record.subject.slice(0, 998) : "",
     text: typeof record.text === "string" ? record.text.slice(0, 500000) : null,
     html: typeof record.html === "string" ? record.html.slice(0, 500000) : null,
