@@ -2508,6 +2508,16 @@ html.dark .mail-appearance-toggle {
 }
 
 
+/* In the compact drawer range, keep Compose available while navigation is closed. */
+@media (min-width: 621px) and (max-width: 850px) {
+  .mail-app.mailbox-live-app:not(:has(.mail-sidebar.mobile-open)) .mail-mobile-compose-fab {
+    display: inline-flex;
+  }
+}
+.mail-app.mailbox-live-app:has(.mail-sidebar.mobile-open) .mail-mobile-compose-fab {
+  display: none;
+}
+
 /* On desktop, the collapsed rail's compose slot becomes its expand control. */
 @media (min-width: 851px) {
   .mail-mobile-nav-toggle { display: none; }
