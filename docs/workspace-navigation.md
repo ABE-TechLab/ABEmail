@@ -37,7 +37,7 @@ The existing mailbox list, query-based active states, collapse behavior, mobile 
 5. Analytics — `/dashboard/:organizationId/analytics`
 6. Settings — `/dashboard/:organizationId/settings`
 
-Templates includes the roadmap for reusable canned responses, the Brand Profile, and the branded-email visual designer. Reminders includes one-time reminders and follow-up nudges. Labels and Analytics are reserved for their Phase 2 roadmap work. The destinations exist in the fixed map so future implementations add page functionality without reshaping the sidebar.
+Templates now hosts the persistent, user-owned plain-text template library/editor and the standard composer can insert a saved template. The Brand Profile and branded-email visual designer remain tracked separately in Issue #36. Reminders includes one-time reminders and follow-up nudges; Labels and Analytics are reserved for their Phase 2 roadmap work. These features extend the fixed destinations without reshaping the sidebar.
 
 ### Settings navigation (inside the Settings page)
 
