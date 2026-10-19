@@ -77,6 +77,8 @@ These subsection links are rendered within the Settings page layout, never insid
 
 ## Review checklist for future PRs
 
+Run `npm run check:navigation` locally when changing workspace navigation. CI runs the same guard to catch duplicate sidebar mounts, missing fixed destinations, page-level sidebar props, and page-scoped CSS overrides before merge.
+
 - [ ] The sidebar is rendered only by the organization layout.
 - [ ] All page destinations work under the selected organization and preserve membership checks.
 - [ ] Active mailbox state derives from the route/query, not page-specific props.
