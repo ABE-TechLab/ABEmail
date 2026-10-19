@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import WorkspaceSidebar, { type MailboxView, type WorkspaceChoice } from "@/components/workspace-sidebar";
 import AppearanceToggle from "@/components/appearance-toggle";
 import styles from "./live-mailbox.module.css";
 import type { Contact } from "@/lib/contacts/types";
@@ -40,7 +39,7 @@ function appendSignature(body: string, signature: string): string {
 }
 
 type Mailbox = { id: string; address: string; display_name: string | null; canManage: boolean };
-type ActiveMailboxView = "Inbox" | "Sent" | "Starred" | "Drafts" | "Scheduled" | "Archive" | "Trash" | "Spam";
+type ActiveMailboxView = "Inbox" | "Sent" | "Starred" | "Drafts" | "Scheduled" | "Snoozed" | "Archive" | "Trash" | "Spam";
 type LifecycleAction = "mark_read" | "mark_unread" | "star" | "unstar" | "archive" | "unarchive" | "trash" | "restore" | "spam" | "not_spam" | "permanent_delete";
 type EmailDraft = { id: string; to_address: string; subject: string; body_text: string; created_at: string; updated_at: string };
 type PendingAttachment = { id: string; filename: string; content_type: string; size_bytes: number };
@@ -75,8 +74,8 @@ type LiveMailboxProps = {
   messages: EmailMessage[];
   messagesError: boolean;
   activeView?: ActiveMailboxView;
-  workspaces: WorkspaceChoice[];
   initialRecipient?: string;
+  initialCompose?: boolean;
 };
 
 function plainText(message: EmailMessage): string {
@@ -126,7 +125,7 @@ function formatFileSize(bytes: number): string {
 }
 
 export default function LiveMailbox(props: LiveMailboxProps) {
-  const { organizationId, organizationName, userEmail, mailboxes, messages, messagesError, activeView = "Inbox", workspaces, initialRecipient } = props;
+  const { organizationId, organizationName, userEmail, mailboxes, messages, messagesError, activeView = "Inbox", initialRecipient, initialCompose = false } = props;
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [compactMessageList, setCompactMessageList] = useState(false);
@@ -136,6 +135,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   const composeBodyRef = useRef<HTMLTextAreaElement>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const composeCursorPosition = useRef<number | null>(null);
+  const initialRecipientHandledRef = useRef(false);
   const initialComposeHandledRef = useRef(false);
 
   useEffect(() => {
@@ -256,8 +256,8 @@ export default function LiveMailbox(props: LiveMailboxProps) {
 const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
 
   useEffect(() => {
-    if (!initialRecipient || initialComposeHandledRef.current) return;
-    initialComposeHandledRef.current = true;
+    if (!initialRecipient || initialRecipientHandledRef.current) return;
+    initialRecipientHandledRef.current = true;
     setTo(initialRecipient);
     setComposeOpen(true);
     setNotice("");
@@ -265,6 +265,15 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
     currentUrl.searchParams.delete("composeTo");
     router.replace(currentUrl.pathname + currentUrl.search, { scroll: false });
   }, [initialRecipient, router]);
+
+  useEffect(() => {
+    if (!initialCompose || initialComposeHandledRef.current) return;
+    initialComposeHandledRef.current = true;
+    setComposeOpen(true);
+    const currentUrl = new URL(window.location.href);
+    currentUrl.searchParams.delete("compose");
+    router.replace(currentUrl.pathname + currentUrl.search, { scroll: false });
+  }, [initialCompose, router]);
 
   useEffect(() => {
     if (!composeOpen || !recipientQuery) return;
@@ -348,7 +357,7 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
 
   const visibleMessages = useMemo(() => {
     const term = query.trim().toLowerCase();
-    if (activeView === "Scheduled" || activeView === "Drafts") return [];
+    if (activeView === "Scheduled" || activeView === "Drafts" || activeView === "Snoozed") return [];
     return messages.filter((message) => {
       if (message.mailbox_id !== mailboxId) return false;
       const inTrash = Boolean(message.trashed_at);
@@ -906,23 +915,9 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
   }
 
   return (
-    <div className={"mail-app mailbox-live-app " + workspaceStyles.app + (compactMessageList ? " " + workspaceStyles.compactList : "")}>
-      <WorkspaceSidebar
-        activeView={activeView}
-        mailboxBaseHref={"/dashboard/" + organizationId + "/mail"}
-        activeMailboxView={activeView as MailboxView}
-        enabledMailboxViews={["Inbox", "Sent", "Starred", "Drafts", "Scheduled", "Archive", "Trash", "Spam"]}
-        disabledMailFeatures={!mailboxes.length}
-        onCompose={openCompose}
-        homeHref={"/dashboard/" + organizationId + "/mail"}
-        workspaceBaseHref={"/dashboard/" + organizationId}
-        workspaceName={organizationName}
-        workspaceDescription="Business workspace"
-        workspaces={workspaces}
-        activeWorkspaceId={organizationId}
-      />
-      <button type="button" className="mail-mobile-compose-fab" onClick={openCompose} aria-label="Compose a new message" title="Compose a new message">+</button>
-      <main className="mail-main">
+    <>
+      <div className={"mailbox-live-page " + workspaceStyles.app + (compactMessageList ? " " + workspaceStyles.compactList : "")}>
+        <button type="button" className="mail-mobile-compose-fab" onClick={openCompose} aria-label="Compose a new message" title="Compose a new message">+</button>
         <header className={"mail-topbar " + workspaceStyles.topbar}>
           <div className="mail-breadcrumb">
             <span>Workspace</span><span className="mail-breadcrumb-slash">/</span><strong>{activeView}</strong>
@@ -1131,7 +1126,7 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
                 )}
                 {activeView !== "Drafts" && activeView !== "Scheduled" && !visibleMessages.length && (
                   <div className="mail-empty-list">
-                    <span>{activeView === "Inbox" ? "▤" : activeView === "Sent" ? "↗" : activeView === "Starred" ? "☆" : activeView === "Archive" ? "▱" : activeView === "Trash" ? "⌫" : "⊘"}</span>
+                    <span>{activeView === "Inbox" ? "▤" : activeView === "Sent" ? "↗" : activeView === "Starred" ? "☆" : activeView === "Snoozed" ? "◴" : activeView === "Archive" ? "▱" : activeView === "Trash" ? "⌫" : "⊘"}</span>
                     <strong>{query ? "No matching messages" : "No messages in " + activeView}</strong>
                     <p>{query ? "Try another search term." : activeView === "Inbox" ? "New incoming messages will appear here." : activeView === "Sent" ? "Messages you send from this mailbox will appear here." : "Messages in this personal " + activeView.toLowerCase() + " view will appear here."}</p>
                     {activeView === "Inbox" && !query && <button type="button" onClick={openCompose}>Compose a message</button>}
@@ -1329,7 +1324,7 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
             </section>
           </div>
         )}
-      </main>
-    </div>
+      </div>
+    </>
   );
 }
