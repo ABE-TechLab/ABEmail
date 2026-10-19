@@ -557,9 +557,6 @@
   height: 29px;
   border-radius: 8px;
 }
-.app:not(.compactList) :global(.messageSelect) {
-  margin-left: 9px;
-}
 
 /* Compact is deliberately denser, but still keeps the full three-line message summary. */
 .compactList :global(.mail-message-row) {
@@ -591,15 +588,5 @@
   height: 22px;
   border-radius: 6px;
   font-size: 8px;
-}
-.compactList :global(.messageSelect) {
-  width: 12px;
-  height: 12px;
-  margin-left: 7px;
-}
-.compactList :global(.messageStatus) {
-  margin-right: 6px;
-  padding: 3px 5px;
-  font-size: 7px;
 }
 
