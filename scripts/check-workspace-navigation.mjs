@@ -40,6 +40,7 @@ const settings = read("components/workspace-settings-panel.tsx");
 const settingsRoute = read("app/dashboard/[organizationId]/settings/[[...section]]/page.tsx");
 const contactManager = read("components/contact-manager.tsx");
 const inboxStyles = read("components/workspace-home.module.css");
+const globalStyles = read("app/globals.css");
 const navigationContract = read("docs/workspace-navigation.md");
 
 const sidebarSourceFiles = walk("app").concat(walk("components")).filter((relativePath) => {
@@ -82,6 +83,14 @@ for (const [relativePath, source] of [
 }
 assert(!/\.app\s+:global\(\.mail-(?:sidebar|nav(?:-section|-item|-icon|-label)?|brand|compose-button|workspace-copy|workspace-switcher)/.test(inboxStyles),
   "Inbox CSS must not override the universal sidebar's styles.");
+assert(globalStyles.includes("/* Workspace sidebar visual contract: preserve the Inbox baseline on every workspace route. */"),
+  "The shared stylesheet must own the locked Inbox sidebar baseline.");
+assert(globalStyles.includes(".mail-app.workspace-app-shell .mail-nav {") &&
+  globalStyles.includes(".mail-app.workspace-app-shell .mail-nav-item {") &&
+  globalStyles.includes(".mail-app.workspace-app-shell .mail-nav-icon {"),
+  "Sidebar spacing, item size, and icon sizing must be defined centrally for the universal workspace shell.");
+assert(/@media \(max-width: 560px\)[\s\S]*?\.mail-app\.workspace-app-shell \.mail-sidebar\s*\{[^}]*width:\s*68px;/.test(globalStyles),
+  "The universal sidebar must preserve the Inbox mobile-width baseline.");
 
 for (const section of ["templates", "reminders", "labels", "analytics"]) {
   assert(featureRoute.includes(section + ":"), "The locked workspace destination /" + section + " needs a canonical content route.");
