@@ -14,9 +14,10 @@ type MailPreferences = { timezone: string; language: string; font: string; signa
 const DEFAULT_MAIL_PREFERENCES: MailPreferences = { timezone: "Africa/Lagos", language: "en", font: "sans", signature: "", replyStyle: "reply", compactMessageList: false };
 
 type Mailbox = { id: string; address: string; display_name: string | null; canManage: boolean };
-type ActiveMailboxView = "Inbox" | "Sent" | "Starred" | "Drafts" | "Archive" | "Trash" | "Spam";
+type ActiveMailboxView = "Inbox" | "Sent" | "Starred" | "Drafts" | "Scheduled" | "Archive" | "Trash" | "Spam";
 type LifecycleAction = "mark_read" | "mark_unread" | "star" | "unstar" | "archive" | "unarchive" | "trash" | "restore" | "spam" | "not_spam" | "permanent_delete";
 type EmailDraft = { id: string; to_address: string; subject: string; body_text: string; created_at: string; updated_at: string };
+type ScheduledEmail = { id: string; to_address: string; subject: string; body_text: string; scheduled_at: string; status: "scheduled" | "processing" | "accepted" | "failed" | "cancelled"; attempt_count: number; last_error_code: string | null; created_at: string; updated_at: string };
 type EmailMessage = {
   id: string;
   mailbox_id: string;
@@ -73,6 +74,13 @@ function messageDate(message: EmailMessage, timezone = "Africa/Lagos", language 
 function initials(value: string): string {
   const localPart = value.split("@")[0].replace(/[._+-]+/g, " ").trim();
   return localPart.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "M";
+}
+
+function localDateTimeInput(value: string): string {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "";
+  date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
+  return date.toISOString().slice(0, 16);
 }
 
 function messagePreview(message: EmailMessage): string {
@@ -180,6 +188,11 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   const [notice, setNotice] = useState("");
   const [requestKey, setRequestKey] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<EmailDraft[]>([]);
+  const [scheduledMessages, setScheduledMessages] = useState<ScheduledEmail[]>([]);
+  const [scheduleMode, setScheduleMode] = useState(false);
+  const [scheduledAt, setScheduledAt] = useState("");
+  const [scheduledBusyId, setScheduledBusyId] = useState("");
+  const [scheduledTimeEdits, setScheduledTimeEdits] = useState<Record<string, string>>({});
   const [draftId, setDraftId] = useState<string | null>(null);
   const [draftSaving, setDraftSaving] = useState(false);
   const draftSaveQueue = useRef<Promise<void>>(Promise.resolve());
@@ -219,10 +232,20 @@ export default function LiveMailbox(props: LiveMailboxProps) {
     return () => { active = false; };
   }, [activeView, mailboxId, organizationId]);
 
-
+  useEffect(() => {
+    if (activeView !== "Scheduled" || !mailboxId) return;
+    let active = true;
+    const load = () => void fetch("/api/mail/scheduled?organizationId=" + encodeURIComponent(organizationId) + "&mailboxId=" + encodeURIComponent(mailboxId), { cache: "no-store" })
+      .then(async (response) => { const result = await response.json() as { scheduled?: ScheduledEmail[]; error?: string }; if (!response.ok) throw new Error(result.error || "Scheduled messages could not be loaded."); if (active) setScheduledMessages(result.scheduled ?? []); })
+      .catch((error: unknown) => { if (active) setNotice(error instanceof Error ? error.message : "Scheduled messages could not be loaded."); });
+    load();
+    const timer = window.setInterval(load, 60_000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [activeView, mailboxId, organizationId]);
 
   const visibleMessages = useMemo(() => {
     const term = query.trim().toLowerCase();
+    if (activeView === "Scheduled" || activeView === "Drafts") return [];
     return messages.filter((message) => {
       if (message.mailbox_id !== mailboxId) return false;
       const inTrash = Boolean(message.trashed_at);
@@ -381,6 +404,8 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   }
 
   function openCompose() {
+    setScheduleMode(false);
+    setScheduledAt("");
     draftIdRef.current = null;
     draftUpdatedAtRef.current = null;
     setDraftId(null);
@@ -393,9 +418,85 @@ export default function LiveMailbox(props: LiveMailboxProps) {
     composeCursorPosition.current = 0;
   }
 
+  async function scheduleMessage() {
+    if (busy || !mailboxId) return;
+    if (!to.trim() || !subject.trim() || !body.trim()) { setNotice("Enter a recipient, subject, and message before scheduling."); return; }
+    if (!scheduledAt || !Number.isFinite(Date.parse(scheduledAt))) { setNotice("Choose a date and time for delivery."); return; }
+    setBusy(true); setNotice("");
+    try {
+      const signature = mailPreferences.signature.trim();
+      const finalBody = body.trimEnd() + (signature && !body.trimEnd().endsWith(signature) ? "\n\n" + signature : "");
+      const response = await fetch("/api/mail/scheduled", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ organizationId, mailboxId, to: to.trim(), subject: subject.trim(), text: finalBody, scheduledAt: new Date(scheduledAt).toISOString() }) });
+      const result = await response.json() as { ok?: boolean; error?: string; scheduled?: ScheduledEmail };
+      if (!response.ok || !result.ok || !result.scheduled) { setNotice(result.error || "The message could not be scheduled."); return; }
+      draftMutationVersion.current += 1;
+      if (draftSaveTimer.current !== null) { window.clearTimeout(draftSaveTimer.current); draftSaveTimer.current = null; }
+      await draftSaveQueue.current;
+      const savedDraftId = draftIdRef.current;
+      if (savedDraftId) {
+        const deleted = await fetch("/api/mail/drafts?organizationId=" + encodeURIComponent(organizationId) + "&mailboxId=" + encodeURIComponent(mailboxId) + "&id=" + encodeURIComponent(savedDraftId), { method: "DELETE" }).catch(() => null);
+        if (!deleted?.ok) setNotice("Message scheduled, but its old draft could not be removed.");
+      }
+      setScheduledMessages((current) => [result.scheduled!, ...current.filter((item) => item.id !== result.scheduled!.id)]);
+      resetComposerAfterClose(); setScheduleMode(false); setScheduledAt(""); setDraftSaving(false);
+      setNotice("Email scheduled for " + new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: mailPreferences.timezone || undefined }).format(new Date(result.scheduled.scheduled_at)) + ".");
+      router.refresh();
+    } catch { setNotice("The connection was interrupted. Check Scheduled before trying again."); }
+    finally { setBusy(false); }
+  }
+
+  async function sendScheduledNow(item: ScheduledEmail) {
+    if (scheduledBusyId) return;
+    setScheduledBusyId(item.id); setNotice("");
+    let claimed = false;
+    try {
+      const claim = await fetch("/api/mail/scheduled", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ organizationId, mailboxId, id: item.id, action: "claim_send_now" }) });
+      const claimResult = await claim.json() as { ok?: boolean; error?: string; scheduled?: ScheduledEmail };
+      if (!claim.ok || !claimResult.ok || !claimResult.scheduled) { setNotice(claimResult.error || "This scheduled email could not be claimed."); return; }
+      claimed = true;
+      const response = await fetch("/api/mail/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Idempotency-Key": "scheduled-" + item.id },
+        body: JSON.stringify({ organizationId, mailboxId, to: item.to_address, subject: item.subject, text: item.body_text }),
+      });
+      const result = await response.json() as { ok?: boolean; error?: string; messageId?: string };
+      if (!response.ok || !result.ok || !result.messageId) {
+        await fetch("/api/mail/scheduled", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ organizationId, mailboxId, id: item.id, action: "release_send_now" }) }).catch(() => null);
+        claimed = false;
+        setNotice(result.error || "The email could not be sent now. It remains scheduled for its original time.");
+        return;
+      }
+      const completed = await fetch("/api/mail/scheduled", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ organizationId, mailboxId, id: item.id, action: "complete_send_now", messageId: result.messageId }) });
+      if (!completed.ok) { setNotice("The email was accepted by the provider. Refresh Scheduled to confirm its final status."); router.refresh(); return; }
+      setScheduledMessages((current) => current.filter((message) => message.id !== item.id));
+      setNotice("Email accepted by the provider and removed from Scheduled.");
+      router.refresh();
+    } catch {
+      if (claimed) await fetch("/api/mail/scheduled", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ organizationId, mailboxId, id: item.id, action: "release_send_now" }) }).catch(() => null);
+      setNotice("The connection was interrupted. Refresh Scheduled before retrying.");
+    } finally { setScheduledBusyId(""); }
+  }
+
+  async function updateScheduled(item: ScheduledEmail, action: "cancel" | "reschedule" | "delete", nextTime?: string) {
+    if (scheduledBusyId) return;
+    setScheduledBusyId(item.id); setNotice("");
+    try {
+      const response = action === "delete"
+        ? await fetch("/api/mail/scheduled?organizationId=" + encodeURIComponent(organizationId) + "&mailboxId=" + encodeURIComponent(mailboxId) + "&id=" + encodeURIComponent(item.id), { method: "DELETE" })
+        : await fetch("/api/mail/scheduled", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ organizationId, mailboxId, id: item.id, action, ...(nextTime ? { scheduledAt: new Date(nextTime).toISOString() } : {}) }) });
+      const result = await response.json() as { ok?: boolean; error?: string; scheduled?: { id: string; scheduled_at: string; status: string } };
+      if (!response.ok || !result.ok) { setNotice(result.error || "Scheduled message could not be updated."); return; }
+      if (action === "cancel" || action === "delete") setScheduledMessages((current) => current.filter((message) => message.id !== item.id));
+      else if (result.scheduled) setScheduledMessages((current) => current.map((message) => message.id === item.id ? { ...message, scheduled_at: result.scheduled!.scheduled_at, status: "scheduled", last_error_code: null } : message));
+      setNotice(action === "cancel" ? "Scheduled email cancelled." : action === "delete" ? "Failed scheduled email deleted." : "Scheduled email updated.");
+    } catch { setNotice("The connection was interrupted. Refresh Scheduled to confirm the change."); }
+    finally { setScheduledBusyId(""); }
+  }
+
   async function submitMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy) return;
+    if (scheduleMode) { await scheduleMessage(); return; }
     setBusy(true);
     setNotice("");
     const stableRequestKey = requestKey ?? crypto.randomUUID();
@@ -491,7 +592,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
         activeView={activeView}
         mailboxBaseHref={"/dashboard/" + organizationId + "/mail"}
         activeMailboxView={activeView as MailboxView}
-        enabledMailboxViews={["Inbox", "Sent", "Starred", "Drafts", "Archive", "Trash", "Spam"]}
+        enabledMailboxViews={["Inbox", "Sent", "Starred", "Drafts", "Scheduled", "Archive", "Trash", "Spam"]}
         disabledMailFeatures={!mailboxes.length}
         disableContacts
         onCompose={openCompose}
@@ -634,6 +735,20 @@ export default function LiveMailbox(props: LiveMailboxProps) {
             <p className={styles.firstEmailFootnote}>A sent status confirms Resend accepted a message; delivery events update its status separately. Check the recipient inbox and send a reply to verify both directions.</p>
                   </section>
                 )}
+                {activeView === "Scheduled" && scheduledMessages.filter((item) => !query || [item.to_address, item.subject, item.body_text, item.status].join(" ").toLowerCase().includes(query.toLowerCase())).map((item) => (
+                  <article className="mail-message-row" key={item.id}>
+                    <span className="mail-avatar tone-slate">◷</span>
+                    <div className="mail-message-copy">
+                      <span className="mail-message-row-top"><strong>{item.to_address}</strong><time>{new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: mailPreferences.timezone || undefined }).format(new Date(item.scheduled_at))}</time></span>
+                      <span className="mail-message-subject">{item.subject}</span>
+                      <span className="mail-message-preview">{item.status === "failed" ? "Delivery failed: " + (item.last_error_code || "unknown error") : item.status === "processing" ? "Sending now…" : item.body_text.replace(/\s+/g, " ").slice(0, 120)}</span>
+                      <div className={styles.rowActions}>
+                        {item.status === "scheduled" && <button type="button" className="mail-toolbar-button" disabled={Boolean(scheduledBusyId)} onClick={() => void sendScheduledNow(item)}>Send now</button>}{item.status === "scheduled" && <><input aria-label={"New send time for " + item.subject} type="datetime-local" value={scheduledTimeEdits[item.id] ?? localDateTimeInput(item.scheduled_at)} onChange={(event) => setScheduledTimeEdits((current) => ({ ...current, [item.id]: event.target.value }))} disabled={Boolean(scheduledBusyId)} /><button type="button" className="mail-toolbar-button" disabled={Boolean(scheduledBusyId) || !(scheduledTimeEdits[item.id] ?? localDateTimeInput(item.scheduled_at))} onClick={() => void updateScheduled(item, "reschedule", scheduledTimeEdits[item.id] ?? localDateTimeInput(item.scheduled_at))} title="Reschedule">Reschedule</button></>}
+                        {item.status === "scheduled" && <button type="button" className="mail-toolbar-button" disabled={Boolean(scheduledBusyId)} onClick={() => void updateScheduled(item, "cancel")} title="Cancel scheduled email">Cancel</button>}{item.status === "failed" && <button type="button" className="mail-toolbar-button" disabled={Boolean(scheduledBusyId)} onClick={() => void updateScheduled(item, "delete")} title="Delete failed scheduled email">Delete</button>}
+                      </div>
+                    </div>
+                  </article>
+                ))}
                 {activeView === "Drafts" && drafts.map((draft) => (
                   <article className="mail-message-row" key={draft.id}>
                     <button className="mail-message-open" type="button" onClick={() => openDraft(draft)} aria-label={"Edit draft " + (draft.subject || "no subject")}>
@@ -693,7 +808,10 @@ export default function LiveMailbox(props: LiveMailboxProps) {
                 {activeView === "Drafts" && !drafts.length && (
                   <div className="mail-empty-list"><span>▧</span><strong>No drafts yet</strong><p>Unfinished messages are saved here automatically while you compose.</p><button type="button" onClick={openCompose}>Compose a draft</button></div>
                 )}
-                {activeView !== "Drafts" && !visibleMessages.length && (
+                {activeView === "Scheduled" && !scheduledMessages.length && (
+                  <div className="mail-empty-list"><span>◷</span><strong>No scheduled emails</strong><p>Emails you schedule for later will appear here.</p><button type="button" onClick={openCompose}>Compose and schedule</button></div>
+                )}
+                {activeView !== "Drafts" && activeView !== "Scheduled" && !visibleMessages.length && (
                   <div className="mail-empty-list">
                     <span>{activeView === "Inbox" ? "▤" : activeView === "Sent" ? "↗" : activeView === "Starred" ? "☆" : activeView === "Archive" ? "▱" : activeView === "Trash" ? "⌫" : "⊘"}</span>
                     <strong>{query ? "No matching messages" : "No messages in " + activeView}</strong>
@@ -773,8 +891,9 @@ export default function LiveMailbox(props: LiveMailboxProps) {
                   <textarea ref={composeBodyRef} required maxLength={80000} rows={8} disabled={busy} value={body} style={{ fontFamily: mailPreferences.font === "serif" ? "Georgia, serif" : mailPreferences.font === "mono" ? "ui-monospace, SFMono-Regular, Consolas, monospace" : "inherit" }} onChange={(event) => { setBody(event.target.value); setRequestKey(null); composeCursorPosition.current = null; }} placeholder="Write your message…" />
                 </label>
                 <p className="mail-compose-warning"><span>i</span> Plain-text email · One recipient · Workspace sending limits apply · {draftSaving ? "Saving draft…" : draftId ? "Draft saved" : "Changes save automatically"}</p>
+                {scheduleMode && <label className="mail-compose-field"><span>Send at</span><input type="datetime-local" required value={scheduledAt} onChange={(event) => setScheduledAt(event.target.value)} disabled={busy} /></label>}
                 <footer className="mail-compose-footer">
-                  <button type="submit" className="mail-primary-action" disabled={busy || !mailboxId}>{busy ? "Sending…" : "Send"} <span>↗</span></button>
+                  {scheduleMode ? <button type="button" className="mail-primary-action" disabled={busy || !mailboxId || !scheduledAt} onClick={() => void scheduleMessage()}>{busy ? "Scheduling…" : "Schedule email"} <span>◷</span></button> : <><button type="submit" className="mail-primary-action" disabled={busy || !mailboxId}>{busy ? "Sending…" : "Send"} <span>↗</span></button><button type="button" className="mail-compose-discard" disabled={busy} onClick={() => { setScheduleMode(true); const date = new Date(Date.now() + 60 * 60 * 1000); date.setMinutes(date.getMinutes() - date.getTimezoneOffset()); setScheduledAt(date.toISOString().slice(0, 16)); }}>Schedule</button></>}
                   <button type="button" className="mail-compose-discard" onClick={() => void closeComposer()} disabled={busy}>Close</button>
                 </footer>
               </form>

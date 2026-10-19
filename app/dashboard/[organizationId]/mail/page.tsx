@@ -7,7 +7,7 @@ export const metadata: Metadata = { title: "Workspace inbox | ABEmail" };
 export const dynamic = "force-dynamic";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const MAILBOX_VIEWS = ["Inbox", "Sent", "Starred", "Drafts", "Archive", "Trash", "Spam"] as const;
+const MAILBOX_VIEWS = ["Inbox", "Sent", "Starred", "Drafts", "Scheduled", "Archive", "Trash", "Spam"] as const;
 type ActiveMailboxView = (typeof MAILBOX_VIEWS)[number];
 type MailPageProps = {
   params: Promise<{ organizationId: string }>;
