@@ -50,9 +50,12 @@ export async function POST(request: NextRequest) {
     typeof payload !== "object" || payload === null ||
     !("organizationId" in payload) || typeof payload.organizationId !== "string" || !UUID_PATTERN.test(payload.organizationId) ||
     !("mailboxId" in payload) || typeof payload.mailboxId !== "string" || !UUID_PATTERN.test(payload.mailboxId) ||
-    !("to" in payload) || typeof payload.to !== "string" || !EMAIL_PATTERN.test(payload.to.trim()) || payload.to.length > 320 ||
+    !("to" in payload) || typeof payload.to !== "string" || payload.to.trim().length < 1 || payload.to.length > 4000 ||
     !("subject" in payload) || typeof payload.subject !== "string" || payload.subject.trim().length < 1 || payload.subject.length > 998 ||
-    !("text" in payload) || typeof payload.text !== "string" || payload.text.trim().length < 1 || payload.text.length > 80000
+    !("text" in payload) || typeof payload.text !== "string" || payload.text.trim().length < 1 || payload.text.length > 80000 ||
+    ("attachments" in payload && (!Array.isArray(payload.attachments) || payload.attachments.length > 5 ||
+      payload.attachments.some((id) => typeof id !== "string" || !UUID_PATTERN.test(id)) ||
+      new Set(payload.attachments).size !== payload.attachments.length))
   ) {
     return json({ error: "Enter one valid recipient, a subject, and a plain-text message under 80 KB." }, 400);
   }
@@ -64,11 +67,15 @@ export async function POST(request: NextRequest) {
 
   const organizationId = payload.organizationId;
   const mailboxId = payload.mailboxId;
-  const to = payload.to.trim().toLowerCase();
   const subject = payload.subject.trim();
   const text = payload.text;
+  const recipients = Array.from(new Set(payload.to.split(/[;,]/).map((value) => value.trim().toLowerCase()).filter(Boolean)));
+  const attachmentIds = "attachments" in payload && Array.isArray(payload.attachments) ? payload.attachments as string[] : [];
+  if (recipients.length < 1 || recipients.length > 10 || recipients.some((address) => !EMAIL_PATTERN.test(address))) {
+    return json({ error: "Enter between one and ten valid email recipients, separated by commas." }, 400);
+  }
   const fingerprint = createHash("sha256")
-    .update(JSON.stringify({ organizationId, mailboxId, to, subject, text }), "utf8")
+    .update(JSON.stringify({ organizationId, mailboxId, recipients, subject, text, attachmentIds }), "utf8")
     .digest("hex");
 
   const admin = createAdminClient();
@@ -192,7 +199,7 @@ export async function POST(request: NextRequest) {
         provider: "resend",
         direction: "outbound",
         from_address: mailbox.address,
-        to_addresses: [to],
+        to_addresses: recipients,
         subject,
         body_text: text,
         status: "processing",
@@ -211,21 +218,69 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    // Attachment IDs can refer to this in-flight message on an idempotent retry,
+    // or to unexpired uploads created by this user for this mailbox.
+    let attachmentRows: Array<{ id: string; filename: string; content_type: string; size_bytes: number; storage_path: string; user_id: string | null; message_id: string | null; expires_at: string | null }> = [];
+    if (attachmentIds.length) {
+      const { data: rows, error: attachmentError } = await admin.from("email_message_attachments")
+        .select("id, filename, content_type, size_bytes, storage_path, user_id, message_id, expires_at")
+        .in("id", attachmentIds).eq("organization_id", organizationId).eq("mailbox_id", mailboxId);
+      if (attachmentError || !rows || rows.length !== attachmentIds.length) {
+        return json({ error: "One or more attachments are unavailable. Remove and upload them again." }, 400);
+      }
+      const byId = new Map(rows.map((row) => [row.id, row]));
+      attachmentRows = attachmentIds.map((id) => byId.get(id)!).filter(Boolean);
+      if (attachmentRows.length !== attachmentIds.length || attachmentRows.some((row) =>
+        (row.message_id !== null && row.message_id !== savedMessageId) ||
+        (row.message_id === null && (row.user_id !== user.id || !row.expires_at || Date.parse(row.expires_at) <= Date.now()))
+      )) {
+        return json({ error: "An attachment expired or belongs to a different message." }, 409);
+      }
+      const attachmentBytes = attachmentRows.reduce((sum, row) => sum + Number(row.size_bytes), 0);
+      if (attachmentBytes > 20 * 1024 * 1024 || attachmentRows.some((row) => row.size_bytes > 4 * 1024 * 1024)) {
+        return json({ error: "Attachments exceed the allowed message size." }, 413);
+      }
+      const pendingIds = attachmentRows.filter((row) => row.message_id === null).map((row) => row.id);
+      if (pendingIds.length) {
+        const { data: linked, error: linkError } = await admin.from("email_message_attachments")
+          .update({ message_id: savedMessageId, expires_at: null })
+          .in("id", pendingIds).eq("organization_id", organizationId).eq("mailbox_id", mailboxId)
+          .eq("user_id", user.id).is("message_id", null)
+          .select("id");
+        if (linkError || (linked?.length ?? 0) !== pendingIds.length) {
+          return json({ error: "Attachments could not be linked safely to this message." }, 503);
+        }
+        attachmentRows = attachmentRows.map((row) => pendingIds.includes(row.id) ? { ...row, message_id: savedMessageId, expires_at: null } : row);
+      }
+    }
+    const providerAttachments: Array<{ filename: string; contentType: string; content: string }> = [];
+    for (const attachment of attachmentRows) {
+      const { data: file, error: fileError } = await admin.storage.from("mail-attachments").download(attachment.storage_path);
+      if (fileError || !file) return json({ error: "An attachment could not be read from secure storage. Retry the same message." }, 503);
+      const content = Buffer.from(await file.arrayBuffer());
+      if (content.length !== attachment.size_bytes || content.length > 4 * 1024 * 1024) {
+        return json({ error: "An attachment failed its size check. Remove and upload it again." }, 409);
+      }
+      providerAttachments.push({ filename: attachment.filename, contentType: attachment.content_type, content: content.toString("base64") });
+    }
+
     const sent = usesWorkspaceKey
       ? await sendResendEmail({
           apiKey: sendApiKey,
           from: (mailbox.display_name || organization.slug) + " <" + mailbox.address + ">",
-          to,
+          to: recipients,
           subject,
           text,
+          attachments: providerAttachments,
           idempotencyKey: organizationId + "/" + idempotencyKey,
         })
       : mailbox.address === OTTAWA_PILOT_ADDRESS
         ? await sendPilotEmail({
             apiKey: sendApiKey,
-            to,
+            to: recipients,
             subject,
             text,
+            attachments: providerAttachments,
             idempotencyKey: organizationId + "/" + idempotencyKey,
           })
         : (() => { throw new ResendProviderError("RESEND_WORKSPACE_KEY_REQUIRED"); })();
