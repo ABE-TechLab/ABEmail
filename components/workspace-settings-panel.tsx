@@ -122,6 +122,10 @@ const SECTION_INFO: Record<string, { title: string; description: string }> = {
   domains: { title: "Domains", description: "Connect a custom domain, add its DNS records, and verify it with Resend." },
   mailboxes: { title: "Mailboxes", description: "Create real addresses on verified domains in this workspace." },
   security: { title: "Security", description: "Review your current access and account-session controls." },
+  rules: { title: "Rules & filters", description: "Define deterministic actions for incoming messages." },
+  "out-of-office": { title: "Out-of-office", description: "Configure automatic replies while you are away." },
+  branding: { title: "Brand profile", description: "Set up the organization identity shared by branded email templates." },
+  integrations: { title: "Integrations", description: "Manage external services connected to this workspace." },
 };
 
 const SETTINGS_NAV_GROUPS = [
@@ -140,7 +144,21 @@ const SETTINGS_NAV_GROUPS = [
     items: [
       { id: "mail", label: "Mail & compose", icon: "✉" },
       { id: "domains", label: "Domains", icon: "◎" },
-      { id: "mailboxes", label: "Mailboxes", icon: "▤" },
+      { id: "mailboxes", label: "Mailboxes & aliases", icon: "▤" },
+    ],
+  },
+  {
+    heading: "AUTOMATION",
+    items: [
+      { id: "rules", label: "Rules & filters", icon: "⇄" },
+      { id: "out-of-office", label: "Out-of-office", icon: "◷" },
+    ],
+  },
+  {
+    heading: "BRAND & CONNECTIONS",
+    items: [
+      { id: "branding", label: "Brand profile", icon: "✧" },
+      { id: "integrations", label: "Integrations", icon: "⛭" },
     ],
   },
 ] as const;
@@ -1014,6 +1032,29 @@ export default function WorkspaceSettingsPanel({
                 {!mailboxesLoading && mailboxRows.length === 0 && <div className="settings-empty-state"><strong>No mailboxes yet</strong><p>Your active email addresses will appear here. Use the form above to create the first address.</p></div>}
                 {mailboxRows.length > 0 && <div className="settings-table-wrap mailbox-table-wrap"><table className="settings-table mailbox-settings-table"><thead><tr><th>Address</th><th>Display name</th><th>Status</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>{mailboxRows.map((mailbox) => <tr key={mailbox.id} className={editingMailboxId === mailbox.id ? "mailbox-row-editing" : undefined}><td><strong>{mailbox.address}</strong><small>Created {new Date(mailbox.created_at).toLocaleDateString()}</small></td><td>{mailbox.display_name || <span className="settings-table-empty">Not set</span>}</td><td><span className={mailbox.status === "active" ? "settings-status active" : "settings-status pending"}><span />{statusLabel(mailbox.status)}</span></td><td><button className="mail-secondary-action mailbox-edit-action" type="button" onClick={() => startEditMailbox(mailbox)} disabled={!canManageWorkspace || mailboxBusy || mailbox.status !== "active"}>{editingMailboxId === mailbox.id ? "Editing…" : "Edit"}</button></td></tr>)}</tbody></table></div>}
                 <div className="settings-info-banner"><span>i</span><p>Incoming email is delivered into ABEmail through the workspace&apos;s signed Resend webhook. If you change an address or domain, the previous address will no longer be assigned to this mailbox.</p></div>
+              </div>}
+
+              {section === "rules" && <div>
+                <div className="settings-section-summary"><div><strong>Incoming rules</strong><p>Rules will run after incoming message ownership and authorization checks.</p></div></div>
+                <div className="settings-empty-state"><strong>No rules configured</strong><p>Rule creation, ordering, labels, and deterministic message actions are part of the Phase 2 automation work. No rule is being applied to incoming mail from this screen.</p></div>
+              </div>}
+
+              {section === "out-of-office" && <div>
+                <div className="settings-section-summary"><div><strong>Automatic replies</strong><p>Set a date range and message for periods when you are away.</p></div></div>
+                <div className="settings-empty-state"><strong>Automatic replies are not active</strong><p>Start/end scheduling, repeated-reply protection, and loop prevention must be implemented before this setting can send responses. Nothing is automatically replied to from this screen.</p></div>
+              </div>}
+
+              {section === "branding" && <div>
+                <div className="settings-section-summary"><div><strong>Organization brand profile</strong><p>Shared branding will be reused across saved and designed email templates.</p></div></div>
+                <div className="settings-empty-state"><strong>Brand profile</strong><p>Company logo, primary/secondary colors, contact details, website, social links, and default footer will be managed with the Templates and Visual Email Designer work.</p><Link href={base + "/templates"} className="mail-secondary-action">Open Templates</Link></div>
+              </div>}
+
+              {section === "integrations" && <div>
+                <div className="settings-section-summary"><div><strong>Connected services</strong><p>Provider setup and future calendar/CRM integrations for this workspace.</p></div></div>
+                <div className="settings-domain-list">
+                  <article className="settings-domain-record"><div className="settings-domain-row"><span className="settings-domain-icon">✉</span><span className="settings-domain-name"><strong>Resend</strong><small>Current email delivery provider</small></span><Link href={settingsBase + "/mail"} className="mail-secondary-action">Mail & compose</Link></div></article>
+                  <div className="settings-info-banner"><span>i</span><p>Calendar, CRM, and cloud-storage connectors require their own secure OAuth/token flows and are tracked in the integrations roadmap. No external account is connected from this page.</p></div>
+                </div>
               </div>}
 
               {section === "security" && <div>
