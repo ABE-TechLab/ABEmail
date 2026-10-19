@@ -76,6 +76,10 @@ on conflict (id) do nothing;
 
 -- Owner performs bulk lifecycle actions. Provider status remains unchanged.
 set local role authenticated;
+select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000101', true);
+select set_config('request.jwt.claim.role', 'authenticated', true);
+select set_config('request.jwt.claims', '{"sub":"10000000-0000-4000-8000-000000000101","role":"authenticated","email":"alice@lifecycle-a.invalid"}', true);
+
 -- Scheduled mail remains private to its creator and requires service-side writes.
 select is(
   (select count(*)::integer from public.scheduled_email_messages),
@@ -88,10 +92,6 @@ select ok(
   and not has_table_privilege('authenticated', 'public.scheduled_email_messages', 'delete'),
   'browser role cannot write scheduled email rows directly'
 );
-
-select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000101', true);
-select set_config('request.jwt.claim.role', 'authenticated', true);
-select set_config('request.jwt.claims', '{"sub":"10000000-0000-4000-8000-000000000101","role":"authenticated","email":"alice@lifecycle-a.invalid"}', true);
 
 select is(
   public.update_email_message_lifecycle(
