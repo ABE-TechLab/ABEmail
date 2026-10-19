@@ -88,9 +88,18 @@ export async function DELETE(request: NextRequest) {
   const ctx = await context(request, organizationId, mailboxId);
   if ("response" in ctx) return ctx.response;
   if (!UUID.test(id)) return json({ error: "Invalid draft ID." }, 400);
+  const { data: attachmentRows, error: attachmentLookupError } = await ctx.admin.from("email_message_attachments")
+    .select("storage_path").eq("organization_id", organizationId).eq("mailbox_id", mailboxId)
+    .eq("user_id", ctx.user.id).eq("draft_id", id);
+  if (attachmentLookupError) return json({ error: "Draft attachments could not be checked before deletion." }, 503);
   const { data, error } = await ctx.admin.from("email_drafts").delete().eq("id", id).eq("organization_id", organizationId)
     .eq("mailbox_id", mailboxId).eq("user_id", ctx.user.id).select("id").maybeSingle();
   if (error) return json({ error: "Draft could not be deleted." }, 503);
   if (!data) return json({ error: "Draft not found." }, 404);
+  const storagePaths = (attachmentRows ?? []).map((attachment) => attachment.storage_path).filter(Boolean);
+  if (storagePaths.length) {
+    const { error: cleanupError } = await ctx.admin.storage.from("mail-attachments").remove(storagePaths);
+    if (cleanupError) return json({ ok: true, warning: "Draft deleted, but one or more private attachment files could not be cleaned up." });
+  }
   return json({ ok: true });
 }
