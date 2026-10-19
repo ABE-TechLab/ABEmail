@@ -239,7 +239,6 @@ export default function WorkspaceSettingsPanel({
 
   const base = "/dashboard/" + organizationId;
   const settingsBase = base + "/settings";
-  const liveMailAvailable = mailboxes.length > 0;
   const info = SECTION_INFO[section] ?? SECTION_INFO.general;
   const canManageWorkspace = organizationRole === "owner" || organizationRole === "admin";
   const verifiedReceivingDomains = domains.filter((domain) => domain.status === "verified" && domain.sendingEnabled && domain.receivingEnabled);
