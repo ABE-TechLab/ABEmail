@@ -600,7 +600,7 @@ h1 {
 .settings-page-heading > div > p:last-child, .contacts-heading > div > p:last-child { margin: 0; color: #879387; font-size: 11px; line-height: 1.6; }
 .settings-preview-chip { display: inline-flex; align-items: center; gap: 7px; margin-bottom: 4px; padding: 7px 10px; border: 1px solid #e6e9dd; border-radius: 999px; background: #fffdf7; color: #a07d43; font-size: 9px; font-weight: 700; white-space: nowrap; }
 .settings-preview-chip > span { width: 6px; height: 6px; border-radius: 50%; background: #c79845; }
-.settings-layout { display: block; min-width: 0; }
+.settings-layout { display: grid; grid-template-columns: minmax(165px, 205px) minmax(0, 1fr); align-items: start; gap: 14px; min-width: 0; }
 .settings-navigation { display: flex; flex-direction: column; gap: 18px; padding: 13px 9px; border: 1px solid #e8ede6; border-radius: 11px; background: #fff; }
 .settings-nav-group { display: flex; flex-direction: column; gap: 3px; }
 .settings-nav-group > p { margin: 0 8px 6px; color: #a0aaa0; font-size: 8px; font-weight: 800; letter-spacing: 1.1px; }
