@@ -71,20 +71,6 @@ export default function HomePage() {
   const [messages, setMessages] = useState<Mail[]>(DEMO_MAIL);
   const [activeView, setActiveView] = useState<View>("Inbox");
 
-  useEffect(() => {
-    const requestedView = searchParams.get("view");
-    const matchingFolder = FOLDERS.find((folder) => folder.name === requestedView);
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- Mirror route state in the interactive sample.
-    if (matchingFolder) setActiveView(matchingFolder.name);
-    else if (requestedView === "Starred") setActiveView("Starred");
-
-    if (searchParams.get("compose") === "1") {
-      setComposeOpen(true);
-      const currentUrl = new URL(window.location.href);
-      currentUrl.searchParams.delete("compose");
-      router.replace(currentUrl.pathname + currentUrl.search, { scroll: false });
-    }
-  }, [searchParams, router]);
   const [selectedId, setSelectedId] = useState<string | null>("m1");
   const [selectedContactId, setSelectedContactId] = useState("c1");
   const [query, setQuery] = useState("");
@@ -93,6 +79,21 @@ export default function HomePage() {
   const [composeSubject, setComposeSubject] = useState("");
   const [composeBody, setComposeBody] = useState("");
   const [toast, setToast] = useState("");
+  useEffect(() => {
+    const requestedView = searchParams.get("view");
+    const matchingFolder = FOLDERS.find((folder) => folder.name === requestedView);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Mirror route state in the interactive sample.
+    if (matchingFolder) setActiveView(matchingFolder.name);
+    else if (requestedView === "Starred") setActiveView("Starred");
+
+    if (searchParams.get("compose") === "1") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Open compose from the sidebar's URL action.
+      setComposeOpen(true);
+      const currentUrl = new URL(window.location.href);
+      currentUrl.searchParams.delete("compose");
+      router.replace(currentUrl.pathname + currentUrl.search, { scroll: false });
+    }
+  }, [searchParams, router]);
 
   const visibleMessages = useMemo(() => {
     if (activeView === "Contacts") return [];
