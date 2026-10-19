@@ -241,12 +241,7 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
   }, [initialRecipient, router]);
 
   useEffect(() => {
-    if (!composeOpen || !recipientQuery) {
-      setContactSuggestions([]);
-      setContactSuggestionsOpen(false);
-      setContactSuggestionsLoading(false);
-      return;
-    }
+    if (!composeOpen || !recipientQuery) return;
 
     let active = true;
     const controller = new AbortController();
@@ -1202,6 +1197,7 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
                     <input
                       className={styles.recipientInput}
                       type="text"
+                      role="combobox"
                       inputMode="email"
                       required
                       maxLength={4000}
@@ -1209,7 +1205,7 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
                       value={to}
                       aria-label="To"
                       aria-autocomplete="list"
-                      aria-expanded={contactSuggestionsOpen && (contactSuggestionsLoading || contactSuggestions.length > 0)}
+                      aria-expanded={Boolean(recipientQuery) && contactSuggestionsOpen && (contactSuggestionsLoading || contactSuggestions.length > 0)}
                       aria-controls="contact-recipient-suggestions"
                       aria-activedescendant={contactSuggestionsOpen && contactSuggestions[activeContactSuggestionIndex] ? "contact-suggestion-" + contactSuggestions[activeContactSuggestionIndex].id : undefined}
                       onChange={(event) => { setTo(event.target.value); setRequestKey(null); setActiveContactSuggestionIndex(0); }}
@@ -1232,7 +1228,7 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
                       onBlur={() => { window.setTimeout(() => setContactSuggestionsOpen(false), 100); }}
                       placeholder="name@example.com, another@example.com"
                     />
-                    {contactSuggestionsOpen && (contactSuggestionsLoading || contactSuggestions.length > 0) && (
+                    {Boolean(recipientQuery) && contactSuggestionsOpen && (contactSuggestionsLoading || contactSuggestions.length > 0) && (
                       <div className={styles.contactSuggestions} id="contact-recipient-suggestions" role="listbox" aria-label="Saved contacts">
                         {contactSuggestionsLoading && <p className={styles.contactSuggestionsStatus}>Searching saved contacts…</p>}
                         {contactSuggestions.map((contact, index) => (
