@@ -510,7 +510,7 @@ h1 {
 .mail-compose-modal form { padding: 4px 20px 18px; }
 .mail-compose-field { display: flex; min-height: 43px; align-items: center; gap: 15px; border-bottom: 1px solid #edf1ec; }
 .mail-compose-field > span { width: 52px; color: #909b90; font-size: 10px; }
-.mail-compose-field input { min-width: 0; flex: 1; padding: 9px 0; border: 0; outline: 0; background: transparent; color: #37453a; font-size: 11px; }
+.mail-compose-field input, .mail-compose-field select { min-width: 0; flex: 1; padding: 9px 0; border: 0; outline: 0; background: transparent; color: #37453a; font-size: 11px; }
 .mail-compose-field input::placeholder, .mail-compose-body-label textarea::placeholder { color: #a8b1a7; }
 .mail-compose-body-label { display: block; padding-top: 14px; }
 .mail-compose-body-label textarea { width: 100%; resize: vertical; padding: 8px 0; border: 0; outline: 0; color: #455346; font-size: 11px; line-height: 1.7; }
