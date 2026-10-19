@@ -82,6 +82,7 @@ export async function POST(request: NextRequest) {
     .select("status").eq("organization_id", organizationId).maybeSingle();
   if (providerError) return json({ error: "The workspace email provider could not be checked." }, 503);
   if (provider && provider.status !== "connected") return json({ error: "Reconnect the workspace Resend connection before scheduling." }, 409);
+  if (provider && (!domain.sending_enabled || !domain.provider_domain_id)) return json({ error: "Resend has not confirmed sending is enabled for this domain. Refresh domain verification before scheduling." }, 409);
   if (!provider && ctx.mailbox.address !== "info@ottawasnowmatch.waste2light.com") {
     return json({ error: "Connect Resend in workspace Settings before scheduling." }, 503);
   }
@@ -116,10 +117,10 @@ export async function PATCH(request: NextRequest) {
   if (body.action === "complete_send_now") {
     const messageId = typeof body.messageId === "string" && UUID.test(body.messageId) ? body.messageId : "";
     if (!messageId) return json({ error: "Invalid sent message reference." }, 400);
-    const { data: sentMessage, error: sentError } = await ctx.admin.from("email_messages").select("id, status, provider_message_id")
+    const { data: sentMessage, error: sentError } = await ctx.admin.from("email_messages").select("id, status, provider_message_id, idempotency_key")
       .eq("id", messageId).eq("organization_id", organizationId).eq("mailbox_id", mailboxId).eq("direction", "outbound").maybeSingle();
     if (sentError) return json({ error: "Sent message could not be verified." }, 503);
-    if (!sentMessage || !["accepted", "delivered", "delayed"].includes(sentMessage.status)) return json({ error: "The email has not been confirmed as accepted by the provider." }, 409);
+    if (!sentMessage || sentMessage.idempotency_key !== "scheduled-" + id || !["accepted", "delivered", "delayed"].includes(sentMessage.status)) return json({ error: "The email has not been confirmed as accepted for this scheduled item." }, 409);
     const { data, error } = await ctx.admin.from("scheduled_email_messages").update({
       status: "accepted", locked_at: null, sent_message_id: sentMessage.id, provider_message_id: sentMessage.provider_message_id, last_error_code: null,
     }).eq("id", id).eq("organization_id", organizationId).eq("mailbox_id", mailboxId).eq("user_id", ctx.user.id).eq("status", "processing")

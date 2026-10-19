@@ -10,7 +10,7 @@ function json(body: Record<string, unknown>, status = 200) {
   return NextResponse.json(body, { status, headers: { "Cache-Control": "no-store" } });
 }
 async function runScheduledWorker(request: NextRequest) {
-  const secret = process.env.ABEMAIL_SCHEDULED_MAIL_CRON_SECRET?.trim();
+  const secret = process.env.CRON_SECRET?.trim() || process.env.ABEMAIL_SCHEDULED_MAIL_CRON_SECRET?.trim();
   const authorization = request.headers.get("authorization") || "";
   if (!secret || authorization !== "Bearer " + secret) return json({ error: "Unauthorized." }, 401);
   const admin = createAdminClient();
