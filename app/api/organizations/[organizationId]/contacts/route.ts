@@ -27,11 +27,16 @@ export async function GET(request: Request, { params }: RouteContext) {
 
   if (term) {
     const pattern = "%" + term + "%";
+    const normalizedTag = term.toLowerCase();
+    const tagFilter = /^[a-z0-9][a-z0-9_-]{0,39}$/.test(normalizedTag)
+      ? ",tags.ov.{" + normalizedTag + "}"
+      : "";
     query = query.or(
       "name.ilike." + pattern +
       ",email.ilike." + pattern +
       ",company.ilike." + pattern +
-      ",role.ilike." + pattern
+      ",role.ilike." + pattern +
+      tagFilter
     );
   }
 
