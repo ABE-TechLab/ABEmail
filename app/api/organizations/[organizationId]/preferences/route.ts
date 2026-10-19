@@ -19,6 +19,11 @@ type Preferences = {
   replyStyle?: string;
   compactMessageList?: boolean;
   notifications?: Partial<Record<(typeof NOTIFICATION_KEYS)[number], boolean>>;
+  mailboxSignatures?: Record<string, {
+    enabled: boolean;
+    defaultSignatureId: string | null;
+    signatures: Array<{ id: string; name: string; content: string }>;
+  }>;
 };
 
 type RouteContext = { params: Promise<{ organizationId: string }> };
@@ -48,6 +53,36 @@ async function authorize(organizationId: string) {
   return { user, admin };
 }
 
+function validMailboxSignatures(input: unknown): boolean {
+  if (input === undefined) return true;
+  if (!input || typeof input !== "object" || Array.isArray(input)) return false;
+  const entries = Object.entries(input as Record<string, unknown>);
+  if (entries.length > 50) return false;
+
+  return entries.every(([mailboxId, rawConfig]) => {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(mailboxId)) return false;
+    if (!rawConfig || typeof rawConfig !== "object" || Array.isArray(rawConfig)) return false;
+    const config = rawConfig as Record<string, unknown>;
+    if (typeof config.enabled !== "boolean") return false;
+    if (config.defaultSignatureId !== null && typeof config.defaultSignatureId !== "string") return false;
+    if (!Array.isArray(config.signatures) || config.signatures.length > 8) return false;
+    if (!Object.keys(config).every((key) => ["enabled", "defaultSignatureId", "signatures"].includes(key))) return false;
+
+    const ids = new Set<string>();
+    for (const rawSignature of config.signatures) {
+      if (!rawSignature || typeof rawSignature !== "object" || Array.isArray(rawSignature)) return false;
+      const signature = rawSignature as Record<string, unknown>;
+      if (!Object.keys(signature).every((key) => ["id", "name", "content"].includes(key))) return false;
+      if (typeof signature.id !== "string" || !/^[a-zA-Z0-9_-]{1,100}$/.test(signature.id) || ids.has(signature.id)) return false;
+      if (typeof signature.name !== "string" || !signature.name.trim() || signature.name.trim().length > 80) return false;
+      if (typeof signature.content !== "string" || signature.content.length > 10000) return false;
+      ids.add(signature.id);
+    }
+    const defaultId = config.defaultSignatureId;
+    return defaultId === null || defaultId === "workspace-default" || ids.has(defaultId);
+  });
+}
+
 function validPreferences(input: unknown): input is Preferences {
   if (!input || typeof input !== "object" || Array.isArray(input)) return false;
   const value = input as Record<string, unknown>;
@@ -63,7 +98,8 @@ function validPreferences(input: unknown): input is Preferences {
       if (!(NOTIFICATION_KEYS as readonly string[]).includes(key) || typeof entry !== "boolean") return false;
     }
   }
-  return Object.keys(value).every((key) => ["timezone", "language", "font", "signature", "replyStyle", "compactMessageList", "notifications"].includes(key));
+  if (!validMailboxSignatures(value.mailboxSignatures)) return false;
+  return Object.keys(value).every((key) => ["timezone", "language", "font", "signature", "replyStyle", "compactMessageList", "notifications", "mailboxSignatures"].includes(key));
 }
 
 export async function GET(_request: NextRequest, context: RouteContext) {
