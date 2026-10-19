@@ -6,6 +6,7 @@ import Link from "next/link";
 import WorkspaceSidebar, { type MailboxView, type WorkspaceChoice } from "@/components/workspace-sidebar";
 import AppearanceToggle from "@/components/appearance-toggle";
 import styles from "./live-mailbox.module.css";
+import type { Contact } from "@/lib/contacts/types";
 import workspaceStyles from "./workspace-home.module.css";
 
 const COMPACT_MESSAGE_LIST_KEY = "abemail:compact-message-list";
@@ -50,6 +51,7 @@ type LiveMailboxProps = {
   messagesError: boolean;
   activeView?: ActiveMailboxView;
   workspaces: WorkspaceChoice[];
+  initialRecipient?: string;
 };
 
 function plainText(message: EmailMessage): string {
@@ -99,7 +101,7 @@ function formatFileSize(bytes: number): string {
 }
 
 export default function LiveMailbox(props: LiveMailboxProps) {
-  const { organizationId, organizationName, userEmail, mailboxes, messages, messagesError, activeView = "Inbox", workspaces } = props;
+  const { organizationId, organizationName, userEmail, mailboxes, messages, messagesError, activeView = "Inbox", workspaces, initialRecipient } = props;
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [compactMessageList, setCompactMessageList] = useState(false);
@@ -109,6 +111,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   const composeBodyRef = useRef<HTMLTextAreaElement>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const composeCursorPosition = useRef<number | null>(null);
+  const initialComposeHandledRef = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -193,6 +196,64 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);
   const [to, setTo] = useState("");
+  const [contactSuggestions, setContactSuggestions] = useState<Contact[]>([]);
+  const [contactSuggestionsOpen, setContactSuggestionsOpen] = useState(false);
+  const [contactSuggestionsLoading, setContactSuggestionsLoading] = useState(false);
+  const [activeContactSuggestionIndex, setActiveContactSuggestionIndex] = useState(0);
+  const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
+
+  useEffect(() => {
+    if (!initialRecipient || initialComposeHandledRef.current) return;
+    initialComposeHandledRef.current = true;
+    setTo(initialRecipient);
+    setComposeOpen(true);
+    setNotice("");
+    const currentUrl = new URL(window.location.href);
+    currentUrl.searchParams.delete("composeTo");
+    router.replace(currentUrl.pathname + currentUrl.search, { scroll: false });
+  }, [initialRecipient, router]);
+
+  useEffect(() => {
+    if (!composeOpen || !recipientQuery) {
+      setContactSuggestions([]);
+      setContactSuggestionsOpen(false);
+      setContactSuggestionsLoading(false);
+      return;
+    }
+
+    let active = true;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      setContactSuggestionsLoading(true);
+      setContactSuggestionsOpen(true);
+      void fetch("/api/organizations/" + organizationId + "/contacts?q=" + encodeURIComponent(recipientQuery), {
+        cache: "no-store",
+        signal: controller.signal,
+      })
+        .then(async (response) => {
+          const payload = await response.json() as { ok?: boolean; contacts?: Contact[] };
+          if (!response.ok || !payload.ok) throw new Error("Contact lookup failed.");
+          if (!active) return;
+          setContactSuggestions((payload.contacts ?? []).slice(0, 8));
+          setActiveContactSuggestionIndex(0);
+        })
+        .catch((error: unknown) => {
+          if (!active || (error instanceof Error && error.name === "AbortError")) return;
+          setContactSuggestions([]);
+          setContactSuggestionsOpen(false);
+        })
+        .finally(() => {
+          if (active) setContactSuggestionsLoading(false);
+        });
+    }, 180);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [composeOpen, organizationId, recipientQuery]);
+
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [busy, setBusy] = useState(false);
@@ -451,6 +512,8 @@ export default function LiveMailbox(props: LiveMailboxProps) {
 
   function resetComposerAfterClose(attachmentsAlreadyLinked = false) {
     setComposeOpen(false);
+    setContactSuggestions([]);
+    setContactSuggestionsOpen(false);
     setTo("");
     setSubject("");
     setBody("");
@@ -579,6 +642,17 @@ export default function LiveMailbox(props: LiveMailboxProps) {
     setBody("");
     setRequestKey(null);
     composeCursorPosition.current = 0;
+  }
+
+  function chooseContactSuggestion(contact: Contact) {
+    const delimiterIndex = Math.max(to.lastIndexOf(","), to.lastIndexOf(";"));
+    const prefix = delimiterIndex >= 0 ? to.slice(0, delimiterIndex + 1) : "";
+    const separator = prefix && !/\\s$/.test(prefix) ? " " : "";
+    setTo(prefix + separator + contact.email + ", ");
+    setRequestKey(null);
+    setContactSuggestions([]);
+    setContactSuggestionsOpen(false);
+    setActiveContactSuggestionIndex(0);
   }
 
   async function scheduleMessage() {
@@ -1120,7 +1194,64 @@ export default function LiveMailbox(props: LiveMailboxProps) {
                 <button type="button" onClick={() => void closeComposer()} aria-label="Close compose" disabled={busy}>×</button>
               </header>
               <form onSubmit={submitMessage}>
-                <label className="mail-compose-field"><span>To</span><input type="text" inputMode="email" required maxLength={4000} disabled={busy} value={to} onChange={(event) => { setTo(event.target.value); setRequestKey(null); }} placeholder="name@example.com, another@example.com" /></label>
+                <label className="mail-compose-field">
+                  <span>To</span>
+                  <div className={styles.recipientField}>
+                    <input
+                      className={styles.recipientInput}
+                      type="text"
+                      inputMode="email"
+                      required
+                      maxLength={4000}
+                      disabled={busy}
+                      value={to}
+                      aria-label="To"
+                      aria-autocomplete="list"
+                      aria-expanded={contactSuggestionsOpen && (contactSuggestionsLoading || contactSuggestions.length > 0)}
+                      aria-controls="contact-recipient-suggestions"
+                      aria-activedescendant={contactSuggestionsOpen && contactSuggestions[activeContactSuggestionIndex] ? "contact-suggestion-" + contactSuggestions[activeContactSuggestionIndex].id : undefined}
+                      onChange={(event) => { setTo(event.target.value); setRequestKey(null); setActiveContactSuggestionIndex(0); }}
+                      onKeyDown={(event) => {
+                        if (event.key === "ArrowDown" && contactSuggestions.length > 0) {
+                          event.preventDefault();
+                          setContactSuggestionsOpen(true);
+                          setActiveContactSuggestionIndex((index) => Math.min(index + 1, contactSuggestions.length - 1));
+                        } else if (event.key === "ArrowUp" && contactSuggestions.length > 0) {
+                          event.preventDefault();
+                          setContactSuggestionsOpen(true);
+                          setActiveContactSuggestionIndex((index) => Math.max(index - 1, 0));
+                        } else if (event.key === "Enter" && contactSuggestionsOpen && contactSuggestions.length > 0) {
+                          event.preventDefault();
+                          chooseContactSuggestion(contactSuggestions[activeContactSuggestionIndex] ?? contactSuggestions[0]);
+                        } else if (event.key === "Escape") {
+                          setContactSuggestionsOpen(false);
+                        }
+                      }}
+                      onBlur={() => { window.setTimeout(() => setContactSuggestionsOpen(false), 100); }}
+                      placeholder="name@example.com, another@example.com"
+                    />
+                    {contactSuggestionsOpen && (contactSuggestionsLoading || contactSuggestions.length > 0) && (
+                      <div className={styles.contactSuggestions} id="contact-recipient-suggestions" role="listbox" aria-label="Saved contacts">
+                        {contactSuggestionsLoading && <p className={styles.contactSuggestionsStatus}>Searching saved contacts…</p>}
+                        {contactSuggestions.map((contact, index) => (
+                          <button
+                            type="button"
+                            role="option"
+                            aria-selected={index === activeContactSuggestionIndex}
+                            id={"contact-suggestion-" + contact.id}
+                            key={contact.id}
+                            className={index === activeContactSuggestionIndex ? styles.contactSuggestionActive : styles.contactSuggestion}
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={() => chooseContactSuggestion(contact)}
+                          >
+                            <span className={styles.contactSuggestionAvatar}>{initials(contact.name)}</span>
+                            <span className={styles.contactSuggestionCopy}><strong>{contact.name}</strong><small>{contact.email}{contact.company ? " · " + contact.company : ""}</small></span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </label>
                 <label className="mail-compose-field"><span>Subject</span><input required maxLength={998} disabled={busy} value={subject} onChange={(event) => { setSubject(event.target.value); setRequestKey(null); }} placeholder="Add a subject" /></label>
                 <label className="mail-compose-body-label">
                   <span className="mail-sr-only">Message body</span>

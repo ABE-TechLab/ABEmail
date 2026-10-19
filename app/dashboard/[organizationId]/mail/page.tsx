@@ -11,12 +11,13 @@ const MAILBOX_VIEWS = ["Inbox", "Sent", "Starred", "Drafts", "Scheduled", "Archi
 type ActiveMailboxView = (typeof MAILBOX_VIEWS)[number];
 type MailPageProps = {
   params: Promise<{ organizationId: string }>;
-  searchParams?: Promise<{ view?: string }>;
+  searchParams?: Promise<{ view?: string; composeTo?: string }>;
 };
 
 export default async function WorkspaceMailPage({ params, searchParams }: MailPageProps) {
   const { organizationId } = await params;
-  const { view } = (await searchParams) ?? {};
+  const { view, composeTo } = (await searchParams) ?? {};
+  const initialRecipient = typeof composeTo === "string" && composeTo.length <= 254 && /^[^\\s@,;<>]+@[^\\s@,;<>]+\\.[^\\s@,;<>]+$/.test(composeTo.trim()) ? composeTo.trim().toLowerCase() : undefined;
   const activeView: ActiveMailboxView = MAILBOX_VIEWS.includes(view as ActiveMailboxView) ? (view as ActiveMailboxView) : "Inbox";
   if (!UUID_PATTERN.test(organizationId)) notFound();
 
@@ -182,6 +183,7 @@ export default async function WorkspaceMailPage({ params, searchParams }: MailPa
       messagesError={messagesError || Boolean(mailboxError)}
       activeView={activeView}
       workspaces={workspaces}
+      initialRecipient={initialRecipient}
     />
   );
 }

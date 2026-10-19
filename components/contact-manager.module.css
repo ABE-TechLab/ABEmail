@@ -1,0 +1,41 @@
+.detailActions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.detailActions > :first-child { flex: 1 1 100%; }
+.deleteButton, .deleteConfirm {
+  min-height: 32px;
+  padding: 8px 12px;
+  border: 1px solid #ead5d2;
+  border-radius: 7px;
+  background: #fff;
+  color: #a34f46;
+  font-size: 10px;
+}
+.deleteButton:hover, .deleteConfirm:hover { background: #fff6f4; border-color: #d7aaa4; }
+.deleteButton:disabled, .deleteConfirm:disabled { opacity: .6; cursor: wait; }
+.notes {
+  margin-top: 15px;
+  padding: 12px;
+  border: 1px solid #eef1eb;
+  border-radius: 8px;
+  background: #fbfcfa;
+}
+.notes small { color: #96a196; font-size: 9px; }
+.notes p { margin: 7px 0 0; color: #59685a; font-size: 10px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+.notesField { display: flex; flex-direction: column; align-items: stretch; gap: 6px; margin-top: 8px; }
+.notesField textarea { width: 100%; min-height: 76px; resize: vertical; padding: 9px 10px; border: 1px solid #e5ebe3; border-radius: 7px; background: #fff; color: #37453a; font: inherit; font-size: 11px; line-height: 1.6; }
+.notesField textarea:focus { outline: 2px solid #a7c8aa; outline-offset: 1px; }
+.formError { margin: 10px 0 0; color: #a34f46; font-size: 10px; line-height: 1.5; }
+.listLimit { margin: 0; padding: 12px 14px; color: #899589; font-size: 9px; line-height: 1.5; }
+.confirmModal { height: auto; max-height: calc(100dvh - 32px); align-self: flex-end; }
+.confirmBody { padding: 18px 20px 20px; }
+.confirmBody p { margin: 0; color: #667366; font-size: 12px; line-height: 1.7; }
+.confirmBody strong { color: #37453a; }
+@media (max-width: 620px) {
+  .detailActions { align-items: stretch; }
+  .detailActions > :first-child { width: 100%; }
+  .confirmBody { padding: 15px; }
+}
