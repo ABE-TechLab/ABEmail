@@ -722,7 +722,6 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   }
 
   async function forwardMessage(message: EmailMessage) {
-    const originalAttachmentCount = messageAttachmentsMessageId === message.id ? visibleMessageAttachments.length : 0;
     discardPendingAttachments();
     setDraftId(null);
     draftIdRef.current = null;
@@ -739,19 +738,17 @@ export default function LiveMailbox(props: LiveMailboxProps) {
     setNotice("");
     composeCursorPosition.current = 0;
     setComposeOpen(true);
-    if (originalAttachmentCount > 0) {
-      try {
-        const response = await fetch("/api/mail/attachments", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "copy", organizationId, mailboxId, sourceMessageId: message.id }),
-        });
-        const result = await response.json() as { attachments?: PendingAttachment[]; error?: string };
-        if (!response.ok) throw new Error(result.error || "Original attachments could not be copied.");
-        if (result.attachments?.length) setPendingAttachments(result.attachments);
-      } catch (error) {
-        setNotice((error instanceof Error ? error.message : "Original attachments could not be copied.") + " The forwarded message text is ready to send.");
-      }
+    try {
+      const response = await fetch("/api/mail/attachments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "copy", organizationId, mailboxId, sourceMessageId: message.id }),
+      });
+      const result = await response.json() as { attachments?: PendingAttachment[]; error?: string };
+      if (!response.ok) throw new Error(result.error || "Original attachments could not be copied.");
+      if (result.attachments?.length) setPendingAttachments(result.attachments);
+    } catch (error) {
+      setNotice((error instanceof Error ? error.message : "Original attachments could not be copied.") + " The forwarded message text is ready to send.");
     }
   }
 
