@@ -237,21 +237,32 @@ export async function POST(request: NextRequest) {
   try { form = await request.formData(); } catch { return json({ error: "Invalid attachment upload." }, 400); }
   const organizationId = String(form.get("organizationId") ?? "");
   const mailboxId = String(form.get("mailboxId") ?? "");
+  const draftIdValue = String(form.get("draftId") ?? "");
+  const draftId = draftIdValue || null;
   const file = form.get("file");
-  if (!UUID.test(organizationId) || !UUID.test(mailboxId) || !(file instanceof File)) return json({ error: "Choose a valid file for an active mailbox." }, 400);
+  if (!UUID.test(organizationId) || !UUID.test(mailboxId) || (draftId && !UUID.test(draftId)) || !(file instanceof File)) return json({ error: "Choose a valid file for an active mailbox." }, 400);
   if (!(await hasMailboxPermission(admin, user.id, organizationId, mailboxId, "can_send"))) return json({ error: "You do not have permission to attach files from this mailbox." }, 403);
+  if (draftId) {
+    const { data: draft, error: draftError } = await admin.from("email_drafts").select("id")
+      .eq("id", draftId).eq("organization_id", organizationId).eq("mailbox_id", mailboxId).eq("user_id", user.id).maybeSingle();
+    if (draftError) return json({ error: "Draft ownership could not be checked." }, 503);
+    if (!draft) return json({ error: "Draft not found." }, 404);
+  }
   const filename = safeFilename(file.name);
   if (!allowedFilename(filename)) return json({ error: "This file type is not allowed as an email attachment." }, 400);
   if (file.size < 1 || file.size > MAX_FILE_BYTES) return json({ error: "Each attachment must be no larger than 4 MB." }, 413);
-  const { data: pending, error: pendingError } = await admin.from("email_message_attachments")
+  const pendingQuery = admin.from("email_message_attachments")
     .select("id, size_bytes").eq("organization_id", organizationId).eq("mailbox_id", mailboxId)
-    .eq("user_id", user.id).is("message_id", null).gt("expires_at", new Date().toISOString());
+    .eq("user_id", user.id).is("message_id", null);
+  const { data: pending, error: pendingError } = draftId
+    ? await pendingQuery.or("draft_id.is.null,draft_id.eq." + draftId)
+    : await pendingQuery.is("draft_id", null).gt("expires_at", new Date().toISOString());
   if (pendingError) return json({ error: "Attachment limits could not be checked." }, 503);
   const pendingRows = pending ?? [];
   if (pendingRows.length >= MAX_ATTACHMENTS) return json({ error: "A message can contain up to five attachments." }, 413);
   if (pendingRows.reduce((sum, item) => sum + Number(item.size_bytes), 0) + file.size > MAX_MESSAGE_BYTES) return json({ error: "Attachments for one message cannot exceed 20 MB in total." }, 413);
-  const contentType = /^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/i.test(file.type) ? file.type : "application/octet-stream";
-  const uploaded = await uploadPending(admin, { organizationId, mailboxId, userId: user.id, filename, contentType, bytes: Buffer.from(await file.arrayBuffer()) });
+  const contentType = /^[a-z0-9!#$&^_.+-]+\\/[a-z0-9!#$&^_.+-]+$/i.test(file.type) ? file.type : "application/octet-stream";
+  const uploaded = await uploadPending(admin, { organizationId, mailboxId, userId: user.id, filename, contentType, draftId, bytes: Buffer.from(await file.arrayBuffer()) });
   if ("error" in uploaded) return json({ error: uploaded.error }, 503);
   return json({ ok: true, attachment: uploaded.attachment }, 201);
 }
