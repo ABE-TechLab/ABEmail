@@ -1,6 +1,6 @@
 import WorkspaceSettingsPanel, { type WorkspaceSettingsContext } from "@/components/workspace-settings-panel";
 
-export type SettingsSection = "general" | "appearance" | "mail" | "notifications" | "team" | "domains" | "mailboxes" | "security";
+export type SettingsSection = "general" | "appearance" | "mail" | "notifications" | "team" | "domains" | "mailboxes" | "security" | "rules" | "out-of-office" | "branding" | "integrations";
 
 export default function SettingsWorkspace({
   section,
