@@ -31,7 +31,7 @@ export default async function WorkspaceContactsPage({ params }: ContactsPageProp
     .maybeSingle();
 
   if (membershipError) {
-    return <main style={{ padding: 28 }}><h1>Contacts are not ready</h1><p>Workspace membership could not be checked. Try refreshing this page.</p></main>;
+    return <section className="workspace-route-error"><h1>Contacts are not ready</h1><p>Workspace membership could not be checked. Try refreshing this page.</p></section>;
   }
   if (!membership) notFound();
 
