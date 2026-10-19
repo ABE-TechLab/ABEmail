@@ -55,7 +55,7 @@ function allowedFilename(value: string) {
 }
 
 async function uploadPending(admin: NonNullable<ReturnType<typeof createAdminClient>>, args: {
-  organizationId: string; mailboxId: string; userId: string; filename: string; contentType: string; bytes: Buffer;
+  organizationId: string; mailboxId: string; userId: string; filename: string; contentType: string; bytes: Buffer; draftId?: string | null;
 }) {
   const filename = safeFilename(args.filename);
   if (!allowedFilename(filename)) return { error: "This file type is not allowed as an email attachment." } as const;
@@ -67,8 +67,8 @@ async function uploadPending(admin: NonNullable<ReturnType<typeof createAdminCli
   if (uploadError) return { error: "The attachment could not be stored securely." } as const;
   const { data, error } = await admin.from("email_message_attachments").insert({
     organization_id: args.organizationId, mailbox_id: args.mailboxId, user_id: args.userId,
-    message_id: null, filename, content_type: args.contentType, size_bytes: args.bytes.length,
-    storage_path: storagePath, expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    message_id: null, draft_id: args.draftId ?? null, filename, content_type: args.contentType, size_bytes: args.bytes.length,
+    storage_path: storagePath, expires_at: args.draftId ? null : new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
   }).select("id, filename, content_type, size_bytes").single();
   if (error || !data) {
     await admin.storage.from(BUCKET).remove([storagePath]);
@@ -83,10 +83,34 @@ export async function GET(request: NextRequest) {
   const organizationId = url.searchParams.get("organizationId") ?? "";
   const mailboxId = url.searchParams.get("mailboxId") ?? "";
   const messageId = url.searchParams.get("messageId") ?? "";
-  if (![organizationId, mailboxId, messageId].every((id) => UUID.test(id))) return json({ error: "Invalid attachment query." }, 400);
+  const draftId = url.searchParams.get("draftId") ?? "";
+  if (!UUID.test(organizationId) || !UUID.test(mailboxId) ||
+      Boolean(messageId) === Boolean(draftId) ||
+      (messageId && !UUID.test(messageId)) || (draftId && !UUID.test(draftId))) {
+    return json({ error: "Invalid attachment query." }, 400);
+  }
   const supabase = await createClient();
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) return json({ error: "Sign in to view attachments." }, 401);
+
+  if (draftId) {
+    const admin = createAdminClient();
+    if (!admin) return json({ error: "Mail storage is not configured." }, 503);
+    if (!(await hasMailboxPermission(admin, user.id, organizationId, mailboxId, "can_send"))) {
+      return json({ error: "You do not have permission to manage this draft." }, 403);
+    }
+    const { data: draft, error: draftError } = await admin.from("email_drafts").select("id")
+      .eq("id", draftId).eq("organization_id", organizationId).eq("mailbox_id", mailboxId).eq("user_id", user.id).maybeSingle();
+    if (draftError) return json({ error: "Draft attachment access could not be checked." }, 503);
+    if (!draft) return json({ error: "Draft not found." }, 404);
+    const { data, error } = await admin.from("email_message_attachments")
+      .select("id, filename, content_type, size_bytes, created_at")
+      .eq("organization_id", organizationId).eq("mailbox_id", mailboxId).eq("draft_id", draftId).eq("user_id", user.id)
+      .order("created_at", { ascending: true });
+    if (error) return json({ error: "Draft attachments could not be loaded." }, 503);
+    return json({ attachments: data ?? [] });
+  }
+
   const { data, error } = await supabase.from("email_message_attachments")
     .select("id, filename, content_type, size_bytes, created_at")
     .eq("organization_id", organizationId).eq("mailbox_id", mailboxId).eq("message_id", messageId)
@@ -105,7 +129,49 @@ export async function POST(request: NextRequest) {
 
   if ((request.headers.get("content-type") ?? "").includes("application/json")) {
     let body: unknown;
-    try { body = await request.json(); } catch { return json({ error: "Invalid attachment-copy request." }, 400); }
+    try { body = await request.json(); } catch { return json({ error: "Invalid attachment request." }, 400); }
+    if (typeof body === "object" && body !== null && !Array.isArray(body) &&
+        "action" in body && body.action === "attach-to-draft") {
+      const input = body as Record<string, unknown>;
+      const draftId = typeof input.draftId === "string" ? input.draftId : "";
+      const ids = input.attachmentIds;
+      if (!UUID.test(draftId) || !Array.isArray(ids) || ids.length < 1 || ids.length > MAX_ATTACHMENTS ||
+          ids.some((id) => typeof id !== "string" || !UUID.test(id)) || new Set(ids).size !== ids.length) {
+        return json({ error: "Invalid draft attachment request." }, 400);
+      }
+      if (!(await hasMailboxPermission(admin, user.id, input.organizationId as string, input.mailboxId as string, "can_send"))) {
+        return json({ error: "You do not have permission to save attachments with this draft." }, 403);
+      }
+      const { data: draft, error: draftError } = await admin.from("email_drafts").select("id")
+        .eq("id", draftId).eq("organization_id", input.organizationId).eq("mailbox_id", input.mailboxId)
+        .eq("user_id", user.id).maybeSingle();
+      if (draftError) return json({ error: "Draft ownership could not be checked." }, 503);
+      if (!draft) return json({ error: "Draft not found." }, 404);
+      const attachmentIds = ids as string[];
+      const { data: rows, error: rowsError } = await admin.from("email_message_attachments")
+        .select("id, draft_id, expires_at, message_id")
+        .in("id", attachmentIds).eq("organization_id", input.organizationId).eq("mailbox_id", input.mailboxId).eq("user_id", user.id);
+      if (rowsError) return json({ error: "Attachment ownership could not be checked." }, 503);
+      if (!rows || rows.length !== attachmentIds.length || rows.some((row) =>
+        row.message_id !== null ||
+        (row.draft_id !== null && row.draft_id !== draftId) ||
+        (row.draft_id === null && (!row.expires_at || Date.parse(row.expires_at) <= Date.now()))
+      )) return json({ error: "One or more attachments expired or belong to another draft." }, 409);
+      const pendingIds = rows.filter((row) => row.draft_id === null).map((row) => row.id);
+      if (pendingIds.length) {
+        const { data: linked, error: linkError } = await admin.from("email_message_attachments")
+          .update({ draft_id: draftId, expires_at: null })
+          .in("id", pendingIds).eq("organization_id", input.organizationId).eq("mailbox_id", input.mailboxId)
+          .eq("user_id", user.id).is("message_id", null).is("draft_id", null).select("id");
+        if (linkError || (linked?.length ?? 0) !== pendingIds.length) return json({ error: "Attachments could not be saved with this draft." }, 503);
+      }
+      const { data: attached, error: attachedError } = await admin.from("email_message_attachments")
+        .select("id, filename, content_type, size_bytes, created_at")
+        .eq("organization_id", input.organizationId).eq("mailbox_id", input.mailboxId).eq("draft_id", draftId)
+        .eq("user_id", user.id).in("id", attachmentIds).order("created_at", { ascending: true });
+      if (attachedError) return json({ error: "Saved draft attachments could not be loaded." }, 503);
+      return json({ ok: true, attachments: attached ?? [] });
+    }
     if (typeof body !== "object" || body === null || !("action" in body) || body.action !== "copy" ||
         !("organizationId" in body) || typeof body.organizationId !== "string" || !UUID.test(body.organizationId) ||
         !("mailboxId" in body) || typeof body.mailboxId !== "string" || !UUID.test(body.mailboxId) ||
