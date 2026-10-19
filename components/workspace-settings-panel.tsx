@@ -120,7 +120,7 @@ const SECTION_INFO: Record<string, { title: string; description: string }> = {
   notifications: { title: "Notifications", description: "Save your notification preferences for this workspace." },
   team: { title: "Team & access", description: "Review the active membership grants for this workspace." },
   domains: { title: "Domains", description: "Connect a custom domain, add its DNS records, and verify it with Resend." },
-  mailboxes: { title: "Mailboxes", description: "Create real addresses on verified domains in this workspace." },
+  mailboxes: { title: "Mailboxes & aliases", description: "Manage workspace mailboxes and future alias routing." },
   security: { title: "Security", description: "Review your current access and account-session controls." },
   rules: { title: "Rules & filters", description: "Define deterministic actions for incoming messages." },
   "out-of-office": { title: "Out-of-office", description: "Configure automatic replies while you are away." },
@@ -1032,6 +1032,9 @@ export default function WorkspaceSettingsPanel({
                 {!mailboxesLoading && mailboxRows.length === 0 && <div className="settings-empty-state"><strong>No mailboxes yet</strong><p>Your active email addresses will appear here. Use the form above to create the first address.</p></div>}
                 {mailboxRows.length > 0 && <div className="settings-table-wrap mailbox-table-wrap"><table className="settings-table mailbox-settings-table"><thead><tr><th>Address</th><th>Display name</th><th>Status</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>{mailboxRows.map((mailbox) => <tr key={mailbox.id} className={editingMailboxId === mailbox.id ? "mailbox-row-editing" : undefined}><td><strong>{mailbox.address}</strong><small>Created {new Date(mailbox.created_at).toLocaleDateString()}</small></td><td>{mailbox.display_name || <span className="settings-table-empty">Not set</span>}</td><td><span className={mailbox.status === "active" ? "settings-status active" : "settings-status pending"}><span />{statusLabel(mailbox.status)}</span></td><td><button className="mail-secondary-action mailbox-edit-action" type="button" onClick={() => startEditMailbox(mailbox)} disabled={!canManageWorkspace || mailboxBusy || mailbox.status !== "active"}>{editingMailboxId === mailbox.id ? "Editing…" : "Edit"}</button></td></tr>)}</tbody></table></div>}
                 <div className="settings-info-banner"><span>i</span><p>Incoming email is delivered into ABEmail through the workspace&apos;s signed Resend webhook. If you change an address or domain, the previous address will no longer be assigned to this mailbox.</p></div>
+                <div className="settings-divider" />
+                <div className="settings-section-summary"><div><strong>Address aliases</strong><p>Alias addresses will route additional addresses such as hello@, sales@, or support@ into the appropriate mailbox.</p></div></div>
+                <div className="settings-empty-state"><strong>Alias routing is not configured</strong><p>Alias creation and inbound routing depend on the email transport and DNS routing design. Mailbox management remains available above.</p></div>
               </div>}
 
               {section === "rules" && <div>
