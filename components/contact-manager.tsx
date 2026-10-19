@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import WorkspaceSidebar, { type WorkspaceChoice } from "@/components/workspace-sidebar";
 import type { Contact } from "@/lib/contacts/types";
 import styles from "./contact-manager.module.css";
 
@@ -20,7 +19,6 @@ type ContactManagerProps = {
   organizationId: string;
   organizationName: string;
   userEmail: string;
-  workspaces: WorkspaceChoice[];
 };
 
 const EMPTY_FORM: ContactForm = { name: "", email: "", company: "", role: "", phone: "", notes: "", tags: "" };
@@ -55,7 +53,7 @@ function messageFromPayload(payload: unknown, fallback: string) {
   return fallback;
 }
 
-export default function ContactManager({ organizationId, organizationName, userEmail, workspaces }: ContactManagerProps) {
+export default function ContactManager({ organizationId, organizationName, userEmail }: ContactManagerProps) {
   const router = useRouter();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [contactCount, setContactCount] = useState(0);
@@ -211,21 +209,8 @@ export default function ContactManager({ organizationId, organizationName, userE
     }
   }
 
-  const mailboxHref = "/dashboard/" + organizationId + "/mail";
-
   return (
-    <main className="mail-app">
-      <WorkspaceSidebar
-        homeHref={mailboxHref}
-        mailboxBaseHref={mailboxHref}
-        workspaceBaseHref={"/dashboard/" + organizationId}
-        workspaceHref={"/dashboard/" + organizationId}
-        workspaceName={organizationName}
-        workspaceDescription="Business workspace"
-        workspaces={workspaces}
-        activeWorkspaceId={organizationId}
-      />
-      <section className="mail-main">
+      <>
         <header className="mail-topbar">
           <div className="mail-breadcrumb"><span>{organizationName}</span><span className="mail-breadcrumb-slash">/</span><strong>Contacts</strong></div>
           <label className="mail-search">
@@ -309,7 +294,6 @@ export default function ContactManager({ organizationId, organizationName, userE
 
           {notice && <div className="mail-toast contacts-toast" role="status"><span>i</span>{notice}<button type="button" aria-label="Dismiss notice" onClick={() => setNotice("")}>×</button></div>}
         </div>
-      </section>
 
       {formMode && (
         <div className="mail-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeForm(); }}>
@@ -340,6 +324,6 @@ export default function ContactManager({ organizationId, organizationName, userE
           </section>
         </div>
       )}
-    </main>
+      </>
   );
 }
