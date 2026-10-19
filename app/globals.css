@@ -304,6 +304,29 @@ h1 {
   text-align: left;
 }
 
+
+/* The organization layout owns the only sidebar; route components render content only. */
+.mail-app.workspace-app-shell {
+  align-items: stretch;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+.mail-app.workspace-app-shell > .workspace-main-content {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.mail-app .mail-main > .mailbox-live-page {
+  display: flex;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .mail-app * { box-sizing: border-box; }
 .mail-app button, .mail-app input, .mail-app textarea { font: inherit; }
 .mail-app button { cursor: pointer; }
@@ -525,7 +548,7 @@ h1 {
   .mail-content-layout { grid-template-columns: minmax(285px, 44%) minmax(0,1fr); }
 }
 
-.mail-app.mailbox-live-app .mail-mobile-compose-fab {
+.mail-app .mail-main > .mailbox-live-page .mail-mobile-compose-fab {
   display: none;
   position: fixed;
   z-index: 35;
@@ -546,18 +569,18 @@ h1 {
   cursor: pointer;
   transition: transform .15s ease, background .15s ease, box-shadow .15s ease;
 }
-.mail-app.mailbox-live-app .mail-mobile-compose-fab:hover {
+.mail-app .mail-main > .mailbox-live-page .mail-mobile-compose-fab:hover {
   transform: translateY(-2px);
   background: #216640;
   box-shadow: 0 10px 28px rgba(25, 78, 43, .35);
 }
-.mail-app.mailbox-live-app .mail-mobile-compose-fab:focus-visible {
+.mail-app .mail-main > .mailbox-live-page .mail-mobile-compose-fab:focus-visible {
   outline: 3px solid #a8d6b3;
   outline-offset: 3px;
 }
 @media (max-width: 620px) {
-  .mail-app.mailbox-live-app .mail-mobile-compose-fab { display: inline-flex; }
-  .mail-app.mailbox-live-app .mail-modal-backdrop .mail-mobile-compose-fab { display: none; }
+  .mail-app .mail-main > .mailbox-live-page .mail-mobile-compose-fab { display: inline-flex; }
+  .mail-app .mail-main > .mailbox-live-page .mail-modal-backdrop .mail-mobile-compose-fab { display: none; }
 }
 
 @media (max-width: 620px) {
@@ -2014,20 +2037,14 @@ html.dark .mail-appearance-toggle {
   background: var(--card, #1b211d);
   color: var(--foreground, #edf2ed);
 }
-.mail-app.mailbox-live-app {
+.mail-app .mail-main > .mailbox-live-page {
   width: 100%;
   height: 100vh;
   height: 100dvh;
   min-height: 0;
   overflow: hidden;
 }
-.mail-app.mailbox-live-app > .mail-main {
-  height: 100vh;
-  height: 100dvh;
-  min-height: 0;
-  overflow: hidden;
-}
-.mail-app.mailbox-live-app > .mail-main > .mail-topbar {
+.mail-app .mail-main > .mailbox-live-page > .mail-topbar {
   position: relative;
   z-index: 8;
   height: 70px;
@@ -2035,75 +2052,75 @@ html.dark .mail-appearance-toggle {
   max-height: 70px;
   flex: 0 0 70px;
 }
-.mail-app.mailbox-live-app .mail-content-layout {
+.mail-app .mail-main > .mailbox-live-page .mail-content-layout {
   height: calc(100dvh - 70px);
   min-height: 0;
   flex: 1 1 auto;
   overflow: hidden;
   grid-template-columns: minmax(280px, 38%) minmax(0, 1fr);
 }
-.mail-app.mailbox-live-app .mail-list-pane {
+.mail-app .mail-main > .mailbox-live-page .mail-list-pane {
   height: 100%;
   min-height: 0;
   overflow: hidden;
 }
-.mail-app.mailbox-live-app .mail-message-list {
+.mail-app .mail-main > .mailbox-live-page .mail-message-list {
   min-height: 0;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
 }
-.mail-app.mailbox-live-app .mail-message-list > section {
+.mail-app .mail-main > .mailbox-live-page .mail-message-list > section {
   margin: 12px;
   flex: 0 0 auto;
 }
-.mail-app.mailbox-live-app .mail-detail-pane {
+.mail-app .mail-main > .mailbox-live-page .mail-detail-pane {
   height: 100%;
   min-height: 0;
   overflow: hidden;
 }
-.mail-app.mailbox-live-app .mail-message-detail {
+.mail-app .mail-main > .mailbox-live-page .mail-message-detail {
   height: 100%;
   min-height: 0;
   overflow: hidden;
 }
-.mail-app.mailbox-live-app .mail-detail-actions {
+.mail-app .mail-main > .mailbox-live-page .mail-detail-actions {
   position: relative;
   z-index: 2;
   flex: 0 0 52px;
   background: var(--card, #fff);
 }
-.mail-app.mailbox-live-app .mail-detail-scroll {
+.mail-app .mail-main > .mailbox-live-page .mail-detail-scroll {
   min-height: 0;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
 }
-.mail-app.mailbox-live-app > .mail-main > .setupCard {
+.mail-app .mail-main > .mailbox-live-page > .setupCard {
   min-height: 0;
   flex: 1 1 auto;
   margin: 20px;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
-.mail-app.mailbox-live-app .mail-reader-heading {
+.mail-app .mail-main > .mailbox-live-page .mail-reader-heading {
   padding-bottom: 17px;
   border-bottom: 1px solid var(--border, #e8ede7);
 }
-.mail-app.mailbox-live-app .mail-reader-heading .mail-overline {
+.mail-app .mail-main > .mailbox-live-page .mail-reader-heading .mail-overline {
   margin-bottom: 9px;
 }
-.mail-app.mailbox-live-app .mail-subject-line {
+.mail-app .mail-main > .mailbox-live-page .mail-subject-line {
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 10px 14px;
   margin-bottom: 0;
 }
-.mail-app.mailbox-live-app .mail-subject-line h2 {
+.mail-app .mail-main > .mailbox-live-page .mail-subject-line h2 {
   min-width: 0;
   overflow-wrap: anywhere;
   flex: 1 1 280px;
 }
-.mail-app.mailbox-live-app .mail-direction-pill {
+.mail-app .mail-main > .mailbox-live-page .mail-direction-pill {
   display: inline-flex;
   min-height: 25px;
   align-items: center;
@@ -2117,43 +2134,43 @@ html.dark .mail-appearance-toggle {
   font-size: 10px;
   font-weight: 700;
 }
-.mail-app.mailbox-live-app .mail-reader-meta {
+.mail-app .mail-main > .mailbox-live-page .mail-reader-meta {
   align-items: flex-start;
   padding: 18px 0 20px;
   margin-bottom: 0;
   border-bottom: 1px solid var(--border, #e8ede7);
 }
-.mail-app.mailbox-live-app .mail-reader-avatar {
+.mail-app .mail-main > .mailbox-live-page .mail-reader-avatar {
   width: 42px;
   height: 42px;
   border-radius: 13px;
   font-size: 12px;
 }
-.mail-app.mailbox-live-app .mail-reader-meta .mail-sender-info {
+.mail-app .mail-main > .mailbox-live-page .mail-reader-meta .mail-sender-info {
   gap: 6px;
 }
-.mail-app.mailbox-live-app .mail-reader-meta .mail-sender-info strong {
+.mail-app .mail-main > .mailbox-live-page .mail-reader-meta .mail-sender-info strong {
   font-size: 12px;
   overflow-wrap: anywhere;
 }
-.mail-app.mailbox-live-app .mail-reader-meta .mail-sender-info span {
+.mail-app .mail-main > .mailbox-live-page .mail-reader-meta .mail-sender-info span {
   white-space: normal;
   overflow-wrap: anywhere;
   line-height: 1.45;
 }
-.mail-app.mailbox-live-app .mail-reader-meta .mail-sender-info small {
+.mail-app .mail-main > .mailbox-live-page .mail-reader-meta .mail-sender-info small {
   color: var(--muted-foreground, #859184);
   font-size: 10px;
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
-.mail-app.mailbox-live-app .mail-reader-meta time {
+.mail-app .mail-main > .mailbox-live-page .mail-reader-meta time {
   max-width: 155px;
   text-align: right;
   white-space: normal;
   line-height: 1.5;
 }
-.mail-app.mailbox-live-app .mail-message-body-card {
+.mail-app .mail-main > .mailbox-live-page .mail-message-body-card {
   margin-top: 18px;
   padding: clamp(16px, 2.3vw, 26px);
   border: 1px solid var(--border, #e6ece4);
@@ -2161,20 +2178,20 @@ html.dark .mail-appearance-toggle {
   background: var(--card, #fff);
   box-shadow: 0 3px 12px rgba(23, 44, 26, .035);
 }
-.mail-app.mailbox-live-app .mail-message-body {
+.mail-app .mail-main > .mailbox-live-page .mail-message-body {
   max-width: 760px;
   color: var(--foreground, #4a584b);
   font-size: 13px;
   line-height: 1.9;
   overflow-wrap: anywhere;
 }
-.mail-app.mailbox-live-app .mail-message-body p {
+.mail-app .mail-main > .mailbox-live-page .mail-message-body p {
   margin: 0 0 14px;
 }
-.mail-app.mailbox-live-app .mail-message-body p:last-child {
+.mail-app .mail-main > .mailbox-live-page .mail-message-body p:last-child {
   margin-bottom: 0;
 }
-.mail-app.mailbox-live-app .mail-reader-reply {
+.mail-app .mail-main > .mailbox-live-page .mail-reader-reply {
   display: inline-flex;
   min-height: 30px;
   align-items: center;
@@ -2187,10 +2204,10 @@ html.dark .mail-appearance-toggle {
   font-size: 10px;
   font-weight: 750;
 }
-.mail-app.mailbox-live-app .mail-reader-reply:hover {
+.mail-app .mail-main > .mailbox-live-page .mail-reader-reply:hover {
   background: var(--accent, #edf5eb);
 }
-.mail-app.mailbox-live-app .mail-mobile-back {
+.mail-app .mail-main > .mailbox-live-page .mail-mobile-back {
   display: none;
 }
 
@@ -2396,7 +2413,7 @@ html.dark .mail-appearance-toggle {
 }
 
 @media (max-width: 760px) {
-  .mail-app.mailbox-live-app > .mail-main > .mail-topbar {
+  .mail-app .mail-main > .mailbox-live-page > .mail-topbar {
     height: 62px;
     min-height: 62px;
     max-height: 62px;
@@ -2404,74 +2421,74 @@ html.dark .mail-appearance-toggle {
     gap: 8px;
     padding: 8px 10px 8px 58px;
   }
-  .mail-app.mailbox-live-app .mail-breadcrumb {
+  .mail-app .mail-main > .mailbox-live-page .mail-breadcrumb {
     display: none;
   }
-  .mail-app.mailbox-live-app .mail-search {
+  .mail-app .mail-main > .mailbox-live-page .mail-search {
     width: auto;
     min-width: 0;
     flex: 1 1 auto;
   }
-  .mail-app.mailbox-live-app .mail-search kbd {
+  .mail-app .mail-main > .mailbox-live-page .mail-search kbd {
     display: none;
   }
-  .mail-app.mailbox-live-app .mail-topbar-right {
+  .mail-app .mail-main > .mailbox-live-page .mail-topbar-right {
     gap: 6px;
   }
-  .mail-app.mailbox-live-app .mail-topbar-right .mail-appearance-toggle {
+  .mail-app .mail-main > .mailbox-live-page .mail-topbar-right .mail-appearance-toggle {
     width: 32px;
     height: 32px;
   }
-  .mail-app.mailbox-live-app .mail-content-layout {
+  .mail-app .mail-main > .mailbox-live-page .mail-content-layout {
     display: grid;
     height: calc(100dvh - 62px);
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr);
   }
-  .mail-app.mailbox-live-app .mail-list-pane,
-  .mail-app.mailbox-live-app .mail-detail-pane {
+  .mail-app .mail-main > .mailbox-live-page .mail-list-pane,
+  .mail-app .mail-main > .mailbox-live-page .mail-detail-pane {
     grid-column: 1;
     grid-row: 1;
     width: 100%;
     height: 100%;
     min-height: 0;
   }
-  .mail-app.mailbox-live-app .mail-list-pane {
+  .mail-app .mail-main > .mailbox-live-page .mail-list-pane {
     display: flex;
     border-right: 0;
   }
-  .mail-app.mailbox-live-app .mail-detail-pane {
+  .mail-app .mail-main > .mailbox-live-page .mail-detail-pane {
     display: none;
   }
-  .mail-app.mailbox-live-app .mail-content-layout.mobile-detail-open .mail-list-pane {
+  .mail-app .mail-main > .mailbox-live-page .mail-content-layout.mobile-detail-open .mail-list-pane {
     display: none;
   }
-  .mail-app.mailbox-live-app .mail-content-layout.mobile-detail-open .mail-detail-pane {
+  .mail-app .mail-main > .mailbox-live-page .mail-content-layout.mobile-detail-open .mail-detail-pane {
     display: flex;
   }
-  .mail-app.mailbox-live-app .mail-list-heading {
+  .mail-app .mail-main > .mailbox-live-page .mail-list-heading {
     min-height: 100px;
     gap: 9px;
     padding: 14px 13px 12px;
   }
-  .mail-app.mailbox-live-app .mail-list-heading h1 {
+  .mail-app .mail-main > .mailbox-live-page .mail-list-heading h1 {
     font-size: 22px;
   }
-  .mail-app.mailbox-live-app .mail-list-heading select {
+  .mail-app .mail-main > .mailbox-live-page .mail-list-heading select {
     max-width: 150px;
   }
-  .mail-app.mailbox-live-app .mail-list-toolbar {
+  .mail-app .mail-main > .mailbox-live-page .mail-list-toolbar {
     min-height: 40px;
     padding: 0 12px;
   }
-  .mail-app.mailbox-live-app .mail-message-open {
+  .mail-app .mail-main > .mailbox-live-page .mail-message-open {
     padding-left: 13px;
   }
-  .mail-app.mailbox-live-app .mail-detail-actions {
+  .mail-app .mail-main > .mailbox-live-page .mail-detail-actions {
     min-height: 52px;
     padding: 0 12px;
   }
-  .mail-app.mailbox-live-app .mail-mobile-back {
+  .mail-app .mail-main > .mailbox-live-page .mail-mobile-back {
     display: inline-flex;
     min-height: 31px;
     align-items: center;
@@ -2483,30 +2500,30 @@ html.dark .mail-appearance-toggle {
     font-size: 10px;
     font-weight: 750;
   }
-  .mail-app.mailbox-live-app .mail-detail-scroll {
+  .mail-app .mail-main > .mailbox-live-page .mail-detail-scroll {
     padding: 18px 15px 22px;
   }
-  .mail-app.mailbox-live-app .mail-reader-meta {
+  .mail-app .mail-main > .mailbox-live-page .mail-reader-meta {
     gap: 9px;
   }
-  .mail-app.mailbox-live-app .mail-reader-meta time {
+  .mail-app .mail-main > .mailbox-live-page .mail-reader-meta time {
     max-width: 105px;
     font-size: 9px;
   }
-  .mail-app.mailbox-live-app .mail-reader-avatar {
+  .mail-app .mail-main > .mailbox-live-page .mail-reader-avatar {
     width: 36px;
     height: 36px;
   }
-  .mail-app.mailbox-live-app .mail-message-body-card {
+  .mail-app .mail-main > .mailbox-live-page .mail-message-body-card {
     padding: 15px;
   }
-  .mail-app.mailbox-live-app .mail-message-body {
+  .mail-app .mail-main > .mailbox-live-page .mail-message-body {
     font-size: 12px;
   }
-  .mail-app.mailbox-live-app .mail-message-list > section {
+  .mail-app .mail-main > .mailbox-live-page .mail-message-list > section {
     margin: 8px;
   }
-  .mail-app.mailbox-live-app .mail-topbar-right .livePillUnavailable {
+  .mail-app .mail-main > .mailbox-live-page .mail-topbar-right .livePillUnavailable {
     max-width: 95px;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -2522,11 +2539,11 @@ html.dark .mail-appearance-toggle {
 
 /* In the compact drawer range, keep Compose available while navigation is closed. */
 @media (min-width: 621px) and (max-width: 850px) {
-  .mail-app.mailbox-live-app:not(:has(.mail-sidebar.mobile-open)) .mail-mobile-compose-fab {
+  .mail-app:not(:has(.mail-sidebar.mobile-open)) .mail-main > .mailbox-live-page .mail-mobile-compose-fab {
     display: inline-flex;
   }
 }
-.mail-app.mailbox-live-app:has(.mail-sidebar.mobile-open) .mail-mobile-compose-fab {
+.mail-app:has(.mail-sidebar.mobile-open) .mail-main > .mailbox-live-page .mail-mobile-compose-fab {
   display: none;
 }
 
@@ -2554,7 +2571,7 @@ html.dark .mail-appearance-toggle {
     background: var(--accent, #edf5ee);
     color: var(--accent-foreground, #1d603b);
   }
-  .mail-app.mailbox-live-app:has(.mail-sidebar.is-collapsed) .mail-mobile-compose-fab {
+  .mail-app:has(.mail-sidebar.is-collapsed) .mail-main > .mailbox-live-page .mail-mobile-compose-fab {
     display: inline-flex;
   }
 }
@@ -2562,50 +2579,50 @@ html.dark .mail-appearance-toggle {
 
 /* Mail reader responsive behavior: keep the list uncluttered until a message is opened. */
 @media (min-width: 1201px) {
-  .mail-app.mailbox-live-app .mail-content-layout:not(.message-selected) {
+  .mail-app .mail-main > .mailbox-live-page .mail-content-layout:not(.message-selected) {
     grid-template-columns: minmax(0, 1fr);
   }
-  .mail-app.mailbox-live-app .mail-content-layout:not(.message-selected) .mail-detail-pane {
+  .mail-app .mail-main > .mailbox-live-page .mail-content-layout:not(.message-selected) .mail-detail-pane {
     display: none;
   }
-  .mail-app.mailbox-live-app .mail-content-layout:not(.message-selected) .mail-list-pane {
+  .mail-app .mail-main > .mailbox-live-page .mail-content-layout:not(.message-selected) .mail-list-pane {
     grid-column: 1 / -1;
     border-right: 0;
   }
-  .mail-app.mailbox-live-app .mail-content-layout.message-selected {
+  .mail-app .mail-main > .mailbox-live-page .mail-content-layout.message-selected {
     grid-template-columns: minmax(340px, 38%) minmax(0, 1fr);
   }
 }
 
 /* On laptop-sized, split-screen, and tablet widths, open a message as its own view. */
 @media (max-width: 1200px) {
-  .mail-app.mailbox-live-app .mail-content-layout {
+  .mail-app .mail-main > .mailbox-live-page .mail-content-layout {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr);
   }
-  .mail-app.mailbox-live-app .mail-content-layout .mail-list-pane,
-  .mail-app.mailbox-live-app .mail-content-layout .mail-detail-pane {
+  .mail-app .mail-main > .mailbox-live-page .mail-content-layout .mail-list-pane,
+  .mail-app .mail-main > .mailbox-live-page .mail-content-layout .mail-detail-pane {
     grid-column: 1;
     grid-row: 1;
     width: 100%;
     height: 100%;
     min-height: 0;
   }
-  .mail-app.mailbox-live-app .mail-content-layout .mail-list-pane {
+  .mail-app .mail-main > .mailbox-live-page .mail-content-layout .mail-list-pane {
     display: flex;
     border-right: 0;
   }
-  .mail-app.mailbox-live-app .mail-content-layout .mail-detail-pane {
+  .mail-app .mail-main > .mailbox-live-page .mail-content-layout .mail-detail-pane {
     display: none;
   }
-  .mail-app.mailbox-live-app .mail-content-layout.mobile-detail-open .mail-list-pane {
+  .mail-app .mail-main > .mailbox-live-page .mail-content-layout.mobile-detail-open .mail-list-pane {
     display: none;
   }
-  .mail-app.mailbox-live-app .mail-content-layout.mobile-detail-open .mail-detail-pane {
+  .mail-app .mail-main > .mailbox-live-page .mail-content-layout.mobile-detail-open .mail-detail-pane {
     display: flex;
   }
-  .mail-app.mailbox-live-app .mail-mobile-back {
+  .mail-app .mail-main > .mailbox-live-page .mail-mobile-back {
     display: inline-flex;
     min-height: 31px;
     align-items: center;
