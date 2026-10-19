@@ -26,6 +26,8 @@ type EmailMessage = {
   direction: "inbound" | "outbound";
   from_address: string;
   to_addresses: string[];
+  cc_addresses: string[];
+  reply_to_addresses: string[];
   subject: string;
   body_text: string | null;
   body_html: string | null;
@@ -699,11 +701,12 @@ export default function LiveMailbox(props: LiveMailboxProps) {
     function replyTo(message: EmailMessage, replyAll = false) {
     if (message.direction !== "inbound") return;
     const ownAddress = selectedMailbox?.address.toLowerCase();
+    const replyTargets = message.reply_to_addresses?.length ? message.reply_to_addresses : [message.from_address];
     const recipients = replyAll
-      ? Array.from(new Set([message.from_address, ...message.to_addresses]
+      ? Array.from(new Set([...replyTargets, ...message.to_addresses, ...(message.cc_addresses ?? [])]
         .map((address) => address.trim().toLowerCase())
         .filter((address) => address && address !== ownAddress)))
-      : [message.from_address];
+      : replyTargets;
     setTo(recipients.join(", "));
     setSubject(/^re:/i.test(message.subject) ? message.subject : "Re: " + message.subject);
     const quoted = plainText(message).split("\n").map((line) => "> " + line).join("\n");
@@ -719,7 +722,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   }
 
   async function forwardMessage(message: EmailMessage) {
-    const originalAttachmentCount = messageAttachments.length;
+    const originalAttachmentCount = messageAttachmentsMessageId === message.id ? visibleMessageAttachments.length : 0;
     discardPendingAttachments();
     setDraftId(null);
     draftIdRef.current = null;
@@ -1030,7 +1033,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
                     {messageAttachmentsLoading && <p className={styles.attachmentStatus}>Loading attachments…</p>}
                     {!messageAttachmentsLoading && visibleMessageAttachments.length > 0 && (
                       <section className={styles.attachmentPanel} aria-label="Message attachments">
-                        <h3>Attachments <span>{messageAttachments.length}</span></h3>
+                        <h3>Attachments <span>{visibleMessageAttachments.length}</span></h3>
                         <div className={styles.attachmentList}>
                           {visibleMessageAttachments.map((attachment) => (
                             <a key={attachment.id} href={"/api/mail/attachments/" + encodeURIComponent(attachment.id)} className={styles.messageAttachment} download>
