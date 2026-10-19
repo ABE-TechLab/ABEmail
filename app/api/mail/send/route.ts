@@ -53,6 +53,8 @@ export async function POST(request: NextRequest) {
     !("to" in payload) || typeof payload.to !== "string" || payload.to.trim().length < 1 || payload.to.length > 4000 ||
     !("subject" in payload) || typeof payload.subject !== "string" || payload.subject.trim().length < 1 || payload.subject.length > 998 ||
     !("text" in payload) || typeof payload.text !== "string" || payload.text.trim().length < 1 || payload.text.length > 80000 ||
+    ("draftId" in payload && payload.draftId !== null &&
+      (typeof payload.draftId !== "string" || !UUID_PATTERN.test(payload.draftId))) ||
     ("attachments" in payload && (!Array.isArray(payload.attachments) || payload.attachments.length > 5 ||
       payload.attachments.some((id) => typeof id !== "string" || !UUID_PATTERN.test(id)) ||
       new Set(payload.attachments).size !== payload.attachments.length))
@@ -67,6 +69,7 @@ export async function POST(request: NextRequest) {
 
   const organizationId = payload.organizationId;
   const mailboxId = payload.mailboxId;
+  const draftId = typeof payload.draftId === "string" ? payload.draftId : null;
   const subject = payload.subject.trim();
   const text = payload.text;
   const recipients = Array.from(new Set(payload.to.split(/[;,]/).map((value) => value.trim().toLowerCase()).filter(Boolean)));
@@ -136,6 +139,14 @@ export async function POST(request: NextRequest) {
       return json({ error: "You do not have permission to send from this mailbox." }, 403);
     }
   }
+  if (draftId) {
+    const { data: ownedDraft, error: draftError } = await admin.from("email_drafts")
+      .select("id").eq("id", draftId).eq("organization_id", organizationId)
+      .eq("mailbox_id", mailboxId).eq("user_id", user.id).maybeSingle();
+    if (draftError) return json({ error: "Draft ownership could not be checked." }, 503);
+    if (!ownedDraft) return json({ error: "Draft not found." }, 404);
+  }
+
 
   const { data: providerConnection, error: providerConnectionError } = await admin
     .from("organization_provider_connections")
@@ -220,10 +231,10 @@ export async function POST(request: NextRequest) {
   try {
     // Attachment IDs can refer to this in-flight message on an idempotent retry,
     // or to unexpired uploads created by this user for this mailbox.
-    let attachmentRows: Array<{ id: string; filename: string; content_type: string; size_bytes: number; storage_path: string; user_id: string | null; message_id: string | null; expires_at: string | null }> = [];
+    let attachmentRows: Array<{ id: string; filename: string; content_type: string; size_bytes: number; storage_path: string; user_id: string | null; message_id: string | null; draft_id: string | null; expires_at: string | null }> = [];
     if (attachmentIds.length) {
       const { data: rows, error: attachmentError } = await admin.from("email_message_attachments")
-        .select("id, filename, content_type, size_bytes, storage_path, user_id, message_id, expires_at")
+        .select("id, filename, content_type, size_bytes, storage_path, user_id, message_id, draft_id, expires_at")
         .in("id", attachmentIds).eq("organization_id", organizationId).eq("mailbox_id", mailboxId);
       if (attachmentError || !rows || rows.length !== attachmentIds.length) {
         return json({ error: "One or more attachments are unavailable. Remove and upload them again." }, 400);
@@ -232,7 +243,12 @@ export async function POST(request: NextRequest) {
       attachmentRows = attachmentIds.map((id) => byId.get(id)!).filter(Boolean);
       if (attachmentRows.length !== attachmentIds.length || attachmentRows.some((row) =>
         (row.message_id !== null && row.message_id !== savedMessageId) ||
-        (row.message_id === null && (row.user_id !== user.id || !row.expires_at || Date.parse(row.expires_at) <= Date.now()))
+        (row.message_id === null && (
+          row.user_id !== user.id ||
+          (row.draft_id !== null
+            ? row.draft_id !== draftId
+            : !row.expires_at || Date.parse(row.expires_at) <= Date.now())
+        ))
       )) {
         return json({ error: "An attachment expired or belongs to a different message." }, 409);
       }
@@ -255,14 +271,14 @@ export async function POST(request: NextRequest) {
     const pendingIds = attachmentRows.filter((row) => row.message_id === null).map((row) => row.id);
     if (pendingIds.length) {
       const { data: linked, error: linkError } = await admin.from("email_message_attachments")
-        .update({ message_id: savedMessageId, expires_at: null })
+        .update({ message_id: savedMessageId, draft_id: null, expires_at: null })
         .in("id", pendingIds).eq("organization_id", organizationId).eq("mailbox_id", mailboxId)
         .eq("user_id", user.id).is("message_id", null)
         .select("id");
       if (linkError || (linked?.length ?? 0) !== pendingIds.length) {
         return json({ error: "Attachments could not be linked safely to this message." }, 503);
       }
-      attachmentRows = attachmentRows.map((row) => pendingIds.includes(row.id) ? { ...row, message_id: savedMessageId, expires_at: null } : row);
+      attachmentRows = attachmentRows.map((row) => pendingIds.includes(row.id) ? { ...row, message_id: savedMessageId, draft_id: null, expires_at: null } : row);
     }
 
     const sent = usesWorkspaceKey
@@ -307,7 +323,11 @@ export async function POST(request: NextRequest) {
       await admin.from("email_messages").update({ status: "failed" }).eq("id", savedMessageId);
       if (attachmentIds.length) {
         const { error: detachError } = await admin.from("email_message_attachments")
-          .update({ message_id: null, expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() })
+          .update({
+            message_id: null,
+            draft_id: draftId,
+            expires_at: draftId ? null : new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+          })
           .eq("organization_id", organizationId).eq("mailbox_id", mailboxId).eq("message_id", savedMessageId)
           .eq("user_id", user.id).in("id", attachmentIds);
         if (detachError) return json({ error: "The provider rejected this email and attachment cleanup needs attention. Refresh the composer before retrying." }, 503);
