@@ -14,7 +14,7 @@ const WORKSPACE_PAGES: Record<string, {
     title: "Templates",
     description: "Reusable messages and branded email designs for consistent customer communication.",
     panelTitle: "Template library",
-    panelDescription: "Saved Signatures and the standard composer remain available. Reusable subject/body templates, the Brand Profile, and the visual email designer are tracked in the P1 roadmap.",
+    panelDescription: "Reusable subject/body templates are managed here and can be inserted from the standard composer. Brand Profile and visual block editing remain on the separate branded-email designer roadmap.",
   },
   reminders: {
     title: "Reminders",
