@@ -751,7 +751,6 @@ export default function WorkspaceSettingsPanel({
 
   return (
     <div className="workspace-settings-app">
-      <main className="mail-main">
         <header className="mail-topbar">
           <div className="mail-breadcrumb"><Link href={base}>Workspace</Link><span className="mail-breadcrumb-slash">/</span><strong>{info.title}</strong></div>
           <div className="settings-topbar-title">{organizationName}</div>
