@@ -691,9 +691,15 @@ export default function LiveMailbox(props: LiveMailboxProps) {
     setDrafts((current) => current.filter((item) => item.id !== draft.id));
   }
 
-    function replyTo(message: EmailMessage) {
+    function replyTo(message: EmailMessage, replyAll = false) {
     if (message.direction !== "inbound") return;
-    setTo(message.from_address);
+    const ownAddress = selectedMailbox?.address.toLowerCase();
+    const recipients = replyAll
+      ? Array.from(new Set([message.from_address, ...message.to_addresses]
+        .map((address) => address.trim().toLowerCase())
+        .filter((address) => address && address !== ownAddress)))
+      : [message.from_address];
+    setTo(recipients.join(", "));
     setSubject(/^re:/i.test(message.subject) ? message.subject : "Re: " + message.subject);
     const quoted = plainText(message).split("\n").map((line) => "> " + line).join("\n");
     const quoteBlock = "—\nOn " + messageDate(message, mailPreferences.timezone, mailPreferences.language) + ", " + message.from_address + " wrote:\n" + quoted;
@@ -701,8 +707,44 @@ export default function LiveMailbox(props: LiveMailboxProps) {
     setRequestKey(null);
     setNotice("");
     setBody(initialBody);
+    setScheduleMode(false);
+    setScheduledAt("");
     composeCursorPosition.current = mailPreferences.replyStyle === "bottom" ? initialBody.length : 0;
     setComposeOpen(true);
+  }
+
+  async function forwardMessage(message: EmailMessage) {
+    const originalAttachmentCount = messageAttachments.length;
+    discardPendingAttachments();
+    setDraftId(null);
+    draftIdRef.current = null;
+    draftUpdatedAtRef.current = null;
+    setTo("");
+    setSubject(/^fwd:/i.test(message.subject) ? message.subject : "Fwd: " + message.subject);
+    setBody("\n\n---------- Forwarded message ----------\nFrom: " + message.from_address +
+      "\nDate: " + messageDate(message, mailPreferences.timezone, mailPreferences.language) +
+      "\nSubject: " + (message.subject || "(no subject)") +
+      "\nTo: " + message.to_addresses.join(", ") + "\n\n" + plainText(message));
+    setRequestKey(null);
+    setScheduleMode(false);
+    setScheduledAt("");
+    setNotice("");
+    composeCursorPosition.current = 0;
+    setComposeOpen(true);
+    if (originalAttachmentCount > 0) {
+      try {
+        const response = await fetch("/api/mail/attachments", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "copy", organizationId, mailboxId, sourceMessageId: message.id }),
+        });
+        const result = await response.json() as { attachments?: PendingAttachment[]; error?: string };
+        if (!response.ok) throw new Error(result.error || "Original attachments could not be copied.");
+        if (result.attachments?.length) setPendingAttachments(result.attachments);
+      } catch (error) {
+        setNotice((error instanceof Error ? error.message : "Original attachments could not be copied.") + " The forwarded message text is ready to send.");
+      }
+    }
   }
 
   return (
@@ -949,6 +991,8 @@ export default function LiveMailbox(props: LiveMailboxProps) {
                     <span className={styles.messageStatus}>{selectedMessage.status}</span>
                     <div className="mail-detail-action-group">
                       {selectedMessage.direction === "inbound" && <button type="button" className="mail-reader-reply" onClick={() => replyTo(selectedMessage)}>Reply <span aria-hidden="true">↶</span></button>}
+                      {selectedMessage.direction === "inbound" && <button type="button" className="mail-toolbar-button" onClick={() => replyTo(selectedMessage, true)}>Reply all</button>}
+                      <button type="button" className="mail-toolbar-button" onClick={() => void forwardMessage(selectedMessage)}>Forward</button>
                       <button type="button" className="mail-toolbar-button" onClick={() => router.refresh()} aria-label="Refresh message">↻</button>
                     </div>
                   </div>
@@ -978,9 +1022,26 @@ export default function LiveMailbox(props: LiveMailboxProps) {
                         ))}
                       </div>
                     </div>
+                    {messageAttachmentsLoading && <p className={styles.attachmentStatus}>Loading attachments…</p>}
+                    {!messageAttachmentsLoading && messageAttachments.length > 0 && (
+                      <section className={styles.attachmentPanel} aria-label="Message attachments">
+                        <h3>Attachments <span>{messageAttachments.length}</span></h3>
+                        <div className={styles.attachmentList}>
+                          {messageAttachments.map((attachment) => (
+                            <a key={attachment.id} href={"/api/mail/attachments/" + encodeURIComponent(attachment.id)} className={styles.messageAttachment} download>
+                              <span className={styles.attachmentIcon} aria-hidden="true">↧</span>
+                              <span className={styles.attachmentFileCopy}><strong>{attachment.filename}</strong><small>{formatFileSize(attachment.size_bytes)}</small></span>
+                              <span aria-hidden="true">↓</span>
+                            </a>
+                          ))}
+                        </div>
+                      </section>
+                    )}
                     {selectedMessage.direction === "inbound" && (
                       <div className="mail-reply-actions">
                         <button type="button" className="mail-primary-action" onClick={() => replyTo(selectedMessage)}>↶ Reply</button>
+                        <button type="button" className="mail-secondary-action" onClick={() => replyTo(selectedMessage, true)}>Reply all</button>
+                        <button type="button" className="mail-secondary-action" onClick={() => void forwardMessage(selectedMessage)}>Forward</button>
                       </div>
                     )}
                     <p className="mail-demo-footnote"><span className="mail-demo-dot" /> Message status: {selectedMessage.status} · {selectedMessage.direction === "inbound" ? "Received" : "Sent"} {messageDate(selectedMessage, mailPreferences.timezone, mailPreferences.language)}</p>
@@ -1003,16 +1064,35 @@ export default function LiveMailbox(props: LiveMailboxProps) {
                 <button type="button" onClick={() => void closeComposer()} aria-label="Close compose" disabled={busy}>×</button>
               </header>
               <form onSubmit={submitMessage}>
-                <label className="mail-compose-field"><span>To</span><input type="email" required maxLength={320} disabled={busy} value={to} onChange={(event) => { setTo(event.target.value); setRequestKey(null); }} placeholder="name@example.com" /></label>
+                <label className="mail-compose-field"><span>To</span><input type="text" inputMode="email" required maxLength={4000} disabled={busy} value={to} onChange={(event) => { setTo(event.target.value); setRequestKey(null); }} placeholder="name@example.com, another@example.com" /></label>
                 <label className="mail-compose-field"><span>Subject</span><input required maxLength={998} disabled={busy} value={subject} onChange={(event) => { setSubject(event.target.value); setRequestKey(null); }} placeholder="Add a subject" /></label>
                 <label className="mail-compose-body-label">
                   <span className="mail-sr-only">Message body</span>
                   <textarea ref={composeBodyRef} required maxLength={80000} rows={8} disabled={busy} value={body} style={{ fontFamily: mailPreferences.font === "serif" ? "Georgia, serif" : mailPreferences.font === "mono" ? "ui-monospace, SFMono-Regular, Consolas, monospace" : "inherit" }} onChange={(event) => { setBody(event.target.value); setRequestKey(null); composeCursorPosition.current = null; }} placeholder="Write your message…" />
                 </label>
-                <p className="mail-compose-warning"><span>i</span> Plain-text email · One recipient · Workspace sending limits apply · {draftSaving ? "Saving draft…" : draftId ? "Draft saved" : "Changes save automatically"}</p>
+                <p className="mail-compose-warning"><span>i</span> Plain-text email · Up to 10 recipients separated by commas · Attachments up to 4 MB each / 20 MB total · {draftSaving ? "Saving draft…" : draftId ? "Draft saved" : "Changes save automatically"}</p>
+                {!scheduleMode && (
+                  <section className={styles.composeAttachments} aria-label="Compose attachments">
+                    <input ref={attachmentInputRef} className={styles.fileInput} type="file" multiple disabled={busy || uploadingAttachments || !mailboxId} onChange={(event) => void uploadSelectedFiles(event.currentTarget.files)} aria-label="Choose attachment files" />
+                    <button type="button" className="mail-compose-discard" disabled={busy || uploadingAttachments || !mailboxId || pendingAttachments.length >= 5} onClick={() => attachmentInputRef.current?.click()}>
+                      {uploadingAttachments ? "Uploading…" : "Attach files"} <span aria-hidden="true">↥</span>
+                    </button>
+                    {pendingAttachments.length > 0 && (
+                      <div className={styles.pendingAttachmentList}>
+                        {pendingAttachments.map((attachment) => (
+                          <div className={styles.pendingAttachment} key={attachment.id}>
+                            <span className={styles.attachmentIcon} aria-hidden="true">↥</span>
+                            <span className={styles.attachmentFileCopy}><strong>{attachment.filename}</strong><small>{formatFileSize(attachment.size_bytes)}</small></span>
+                            <button type="button" disabled={busy || uploadingAttachments} aria-label={"Remove " + attachment.filename} onClick={() => void removePendingAttachment(attachment)}>×</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </section>
+                )}
                 {scheduleMode && <label className="mail-compose-field"><span>Send at</span><input type="datetime-local" required value={scheduledAt} onChange={(event) => setScheduledAt(event.target.value)} disabled={busy} /></label>}
                 <footer className="mail-compose-footer">
-                  {scheduleMode ? <button type="button" className="mail-primary-action" disabled={busy || !mailboxId || !scheduledAt} onClick={() => void scheduleMessage()}>{busy ? "Scheduling…" : "Schedule email"} <span>◷</span></button> : <><button type="submit" className="mail-primary-action" disabled={busy || !mailboxId}>{busy ? "Sending…" : "Send"} <span>↗</span></button><button type="button" className="mail-compose-discard" disabled={busy} onClick={() => { setScheduleMode(true); const date = new Date(Date.now() + 60 * 60 * 1000); date.setMinutes(date.getMinutes() - date.getTimezoneOffset()); setScheduledAt(date.toISOString().slice(0, 16)); }}>Schedule</button></>}
+                  {scheduleMode ? <button type="button" className="mail-primary-action" disabled={busy || uploadingAttachments || !mailboxId || !scheduledAt || pendingAttachments.length > 0 || to.split(/[;,]/).map((value) => value.trim()).filter(Boolean).length !== 1} onClick={() => void scheduleMessage()}>{busy ? "Scheduling…" : "Schedule email"} <span>◷</span></button> : <><button type="submit" className="mail-primary-action" disabled={busy || uploadingAttachments || !mailboxId}>{busy ? "Sending…" : "Send"} <span>↗</span></button><button type="button" className="mail-compose-discard" disabled={busy || uploadingAttachments || pendingAttachments.length > 0 || to.split(/[;,]/).map((value) => value.trim()).filter(Boolean).length !== 1} title={pendingAttachments.length > 0 ? "Remove attachments before scheduling" : "Scheduling currently supports one recipient"} onClick={() => { setScheduleMode(true); const date = new Date(Date.now() + 60 * 60 * 1000); date.setMinutes(date.getMinutes() - date.getTimezoneOffset()); setScheduledAt(date.toISOString().slice(0, 16)); }}>Schedule</button></>}
                   <button type="button" className="mail-compose-discard" onClick={() => void closeComposer()} disabled={busy}>Close</button>
                 </footer>
               </form>
