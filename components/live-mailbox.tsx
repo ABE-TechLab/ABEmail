@@ -14,8 +14,9 @@ type MailPreferences = { timezone: string; language: string; font: string; signa
 const DEFAULT_MAIL_PREFERENCES: MailPreferences = { timezone: "Africa/Lagos", language: "en", font: "sans", signature: "", replyStyle: "reply", compactMessageList: false };
 
 type Mailbox = { id: string; address: string; display_name: string | null; canManage: boolean };
-type ActiveMailboxView = "Inbox" | "Sent" | "Starred" | "Archive" | "Trash" | "Spam";
+type ActiveMailboxView = "Inbox" | "Sent" | "Starred" | "Drafts" | "Archive" | "Trash" | "Spam";
 type LifecycleAction = "mark_read" | "mark_unread" | "star" | "unstar" | "archive" | "unarchive" | "trash" | "restore" | "spam" | "not_spam" | "permanent_delete";
+type EmailDraft = { id: string; to_address: string; subject: string; body_text: string; created_at: string; updated_at: string };
 type EmailMessage = {
   id: string;
   mailbox_id: string;
@@ -177,7 +178,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   const [body, setBody] = useState("");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
-  const [requestKey, setRequestKey] = useState<string | null>(null);
+  const [requestKey, setRequestKey] = useState<string | null>(null);\n  const [drafts, setDrafts] = useState<EmailDraft[]>([]);\n  const [draftId, setDraftId] = useState<string | null>(null);\n  const [draftUpdatedAt, setDraftUpdatedAt] = useState<string | null>(null);\n  const [draftSaving, setDraftSaving] = useState(false);\n  const draftSaveQueue = useRef<Promise<void>>(Promise.resolve());\n  const draftMutationVersion = useRef(0);
 
   useEffect(() => {
     const media = window.matchMedia("(max-width: 760px)");
@@ -201,7 +202,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
     return () => window.cancelAnimationFrame(frame);
   }, [composeOpen, body]);
 
-  const visibleMessages = useMemo(() => {
+  useEffect(() => {\n    if (activeView !== "Drafts" || !mailboxId) { setDrafts([]); return; }\n    let active = true;\n    void fetch("/api/mail/drafts?organizationId=" + encodeURIComponent(organizationId) + "&mailboxId=" + encodeURIComponent(mailboxId), { cache: "no-store" })\n      .then(async (response) => { const result = await response.json() as { drafts?: EmailDraft[]; error?: string }; if (!response.ok) throw new Error(result.error || "Drafts could not be loaded."); if (active) setDrafts(result.drafts ?? []); })\n      .catch((error: unknown) => { if (active) setNotice(error instanceof Error ? error.message : "Drafts could not be loaded."); });\n    return () => { active = false; };\n  }, [activeView, mailboxId, organizationId]);\n\n  useEffect(() => {\n    if (!composeOpen || !mailboxId || (!to.trim() && !subject.trim() && !body.trim())) return;\n    const version = ++draftMutationVersion.current;\n    const timer = window.setTimeout(() => {\n      setDraftSaving(true);\n      draftSaveQueue.current = draftSaveQueue.current.then(async () => {\n        const payload = { organizationId, mailboxId, id: draftId, expectedUpdatedAt: draftUpdatedAt, to, subject, text: body };\n        const response = await fetch("/api/mail/drafts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });\n        const result = await response.json() as { ok?: boolean; draft?: EmailDraft; error?: string; conflict?: boolean };\n        if (!response.ok || !result.ok || !result.draft) { if (version === draftMutationVersion.current) setNotice(result.error || "Draft could not be saved."); return; }\n        if (version === draftMutationVersion.current) { setDraftId(result.draft.id); setDraftUpdatedAt(result.draft.updated_at); setDrafts((current) => [result.draft!, ...current.filter((item) => item.id !== result.draft!.id)]); }\n      }).catch(() => { if (version === draftMutationVersion.current) setNotice("Draft save failed. Keep this window open and try again."); }).finally(() => { if (version === draftMutationVersion.current) setDraftSaving(false); });\n    }, 650);\n    return () => window.clearTimeout(timer);\n  }, [composeOpen, organizationId, mailboxId, to, subject, body, draftId, draftUpdatedAt]);\n\n  const visibleMessages = useMemo(() => {
     const term = query.trim().toLowerCase();
     return messages.filter((message) => {
       if (message.mailbox_id !== mailboxId) return false;
@@ -311,7 +312,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
     }
   }
 
-  function replyTo(message: EmailMessage) {
+  function openDraft(draft: EmailDraft) {\n    setDraftId(draft.id); setDraftUpdatedAt(draft.updated_at); setTo(draft.to_address); setSubject(draft.subject); setBody(draft.body_text); setRequestKey(null); setNotice(""); setComposeOpen(true); composeCursorPosition.current = draft.body_text.length;\n  }\n\n  async function deleteDraft(draft: EmailDraft) {\n    const response = await fetch("/api/mail/drafts?organizationId=" + encodeURIComponent(organizationId) + "&mailboxId=" + encodeURIComponent(mailboxId) + "&id=" + encodeURIComponent(draft.id), { method: "DELETE" });\n    const result = await response.json() as { ok?: boolean; error?: string };\n    if (!response.ok || !result.ok) { setNotice(result.error || "Draft could not be deleted."); return; }\n    setDrafts((current) => current.filter((item) => item.id !== draft.id));\n  }\n\n  function replyTo(message: EmailMessage) {
     if (message.direction !== "inbound") return;
     setTo(message.from_address);
     setSubject(/^re:/i.test(message.subject) ? message.subject : "Re: " + message.subject);
@@ -474,7 +475,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
             <p className={styles.firstEmailFootnote}>A sent status confirms Resend accepted a message; delivery events update its status separately. Check the recipient inbox and send a reply to verify both directions.</p>
                   </section>
                 )}
-                {visibleMessages.map((message) => (
+                {activeView === "Drafts" && drafts.map((draft) => (\n                  <article className="mail-message-row" key={draft.id}>\n                    <button className="mail-message-open" type="button" onClick={() => openDraft(draft)} aria-label={"Edit draft " + (draft.subject || "no subject")}>\n                      <span className="mail-avatar tone-slate">✎</span><span className="mail-message-copy"><span className="mail-message-row-top"><strong>{draft.to_address || "Draft recipient"}</strong><time>{new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(draft.updated_at))}</time></span><span className="mail-message-subject">{draft.subject || "(no subject)"}</span><span className="mail-message-preview">{draft.body_text.replace(/\\s+/g, " ").slice(0, 120) || "No message text yet."}</span></span>\n                    </button><div className={styles.rowActions}><button type="button" className="mail-toolbar-button" onClick={() => void deleteDraft(draft)} aria-label="Delete draft" title="Delete draft">⌫</button></div>\n                  </article>\n                ))}\n                {visibleMessages.map((message) => (
                   <article className={selectedMessage?.id === message.id ? "mail-message-row selected" : "mail-message-row"} key={message.id}>
                     <input
                       className={styles.messageSelect}
@@ -523,7 +524,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
                     </div>
                   </article>
                 ))}
-                {!visibleMessages.length && (
+                {activeView === "Drafts" && !drafts.length && (\n                  <div className="mail-empty-list"><span>▧</span><strong>No drafts yet</strong><p>Unfinished messages are saved here automatically while you compose.</p><button type="button" onClick={openCompose}>Compose a draft</button></div>\n                )}\n                {activeView !== "Drafts" && !visibleMessages.length && (
                   <div className="mail-empty-list">
                     <span>{activeView === "Inbox" ? "▤" : activeView === "Sent" ? "↗" : activeView === "Starred" ? "☆" : activeView === "Archive" ? "▱" : activeView === "Trash" ? "⌫" : "⊘"}</span>
                     <strong>{query ? "No matching messages" : "No messages in " + activeView}</strong>
@@ -592,7 +593,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
           <div className="mail-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) setComposeOpen(false); }}>
             <section className="mail-compose-modal" role="dialog" aria-modal="true" aria-labelledby="compose-title">
               <header className="mail-compose-header">
-                <h2 id="compose-title">New message</h2>
+                <h2 id="compose-title">{draftId ? "Edit draft" : "New message"}</h2>
                 <button type="button" onClick={() => setComposeOpen(false)} aria-label="Close compose" disabled={busy}>×</button>
               </header>
               <form onSubmit={submitMessage}>
@@ -602,10 +603,10 @@ export default function LiveMailbox(props: LiveMailboxProps) {
                   <span className="mail-sr-only">Message body</span>
                   <textarea ref={composeBodyRef} required maxLength={80000} rows={8} value={body} style={{ fontFamily: mailPreferences.font === "serif" ? "Georgia, serif" : mailPreferences.font === "mono" ? "ui-monospace, SFMono-Regular, Consolas, monospace" : "inherit" }} onChange={(event) => { setBody(event.target.value); setRequestKey(null); composeCursorPosition.current = null; }} placeholder="Write your message…" />
                 </label>
-                <p className="mail-compose-warning"><span>i</span> Plain-text email · One recipient · Workspace sending limits apply</p>
+                <p className="mail-compose-warning"><span>i</span> Plain-text email · One recipient · Workspace sending limits apply · {draftSaving ? "Saving draft…" : draftId ? "Draft saved" : "Changes save automatically"}</p>
                 <footer className="mail-compose-footer">
                   <button type="submit" className="mail-primary-action" disabled={busy || !mailboxId}>{busy ? "Sending…" : "Send"} <span>↗</span></button>
-                  <button type="button" className="mail-compose-discard" onClick={() => setComposeOpen(false)} disabled={busy}>Discard</button>
+                  <button type="button" className="mail-compose-discard" onClick={() => { setComposeOpen(false); setTo(""); setSubject(""); setBody(""); setDraftId(null); setDraftUpdatedAt(null); setRequestKey(null); }} disabled={busy}>Close</button>
                 </footer>
               </form>
             </section>
