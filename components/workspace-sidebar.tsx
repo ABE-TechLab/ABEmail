@@ -306,12 +306,6 @@ export default function WorkspaceSidebar({
           </div>
         )}
 
-        {profileOpen && onWorkspaceSettings && (
-          <div className="mail-profile-menu">
-            <strong>Workspace settings</strong>
-            <button type="button" onClick={onWorkspaceSettings}>Open settings</button>
-          </div>
-        )}
         <p className="workspace-sidebar-note">Workspace mail</p>
       </div>
     </aside>
