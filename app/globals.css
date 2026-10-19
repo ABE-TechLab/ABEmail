@@ -473,8 +473,13 @@ h1 {
 .mail-contact-detail-section > strong { color: #526253; font-size: 11px; overflow-wrap: anywhere; }
 .mail-contact-email { width: 100%; }
 
-.mail-modal-backdrop { position: fixed; z-index: 40; inset: 0; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(18, 30, 21, .36); backdrop-filter: blur(3px); }
-.mail-compose-modal { width: min(620px, 100%); max-height: min(740px, calc(100vh - 40px)); overflow: auto; border: 1px solid #e3eae1; border-radius: 13px; background: #fff; box-shadow: 0 28px 80px rgba(15, 35, 20, .22); }
+.mail-modal-backdrop { position: fixed; z-index: 40; inset: 0; display: flex; align-items: flex-end; justify-content: flex-end; padding: 16px; background: rgba(18, 30, 21, .14); backdrop-filter: blur(1px); animation: mail-compose-backdrop-in .18s ease-out both; }
+.mail-compose-modal { display: flex; width: min(560px, calc(100vw - 32px)); height: min(680px, calc(100dvh - 32px)); max-height: calc(100dvh - 32px); flex-direction: column; overflow: hidden; border: 1px solid #e3eae1; border-radius: 13px 13px 10px 10px; background: #fff; box-shadow: 0 18px 60px rgba(15, 35, 20, .24); transform-origin: bottom right; animation: mail-compose-drawer-in .24s cubic-bezier(.2,.75,.25,1) both; }
+@keyframes mail-compose-backdrop-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes mail-compose-drawer-in { from { opacity: 0; transform: translate(18px, 22px) scale(.97); } to { opacity: 1; transform: translate(0, 0) scale(1); } }
+.mail-compose-modal form { display: flex; min-height: 0; flex: 1; flex-direction: column; overflow-y: auto; }
+.mail-compose-body-label { min-height: 0; flex: 1; }
+.mail-compose-body-label textarea { min-height: 220px; height: 100%; }
 .mail-compose-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid #eaf0e8; background: #fbfcfa; }
 .mail-compose-header h2 { margin: 0; color: #334136; font-family: "Manrope", sans-serif; font-size: 14px; }
 .mail-compose-header button { width: 28px; height: 28px; border: 0; border-radius: 6px; background: transparent; color: #889489; font-size: 21px; }
@@ -519,7 +524,46 @@ h1 {
   .mail-search { width: auto; min-width: 180px; flex: 1; }
   .mail-content-layout { grid-template-columns: minmax(285px, 44%) minmax(0,1fr); }
 }
+
+.mail-app.mailbox-live-app .mail-mobile-compose-fab {
+  display: none;
+  position: fixed;
+  z-index: 35;
+  right: 20px;
+  bottom: max(20px, env(safe-area-inset-bottom));
+  width: 56px;
+  height: 56px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 50%;
+  background: #28774c;
+  color: #fff;
+  box-shadow: 0 8px 24px rgba(25, 78, 43, .3);
+  font-size: 32px;
+  font-weight: 400;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform .15s ease, background .15s ease, box-shadow .15s ease;
+}
+.mail-app.mailbox-live-app .mail-mobile-compose-fab:hover {
+  transform: translateY(-2px);
+  background: #216640;
+  box-shadow: 0 10px 28px rgba(25, 78, 43, .35);
+}
+.mail-app.mailbox-live-app .mail-mobile-compose-fab:focus-visible {
+  outline: 3px solid #a8d6b3;
+  outline-offset: 3px;
+}
 @media (max-width: 620px) {
+  .mail-app.mailbox-live-app .mail-mobile-compose-fab { display: inline-flex; }
+  .mail-app.mailbox-live-app .mail-modal-backdrop .mail-mobile-compose-fab { display: none; }
+}
+
+@media (max-width: 620px) {
+  .mail-modal-backdrop { padding: 8px; }
+  .mail-compose-modal { width: calc(100vw - 16px); height: min(620px, calc(100dvh - 16px)); max-height: calc(100dvh - 16px); border-radius: 12px; }
+  .mail-compose-body-label textarea { min-height: 160px; }
   .mail-sidebar { width: 54px; min-width: 54px; flex-basis: 54px; padding-right: 5px; padding-left: 5px; }
   .mail-brand-mark { width: 29px; height: 29px; }
   .mail-compose-button { width: 38px; height: 38px; }
@@ -1293,6 +1337,18 @@ html[data-appearance-mode="system"] {
 .mail-workspace-menu .mail-workspace-option:hover,
 .mail-workspace-menu .mail-workspace-option.active {
   background: var(--accent, #edf5ee);
+}
+/* Workspace options must keep their names visible even when the parent rail is collapsed. */
+.mail-sidebar.is-collapsed .mail-profile-menu.mail-workspace-menu .mail-workspace-option .mail-workspace-copy,
+.mail-sidebar.is-collapsed .mail-profile-menu.mail-workspace-menu .mail-workspace-option .mail-workspace-copy strong,
+.mail-sidebar.is-collapsed .mail-profile-menu.mail-workspace-menu .mail-workspace-option .mail-workspace-copy small {
+  display: flex;
+}
+.mail-sidebar.is-collapsed .mail-profile-menu.mail-workspace-menu .mail-workspace-option .mail-workspace-copy strong {
+  display: block;
+}
+.mail-sidebar.is-collapsed .mail-profile-menu.mail-workspace-menu .mail-workspace-option .mail-workspace-copy small {
+  display: block;
 }
 .mail-workspace-menu .mail-workspace-option .mail-workspace-copy {
   min-width: 0;
@@ -2464,27 +2520,101 @@ html.dark .mail-appearance-toggle {
 }
 
 
-/* Keep a persistent desktop control available outside the collapsed rail. */
+/* In the compact drawer range, keep Compose available while navigation is closed. */
+@media (min-width: 621px) and (max-width: 850px) {
+  .mail-app.mailbox-live-app:not(:has(.mail-sidebar.mobile-open)) .mail-mobile-compose-fab {
+    display: inline-flex;
+  }
+}
+.mail-app.mailbox-live-app:has(.mail-sidebar.mobile-open) .mail-mobile-compose-fab {
+  display: none;
+}
+
+/* On desktop, the collapsed rail's compose slot becomes its expand control. */
 @media (min-width: 851px) {
-  .mail-mobile-nav-toggle {
-    position: fixed;
-    z-index: 92;
-    top: 14px;
-    left: 14px;
+  .mail-mobile-nav-toggle { display: none; }
+  .mail-sidebar.is-collapsed .mail-sidebar-reopen-button {
     display: inline-grid;
-    width: 32px;
-    height: 32px;
     place-items: center;
+    width: 42px;
+    height: 42px;
+    min-height: 42px;
+    margin: 0 0 24px;
+    padding: 0;
     border: 1px solid var(--border, #dfe7dd);
-    border-radius: 8px;
+    border-radius: 10px;
     background: var(--card, #fff);
     color: var(--foreground, #354337);
-    box-shadow: 0 2px 8px rgba(20, 40, 24, .08);
+    font-size: 25px;
+    line-height: 1;
     cursor: pointer;
   }
-  .mail-app:not(:has(.mail-sidebar.is-collapsed)) .mail-mobile-nav-toggle {
-    left: 264px;
-    opacity: 0;
-    pointer-events: none;
+  .mail-sidebar.is-collapsed .mail-sidebar-reopen-button:hover {
+    border-color: var(--ring, #93c5a0);
+    background: var(--accent, #edf5ee);
+    color: var(--accent-foreground, #1d603b);
+  }
+  .mail-app.mailbox-live-app:has(.mail-sidebar.is-collapsed) .mail-mobile-compose-fab {
+    display: inline-flex;
+  }
+}
+
+
+/* Mail reader responsive behavior: keep the list uncluttered until a message is opened. */
+@media (min-width: 1201px) {
+  .mail-app.mailbox-live-app .mail-content-layout:not(.message-selected) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .mail-app.mailbox-live-app .mail-content-layout:not(.message-selected) .mail-detail-pane {
+    display: none;
+  }
+  .mail-app.mailbox-live-app .mail-content-layout:not(.message-selected) .mail-list-pane {
+    grid-column: 1 / -1;
+    border-right: 0;
+  }
+  .mail-app.mailbox-live-app .mail-content-layout.message-selected {
+    grid-template-columns: minmax(340px, 38%) minmax(0, 1fr);
+  }
+}
+
+/* On laptop-sized, split-screen, and tablet widths, open a message as its own view. */
+@media (max-width: 1200px) {
+  .mail-app.mailbox-live-app .mail-content-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+  .mail-app.mailbox-live-app .mail-content-layout .mail-list-pane,
+  .mail-app.mailbox-live-app .mail-content-layout .mail-detail-pane {
+    grid-column: 1;
+    grid-row: 1;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+  }
+  .mail-app.mailbox-live-app .mail-content-layout .mail-list-pane {
+    display: flex;
+    border-right: 0;
+  }
+  .mail-app.mailbox-live-app .mail-content-layout .mail-detail-pane {
+    display: none;
+  }
+  .mail-app.mailbox-live-app .mail-content-layout.mobile-detail-open .mail-list-pane {
+    display: none;
+  }
+  .mail-app.mailbox-live-app .mail-content-layout.mobile-detail-open .mail-detail-pane {
+    display: flex;
+  }
+  .mail-app.mailbox-live-app .mail-mobile-back {
+    display: inline-flex;
+    min-height: 31px;
+    align-items: center;
+    padding: 0 9px;
+    border: 1px solid var(--border, #dce5da);
+    border-radius: 7px;
+    background: var(--card, #fff);
+    color: var(--foreground, #3f5a43);
+    font-size: 10px;
+    font-weight: 750;
   }
 }

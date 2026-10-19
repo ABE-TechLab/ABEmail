@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import WorkspaceSidebar from "@/components/workspace-sidebar";
 
-type Folder = "Inbox" | "Sent" | "Drafts" | "Scheduled" | "Archive" | "Trash";
+type Folder = "Inbox" | "Sent" | "Drafts" | "Scheduled" | "Archive" | "Trash" | "Spam";
 type View = Folder | "Starred" | "Contacts";
 type Tone = "green" | "amber" | "violet" | "blue" | "rose" | "slate";
 
@@ -37,6 +37,7 @@ const DEMO_MAIL: Mail[] = [
   { id: "m8", from: "Scheduled message", email: "you@acmestudio.example", to: "maya@northstar.design", subject: "Workshop agenda", preview: "A draft agenda for next week's collaborative workshop.", body: "Hi Maya,\n\nHere is a proposed agenda for next week's workshop.\n\n1. Review goals\n2. Confirm open questions\n3. Agree on owners and next steps\n\nBest", date: "Tomorrow", time: "8:30 AM", folder: "Scheduled", unread: false, starred: false, tone: "slate" },
   { id: "m9", from: "Olivia Parker", email: "olivia@northstar.design", to: "you@acmestudio.example", subject: "Brand assets approved", preview: "The final set of brand assets has been approved.", body: "Hi,\n\nThe final set of brand assets has been approved. Thank you for the thoughtful work and quick turnaround.\n\nOlivia", date: "Oct 8", time: "2:14 PM", folder: "Archive", unread: false, starred: false, tone: "blue" },
   { id: "m10", from: "Sample notification", email: "notifications@example.test", to: "you@acmestudio.example", subject: "Example message in Trash", preview: "Sample data demonstrating the Trash view.", body: "This is illustrative sample content only.", date: "Oct 7", time: "8:11 AM", folder: "Trash", unread: false, starred: false, tone: "slate" },
+  { id: "m11", from: "Product Bulletin", email: "bulletin@example.test", to: "you@acmestudio.example", subject: "Weekly product digest", preview: "Sample content demonstrating the Spam view.", body: "This is illustrative sample content only and is not connected to a mail server.", date: "Oct 6", time: "7:20 AM", folder: "Spam", unread: false, starred: false, tone: "slate" },
 ];
 
 const DEMO_CONTACTS: Contact[] = [
@@ -55,6 +56,7 @@ const FOLDERS: { name: View; icon: string }[] = [
   { name: "Scheduled", icon: "◷" },
   { name: "Archive", icon: "▱" },
   { name: "Trash", icon: "⌫" },
+  { name: "Spam", icon: "⊘" },
 ];
 
 function initials(name: string) {
