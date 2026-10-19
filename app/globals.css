@@ -2671,3 +2671,54 @@ html.dark .mail-appearance-toggle {
   padding-right: 0;
   padding-left: 0;
 }
+
+/* Workspace sidebar visual contract: preserve the Inbox baseline on every workspace route. */
+.mail-app.workspace-app-shell .mail-sidebar {
+  background: var(--sidebar, var(--card, #fff));
+}
+.mail-app.workspace-app-shell .mail-nav {
+  gap: 2px;
+}
+.mail-app.workspace-app-shell .mail-nav-item {
+  min-height: 33px;
+  gap: 9px;
+  padding: 7px 9px;
+  border-radius: 6px;
+}
+.mail-app.workspace-app-shell .mail-nav-icon {
+  width: 16px;
+  font-size: 14px;
+}
+@media (max-width: 560px) {
+  .mail-app.workspace-app-shell .mail-sidebar {
+    width: 68px;
+    min-width: 68px;
+    flex-basis: 68px;
+    padding: 16px 7px 10px;
+  }
+  .mail-app.workspace-app-shell .mail-brand {
+    margin: 0 auto 23px;
+  }
+  .mail-app.workspace-app-shell .mail-brand > span:last-child,
+  .mail-app.workspace-app-shell .mail-compose-label,
+  .mail-app.workspace-app-shell .mail-nav-label,
+  .mail-app.workspace-app-shell .mail-nav-item > span:not(.mail-nav-icon),
+  .mail-app.workspace-app-shell .mail-workspace-copy,
+  .mail-app.workspace-app-shell .workspace-sidebar-note,
+  .mail-app.workspace-app-shell .mail-chevron {
+    display: none;
+  }
+  .mail-app.workspace-app-shell .mail-compose-button {
+    padding: 0;
+    margin-left: 0;
+    margin-right: 0;
+  }
+  .mail-app.workspace-app-shell .mail-nav-item {
+    justify-content: center;
+    padding-left: 0;
+    padding-right: 0;
+  }
+  .mail-app.workspace-app-shell .mail-nav-icon {
+    font-size: 18px;
+  }
+}
