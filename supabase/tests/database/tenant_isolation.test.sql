@@ -75,6 +75,11 @@ insert into public.email_messages (
    'Tenant B message', 'Test-only tenant B message', 'accepted', 'test-b-team-0001', repeat('b', 64),
    '10000000-0000-4000-8000-000000000002', now(), null);
 
+insert into public.email_templates (id, organization_id, user_id, name, subject, body_text) values
+  ('70000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001', 'Alice payment reminder', 'Payment reminder', 'Hello, please see the attached payment reminder.'),
+  ('70000000-0000-4000-8000-000000000002', '20000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000003', 'Carol follow-up', 'Following up', 'Hello, checking in on this.'),
+  ('70000000-0000-4000-8000-000000000003', '20000000-0000-4000-8000-000000000002', '10000000-0000-4000-8000-000000000002', 'Bob introduction', '', 'Thank you for reaching out.');
+
 insert into public.organization_invitations (
   id, organization_id, invite_email, role, token_hash, invited_by, expires_at
 ) values
@@ -119,6 +124,18 @@ select throws_ok(
   null,
   'a contact cannot have more than twelve tags'
 );
+select is((select count(*)::integer from public.email_templates where organization_id = '20000000-0000-4000-8000-000000000001'), 1, 'user can read their own templates but not another member templates');
+select is((select count(*)::integer from public.email_templates where organization_id = '20000000-0000-4000-8000-000000000002'), 0, 'workspace membership does not reveal another users private templates');
+select is((select name from public.email_templates where id = '70000000-0000-4000-8000-000000000001'), 'Alice payment reminder', 'template content is readable by its owner');
+select ok(not has_table_privilege('anon', 'public.email_templates', 'select'), 'anonymous users cannot read saved templates');
+select ok(exists (select 1 from pg_indexes where schemaname = 'public' and indexname = 'email_templates_owner_updated_idx'), 'saved templates have an owner/workspace listing index');
+select throws_ok(
+  $$update public.email_templates set user_id = '10000000-0000-4000-8000-000000000003' where id = '70000000-0000-4000-8000-000000000001'$$,
+  'P0001',
+  null,
+  'template owner cannot be reassigned'
+);
+
 select ok(not has_table_privilege('authenticated', 'private.user_login_aliases', 'select'), 'login aliases are not directly readable through the Data API');
 
 -- A member can see only their assigned mailbox and cannot inspect a different tenant.
@@ -131,6 +148,26 @@ select is((select count(*)::integer from public.organization_memberships), 1, 'm
 select is((select count(*)::integer from public.organization_memberships where organization_id = '20000000-0000-4000-8000-000000000002'), 0, 'membership rows from another tenant are hidden');
 select is((select count(*)::integer from public.contacts where organization_id = '20000000-0000-4000-8000-000000000001'), 1, 'member can read contacts in their organization');
 select is((select count(*)::integer from public.contacts where organization_id = '20000000-0000-4000-8000-000000000002'), 0, 'member cannot read another tenant contacts');
+select is((select count(*)::integer from public.email_templates where organization_id = '20000000-0000-4000-8000-000000000001'), 1, 'member can read only their own templates in their workspace');
+select is((select count(*)::integer from public.email_templates where id = '70000000-0000-4000-8000-000000000001'), 0, 'one member cannot read another members templates');
+with changed_templates as (
+  update public.email_templates set body_text = 'Cross-user modification'
+  where id = '70000000-0000-4000-8000-000000000001'
+  returning id
+)
+select is((select count(*)::integer from changed_templates), 0, 'member cannot update another users template');
+with deleted_templates as (
+  delete from public.email_templates where id = '70000000-0000-4000-8000-000000000001'
+  returning id
+)
+select is((select count(*)::integer from deleted_templates), 0, 'member cannot delete another users template');
+select throws_ok(
+  $$insert into public.email_templates (organization_id, user_id, name, subject, body_text)
+    values ('20000000-0000-4000-8000-000000000003', '10000000-0000-4000-8000-000000000003', 'Injected template', '', 'not allowed')$$,
+  '42501',
+  null,
+  'member cannot save a template outside their workspace'
+);
 with changed as (
   update public.contacts set name = 'Cross-tenant modification'
   where id = '40000000-0000-4000-8000-000000000002'
