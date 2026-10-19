@@ -20,11 +20,19 @@ export type WorkspaceSettingsContext = {
   members: { user_id: string; role: string; status: string }[];
 };
 
+export type SavedSignature = { id: string; name: string; content: string };
+export type MailboxSignaturePreference = {
+  enabled: boolean;
+  defaultSignatureId: string | null;
+  signatures: SavedSignature[];
+};
+
 export type WorkspacePreferenceValues = {
   timezone: string;
   language: string;
   font: string;
   signature: string;
+  mailboxSignatures: Record<string, MailboxSignaturePreference>;
   replyStyle: "reply" | "bottom";
   compactMessageList: boolean;
   notifications: { newMail: boolean; mentions: boolean; product: boolean; digest: boolean };
@@ -101,6 +109,7 @@ const DEFAULT_PREFERENCES: WorkspacePreferenceValues = {
   language: "en",
   font: "sans",
   signature: "",
+  mailboxSignatures: {},
   replyStyle: "reply",
   compactMessageList: false,
   notifications: { newMail: true, mentions: true, product: false, digest: false },
@@ -423,6 +432,45 @@ export default function WorkspaceSettingsPanel({
     }
     notify("Regional preferences saved for this workspace.");
     setSaving(false);
+  }
+
+  function updateMailboxSignatureConfig(
+    mailboxId: string,
+    update: (config: MailboxSignaturePreference) => MailboxSignaturePreference,
+  ) {
+    setPreferences((current) => {
+      const config = current.mailboxSignatures[mailboxId] ?? {
+        enabled: true,
+        defaultSignatureId: current.signature.trim() ? "workspace-default" : null,
+        signatures: [],
+      };
+      return {
+        ...current,
+        mailboxSignatures: {
+          ...current.mailboxSignatures,
+          [mailboxId]: update(config),
+        },
+      };
+    });
+  }
+
+  function addMailboxSignature(mailboxId: string) {
+    const signature: SavedSignature = { id: crypto.randomUUID(), name: "New signature", content: "" };
+    updateMailboxSignatureConfig(mailboxId, (config) => ({
+      ...config,
+      signatures: [...config.signatures, signature],
+      defaultSignatureId: config.defaultSignatureId ?? signature.id,
+    }));
+  }
+
+  function removeMailboxSignature(mailboxId: string, signatureId: string) {
+    updateMailboxSignatureConfig(mailboxId, (config) => ({
+      ...config,
+      signatures: config.signatures.filter((signature) => signature.id !== signatureId),
+      defaultSignatureId: config.defaultSignatureId === signatureId
+        ? (preferences.signature.trim() ? "workspace-default" : null)
+        : config.defaultSignatureId,
+    }));
   }
 
   async function saveMailPreferences(event: FormEvent<HTMLFormElement>) {
@@ -755,8 +803,64 @@ export default function WorkspaceSettingsPanel({
                   <Field label="Default writing font"><select value={preferences.font} onChange={(event) => setPreferences((current) => ({ ...current, font: event.target.value }))}><option value="sans">Sans serif</option><option value="serif">Serif</option><option value="mono">Monospace</option></select></Field>
                   <div className="settings-divider" />
                   <div className="settings-choice-group"><p className="settings-subheading">When replying</p><label className="settings-radio-row"><input type="radio" name="workspace-reply-style" value="reply" checked={preferences.replyStyle === "reply"} onChange={() => setPreferences((current) => ({ ...current, replyStyle: "reply" }))} /><span><strong>Reply above the quoted message</strong><small>Start writing before the original message.</small></span></label><label className="settings-radio-row"><input type="radio" name="workspace-reply-style" value="bottom" checked={preferences.replyStyle === "bottom"} onChange={() => setPreferences((current) => ({ ...current, replyStyle: "bottom" }))} /><span><strong>Reply below the quoted message</strong><small>Place the cursor after the quoted original message.</small></span></label></div>
-                  <Field label="Email signature" hint="Added to outgoing messages from this workspace."><textarea rows={4} value={preferences.signature} onChange={(event) => setPreferences((current) => ({ ...current, signature: event.target.value }))} /></Field>
-                  <div className="settings-form-footer"><span>Mail preferences sync to your account in this workspace and apply to compose/reply.</span><button className="mail-primary-action" type="submit">Save mail preferences</button></div>
+                  <Field label="Workspace default signature" hint="Legacy fallback used when a mailbox has no custom signature configuration."><textarea rows={4} maxLength={10000} value={preferences.signature} onChange={(event) => setPreferences((current) => ({ ...current, signature: event.target.value }))} /></Field>
+                  <div className="settings-divider" />
+                  <div className="settings-section-summary">
+                    <div><strong>Signatures by mailbox</strong><p>Choose which signatures are available from each address, set a default, and turn signatures off for mailboxes that should not append one.</p></div>
+                    <span className="settings-summary-chip">{mailboxes.length} mailbox{mailboxes.length === 1 ? "" : "es"}</span>
+                  </div>
+                  {mailboxes.length === 0 ? (
+                    <div className="settings-empty-state"><strong>No mailboxes yet</strong><p>Create an active mailbox first. You can return here to add signatures for each address.</p></div>
+                  ) : (
+                    <div className="settings-domain-list">
+                      {mailboxes.map((mailbox) => {
+                        const config = preferences.mailboxSignatures[mailbox.id] ?? {
+                          enabled: true,
+                          defaultSignatureId: preferences.signature.trim() ? "workspace-default" : null,
+                          signatures: [],
+                        };
+                        const defaultLabel = config.defaultSignatureId === "workspace-default"
+                          ? "Workspace default"
+                          : config.signatures.find((signature) => signature.id === config.defaultSignatureId)?.name ?? "No signature";
+                        return (
+                          <article className="settings-domain-record" key={mailbox.id}>
+                            <div className="settings-domain-row">
+                              <span className="settings-domain-icon">✉</span>
+                              <span className="settings-domain-name"><strong>{mailbox.address}</strong><small>{mailbox.display_name || "Business mailbox"}</small></span>
+                              <span className={config.enabled ? "settings-status active" : "settings-status pending"}><span />{config.enabled ? "Signature enabled" : "Signature disabled"}</span>
+                            </div>
+                            <SettingRow title="Append a signature" description="Automatically add the selected signature when composing or scheduling from this mailbox.">
+                              <Toggle checked={config.enabled} onChange={(enabled) => updateMailboxSignatureConfig(mailbox.id, (current) => ({ ...current, enabled }))} label={"Enable signature for " + mailbox.address} />
+                            </SettingRow>
+                            <Field label="Default signature" hint={"Current default: " + defaultLabel}>
+                              <select value={config.defaultSignatureId ?? ""} onChange={(event) => updateMailboxSignatureConfig(mailbox.id, (current) => ({ ...current, defaultSignatureId: event.target.value || null }))} disabled={!config.enabled}>
+                                <option value="">No signature</option>
+                                {preferences.signature.trim() && <option value="workspace-default">Workspace default</option>}
+                                {config.signatures.map((signature) => <option key={signature.id} value={signature.id}>{signature.name}</option>)}
+                              </select>
+                            </Field>
+                            {config.signatures.map((signature, index) => (
+                              <div className="settings-domain-record" key={signature.id}>
+                                <div className="settings-section-summary">
+                                  <div><strong>Custom signature {index + 1}</strong><p>Reusable for sales, support, personal sign-offs, or other common cases.</p></div>
+                                  <button className="mail-secondary-action" type="button" onClick={() => removeMailboxSignature(mailbox.id, signature.id)}>Remove</button>
+                                </div>
+                                <div className="settings-form-grid">
+                                  <Field label="Signature name"><input value={signature.name} maxLength={80} required onChange={(event) => updateMailboxSignatureConfig(mailbox.id, (current) => ({ ...current, signatures: current.signatures.map((item) => item.id === signature.id ? { ...item, name: event.target.value } : item) }))} /></Field>
+                                  <Field label="Signature text" hint="Plain text appended to the email body."><textarea rows={3} value={signature.content} maxLength={10000} onChange={(event) => updateMailboxSignatureConfig(mailbox.id, (current) => ({ ...current, signatures: current.signatures.map((item) => item.id === signature.id ? { ...item, content: event.target.value } : item) }))} /></Field>
+                                </div>
+                              </div>
+                            ))}
+                            <div className="settings-form-footer">
+                              <span>{config.signatures.length} custom signature{config.signatures.length === 1 ? "" : "s"} saved in this mailbox&apos;s settings.</span>
+                              <button className="mail-secondary-action" type="button" disabled={config.signatures.length >= 8} onClick={() => addMailboxSignature(mailbox.id)}>＋ Add signature</button>
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <div className="settings-form-footer"><span>Workspace preferences and per-mailbox signature choices are saved together for your account.</span><button className="mail-primary-action" type="submit">Save mail preferences</button></div>
                 </form>
               </div>}
 
