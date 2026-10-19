@@ -2,6 +2,26 @@ import type { ContactInput } from "@/lib/contacts/types";
 
 const EMAIL_PATTERN = /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/;
 
+const TAG_PATTERN = /^[a-z0-9][a-z0-9_-]{0,39}$/;
+
+function parseTags(value: unknown): { value: string[]; error?: never } | { value?: never; error: string } {
+  if (value === undefined || value === null) return { value: [] };
+  if (!Array.isArray(value)) return { error: "Tags must be a list of labels." };
+
+  const tags: string[] = [];
+  for (const rawTag of value) {
+    if (typeof rawTag !== "string") return { error: "Each tag must be text." };
+    const tag = rawTag.trim().toLowerCase();
+    if (!tag) continue;
+    if (!TAG_PATTERN.test(tag)) {
+      return { error: "Tags must be 1–40 characters using letters, numbers, hyphens, or underscores." };
+    }
+    if (!tags.includes(tag)) tags.push(tag);
+    if (tags.length > 12) return { error: "A contact can have up to 12 tags." };
+  }
+  return { value: tags };
+}
+
 function optionalText(value: unknown, label: string, maxLength: number): { value: string | null; error?: never } | { value?: never; error: string } {
   if (value === undefined || value === null) return { value: null };
   if (typeof value !== "string") return { error: label + " must be text." };
@@ -30,7 +50,8 @@ export function parseContactInput(value: unknown): { data: ContactInput | null; 
   const role = optionalText(record.role, "Role", 120);
   const phone = optionalText(record.phone, "Phone", 80);
   const notes = optionalText(record.notes, "Notes", 5000);
-  for (const field of [company, role, phone, notes]) {
+  const tags = parseTags(record.tags);
+  for (const field of [company, role, phone, notes, tags]) {
     if (field.error) return { data: null, error: field.error };
   }
 
@@ -42,6 +63,7 @@ export function parseContactInput(value: unknown): { data: ContactInput | null; 
       role: role.value ?? null,
       phone: phone.value ?? null,
       notes: notes.value ?? null,
+      tags: tags.value ?? [],
     },
   };
 }
