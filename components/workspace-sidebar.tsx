@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import SignOutButton from "@/components/auth/sign-out-button";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 const mailboxLinks = [
@@ -11,6 +11,7 @@ const mailboxLinks = [
   { view: "Sent", href: "/?view=Sent", label: "Sent", icon: "↗" },
   { view: "Drafts", href: "/?view=Drafts", label: "Drafts", icon: "▧" },
   { view: "Scheduled", href: "/?view=Scheduled", label: "Scheduled", icon: "◷" },
+  { view: "Snoozed", href: "/?view=Snoozed", label: "Snoozed", icon: "◴" },
   { view: "Archive", href: "/?view=Archive", label: "Archive", icon: "▱" },
   { view: "Trash", href: "/?view=Trash", label: "Trash", icon: "⌫" },
   { view: "Spam", href: "/?view=Spam", label: "Spam", icon: "⊘" },
@@ -21,6 +22,10 @@ export type WorkspaceChoice = { id: string; name: string; slug: string; role: st
 
 const workspaceLinks = [
   { href: "/contacts", label: "Contacts", icon: "♙" },
+  { href: "/templates", label: "Templates", icon: "▧" },
+  { href: "/reminders", label: "Reminders", icon: "◴" },
+  { href: "/labels", label: "Labels", icon: "◇" },
+  { href: "/analytics", label: "Analytics", icon: "↗" },
   { href: "/settings", label: "Settings", icon: "⚙" },
 ] as const;
 
@@ -28,46 +33,30 @@ const workspaceLinks = [
 const SIDEBAR_COLLAPSED_KEY = "abemail:sidebar-collapsed";
 
 type WorkspaceSidebarProps = {
-  activeView?: string;
-  mailboxCounts?: Partial<Record<MailboxView, number>>;
-  onMailboxNavigate?: (view: MailboxView) => void;
-  onCompose?: () => void;
-  profileOpen?: boolean;
-  onWorkspaceToggle?: () => void;
-  onWorkspaceSettings?: () => void;
-  disabledMailFeatures?: boolean;
-  homeHref?: string;
-  mailboxBaseHref?: string;
-  activeMailboxView?: MailboxView;
-  enabledMailboxViews?: MailboxView[];
-  workspaceName?: string;
-  workspaceDescription?: string;
-  workspaceHref?: string;
-  workspaceBaseHref?: string;
-  workspaces?: WorkspaceChoice[];
-  activeWorkspaceId?: string;
+  composeHref: string;
+  homeHref: string;
+  mailboxBaseHref: string;
+  workspaceName: string;
+  workspaceDescription: string;
+  workspaceBaseHref: string;
+  workspaces: WorkspaceChoice[];
+  activeWorkspaceId: string;
 };
 
 export default function WorkspaceSidebar({
-  activeView,
-  mailboxCounts = {},
-  onMailboxNavigate,
-  onCompose,
-  profileOpen = false,
-  onWorkspaceToggle,
-  onWorkspaceSettings,
-  disabledMailFeatures = false,
-  homeHref = "/",
+  composeHref,
+  homeHref,
   mailboxBaseHref,
-  activeMailboxView,
-  workspaceName = "Acme Studio",
-  workspaceDescription = "Sample workspace",
-  workspaceHref,
+  workspaceName,
+  workspaceDescription,
   workspaceBaseHref,
-  workspaces = [],
+  workspaces,
   activeWorkspaceId,
 }: WorkspaceSidebarProps) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const requestedMailboxView = searchParams.get("view");
+  const currentMailboxView = mailboxLinks.find((item) => item.view === requestedMailboxView)?.view ?? "Inbox";
   const [collapsed, setCollapsed] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -128,7 +117,7 @@ export default function WorkspaceSidebar({
     };
   }, []);
 
-  const isSwitcherOpen = workspaces.length ? switcherOpen : profileOpen;
+  const isSwitcherOpen = switcherOpen;
 
   return (
     <>
@@ -200,17 +189,9 @@ export default function WorkspaceSidebar({
         >
           <span aria-hidden="true">›</span>
         </button>
-      ) : disabledMailFeatures ? (
-        <button className="mail-compose-button workspace-compose-disabled" disabled type="button" aria-label="Compose is unavailable until email is connected" title="Compose unavailable until email is connected">
-          <span className="compose-plus">＋</span><span className="mail-compose-label">Compose</span>
-        </button>
-      ) : onCompose ? (
-        <button className="mail-compose-button" onClick={onCompose} type="button" title="Compose">
-          <span className="compose-plus">＋</span><span className="mail-compose-label">Compose</span>
-        </button>
       ) : (
-        <Link className="mail-compose-button workspace-compose-link" href={homeHref} title="Open inbox">
-          <span className="compose-plus">↖</span><span className="mail-compose-label">Open inbox</span>
+        <Link className="mail-compose-button" href={composeHref} title="Compose">
+          <span className="compose-plus" aria-hidden="true">＋</span><span className="mail-compose-label">Compose</span>
         </Link>
       )}
 
@@ -218,11 +199,7 @@ export default function WorkspaceSidebar({
         <div className="mail-nav-label">MAILBOX</div>
         <nav className="mail-nav" aria-label="Mailbox navigation">
           {mailboxLinks.map((item) => {
-            const active = mailboxBaseHref
-              ? item.view === activeMailboxView && pathname.startsWith(mailboxBaseHref)
-              : disabledMailFeatures
-                ? item.view === activeView
-                : pathname === "/" && activeView === item.view;
+            const active = pathname.startsWith(mailboxBaseHref) && item.view === currentMailboxView;
             const itemHref = mailboxBaseHref
               ? `${mailboxBaseHref}?view=${encodeURIComponent(item.view)}`
               : item.href;
@@ -287,37 +264,18 @@ export default function WorkspaceSidebar({
 
       <div className="mail-sidebar-bottom">
         <div className="mail-sidebar-divider" />
-        {workspaces.length ? (
-          <button
-            className="mail-workspace-switcher"
-            type="button"
-            onClick={() => setSwitcherOpen((current) => !current)}
-            aria-expanded={isSwitcherOpen}
-            aria-label={"Current workspace: " + workspaceName + ". Switch workspace"}
-            title="Switch workspace"
-          >
-            <span className="mail-workspace-avatar">{workspaceName.slice(0, 1).toUpperCase()}</span>
-            <span className="mail-workspace-copy"><strong>{workspaceName}</strong><small>{workspaceDescription}</small></span>
-            <span className="mail-chevron">⌄</span>
-          </button>
-        ) : workspaceHref ? (
-          <Link className="mail-workspace-switcher" href={workspaceHref} title={workspaceName}>
-            <span className="mail-workspace-avatar">{workspaceName.slice(0, 1).toUpperCase()}</span>
-            <span className="mail-workspace-copy"><strong>{workspaceName}</strong><small>{workspaceDescription}</small></span>
-            <span className="mail-chevron">⌄</span>
-          </Link>
-        ) : onWorkspaceToggle ? (
-          <button className="mail-workspace-switcher" onClick={onWorkspaceToggle} type="button" aria-expanded={profileOpen} title={workspaceName}>
-            <span className="mail-workspace-avatar">{workspaceName.slice(0, 1).toUpperCase()}</span>
-            <span className="mail-workspace-copy"><strong>{workspaceName}</strong><small>{workspaceDescription}</small></span>
-            <span className="mail-chevron">⌄</span>
-          </button>
-        ) : (
-          <div className="mail-workspace-switcher workspace-sample-switcher">
-            <span className="mail-workspace-avatar">{workspaceName.slice(0, 1).toUpperCase()}</span>
-            <span className="mail-workspace-copy"><strong>{workspaceName}</strong><small>{workspaceDescription}</small></span>
-          </div>
-        )}
+        <button
+          className="mail-workspace-switcher"
+          type="button"
+          onClick={() => setSwitcherOpen((current) => !current)}
+          aria-expanded={isSwitcherOpen}
+          aria-label={"Current workspace: " + workspaceName + ". Switch workspace"}
+          title="Switch workspace"
+        >
+          <span className="mail-workspace-avatar">{workspaceName.slice(0, 1).toUpperCase()}</span>
+          <span className="mail-workspace-copy"><strong>{workspaceName}</strong><small>{workspaceDescription}</small></span>
+          <span className="mail-chevron">⌄</span>
+        </button>
 
         {isSwitcherOpen && workspaces.length > 0 && (
           <div className="mail-profile-menu mail-workspace-menu" role="menu" aria-label="Switch workspace">
@@ -354,7 +312,7 @@ export default function WorkspaceSidebar({
             <button type="button" onClick={onWorkspaceSettings}>Open settings</button>
           </div>
         )}
-        <p className="workspace-sidebar-note">{disabledMailFeatures ? "Email setup required" : "Workspace mail"}</p>
+        <p className="workspace-sidebar-note">Workspace mail</p>
       </div>
     </aside>
     </>
