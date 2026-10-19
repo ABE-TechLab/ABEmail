@@ -17,6 +17,8 @@ type Mailbox = { id: string; address: string; display_name: string | null; canMa
 type ActiveMailboxView = "Inbox" | "Sent" | "Starred" | "Drafts" | "Scheduled" | "Archive" | "Trash" | "Spam";
 type LifecycleAction = "mark_read" | "mark_unread" | "star" | "unstar" | "archive" | "unarchive" | "trash" | "restore" | "spam" | "not_spam" | "permanent_delete";
 type EmailDraft = { id: string; to_address: string; subject: string; body_text: string; created_at: string; updated_at: string };
+type PendingAttachment = { id: string; filename: string; content_type: string; size_bytes: number };
+type MessageAttachment = PendingAttachment & { created_at: string };
 type ScheduledEmail = { id: string; to_address: string; subject: string; body_text: string; scheduled_at: string; status: "scheduled" | "processing" | "accepted" | "failed" | "cancelled"; attempt_count: number; last_error_code: string | null; created_at: string; updated_at: string };
 type EmailMessage = {
   id: string;
@@ -88,6 +90,12 @@ function messagePreview(message: EmailMessage): string {
   return value.length > 120 ? value.slice(0, 117) + "…" : value || "No text preview available.";
 }
 
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return bytes + " B";
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(0) + " KB";
+  return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+}
+
 export default function LiveMailbox(props: LiveMailboxProps) {
   const { organizationId, organizationName, userEmail, mailboxes, messages, messagesError, activeView = "Inbox", workspaces } = props;
   const router = useRouter();
@@ -97,6 +105,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   const [emailConnectionState, setEmailConnectionState] = useState<"checking" | "connected" | "not_connected" | "unavailable">("checking");
   const [mailboxId, setMailboxId] = useState(mailboxes[0]?.id ?? "");
   const composeBodyRef = useRef<HTMLTextAreaElement>(null);
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
   const composeCursorPosition = useRef<number | null>(null);
 
   useEffect(() => {
@@ -185,6 +194,10 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [busy, setBusy] = useState(false);
+  const [uploadingAttachments, setUploadingAttachments] = useState(false);
+  const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
+  const [messageAttachments, setMessageAttachments] = useState<MessageAttachment[]>([]);
+  const [messageAttachmentsLoading, setMessageAttachmentsLoading] = useState(false);
   const [notice, setNotice] = useState("");
   const [requestKey, setRequestKey] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<EmailDraft[]>([]);
@@ -276,6 +289,30 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   }, [messages, mailboxId, activeView, query]);
   const selectedMessage = visibleMessages.find((message) => message.id === selectedMessageId);
   const selectedMailbox = mailboxes.find((mailbox) => mailbox.id === mailboxId);
+
+  useEffect(() => {
+    const messageId = selectedMessage?.id;
+    if (!messageId || !mailboxId || activeView === "Drafts" || activeView === "Scheduled") {
+      setMessageAttachments([]);
+      setMessageAttachmentsLoading(false);
+      return;
+    }
+    let active = true;
+    setMessageAttachments([]);
+    setMessageAttachmentsLoading(true);
+    const params = new URLSearchParams({ organizationId, mailboxId, messageId });
+    void fetch("/api/mail/attachments?" + params.toString(), { cache: "no-store" })
+      .then(async (response) => {
+        const result = await response.json() as { attachments?: MessageAttachment[]; error?: string };
+        if (!response.ok) throw new Error(result.error || "Message attachments could not be loaded.");
+        if (active) setMessageAttachments(result.attachments ?? []);
+      })
+      .catch((error: unknown) => {
+        if (active) setNotice(error instanceof Error ? error.message : "Message attachments could not be loaded.");
+      })
+      .finally(() => { if (active) setMessageAttachmentsLoading(false); });
+    return () => { active = false; };
+  }, [selectedMessage?.id, activeView, mailboxId, organizationId]);
   const sentFromSelectedMailbox = messages.some((message) => message.mailbox_id === mailboxId && message.direction === "outbound");
   const receivedBySelectedMailbox = messages.some((message) => message.mailbox_id === mailboxId && message.direction === "inbound");
   const firstEmailChecksComplete = sentFromSelectedMailbox && receivedBySelectedMailbox;
@@ -368,14 +405,86 @@ export default function LiveMailbox(props: LiveMailboxProps) {
 
   
 
-  function resetComposerAfterClose() {
+  function discardPendingAttachments() {
+    const pending = [...pendingAttachments];
+    setPendingAttachments([]);
+    if (!pending.length || !mailboxId) return;
+    void Promise.all(pending.map((attachment) => fetch(
+      "/api/mail/attachments?organizationId=" + encodeURIComponent(organizationId) +
+      "&mailboxId=" + encodeURIComponent(mailboxId) + "&id=" + encodeURIComponent(attachment.id),
+      { method: "DELETE" },
+    ).catch(() => null)));
+  }
+
+  function resetComposerAfterClose(attachmentsAlreadyLinked = false) {
     setComposeOpen(false);
     setTo("");
     setSubject("");
     setBody("");
+    setScheduleMode(false);
+    setScheduledAt("");
+    if (attachmentsAlreadyLinked) setPendingAttachments([]);
+    else discardPendingAttachments();
     draftIdRef.current = null;
     draftUpdatedAtRef.current = null;
     setDraftId(null);
+    setRequestKey(null);
+  }
+
+  async function uploadSelectedFiles(fileList: FileList | null) {
+    const files = Array.from(fileList ?? []);
+    if (!files.length) return;
+    if (!mailboxId) { setNotice("Choose an active mailbox before attaching files."); return; }
+    if (scheduleMode) { setNotice("Remove attachments before scheduling. Scheduled attachments are not supported yet."); return; }
+    if (uploadingAttachments || busy) return;
+    setUploadingAttachments(true);
+    setNotice("");
+    const existing = [...pendingAttachments];
+    const added: PendingAttachment[] = [];
+    let totalBytes = existing.reduce((sum, item) => sum + item.size_bytes, 0);
+    try {
+      for (const file of files) {
+        if (existing.length + added.length >= 5) { setNotice("A message can contain up to five attachments."); break; }
+        if (file.size < 1 || file.size > 4 * 1024 * 1024) {
+          setNotice(file.name + " was skipped. Each file must be no larger than 4 MB.");
+          continue;
+        }
+        if (totalBytes + file.size > 20 * 1024 * 1024) { setNotice("Attachments for one message cannot exceed 20 MB in total."); break; }
+        const form = new FormData();
+        form.set("organizationId", organizationId);
+        form.set("mailboxId", mailboxId);
+        form.set("file", file);
+        const response = await fetch("/api/mail/attachments", { method: "POST", body: form });
+        const result = await response.json() as { ok?: boolean; attachment?: PendingAttachment; error?: string };
+        if (!response.ok || !result.ok || !result.attachment) {
+          setNotice(result.error || "A file could not be attached.");
+          continue;
+        }
+        added.push(result.attachment);
+        totalBytes += result.attachment.size_bytes;
+      }
+      if (added.length) {
+        setPendingAttachments((current) => [...current, ...added]);
+        setRequestKey(null);
+      }
+    } catch {
+      setNotice("The upload connection was interrupted. Check the attachment list before retrying.");
+    } finally {
+      setUploadingAttachments(false);
+      if (attachmentInputRef.current) attachmentInputRef.current.value = "";
+    }
+  }
+
+  async function removePendingAttachment(attachment: PendingAttachment) {
+    if (busy || uploadingAttachments) return;
+    const response = await fetch(
+      "/api/mail/attachments?organizationId=" + encodeURIComponent(organizationId) +
+      "&mailboxId=" + encodeURIComponent(mailboxId) + "&id=" + encodeURIComponent(attachment.id),
+      { method: "DELETE" },
+    );
+    const result = await response.json() as { ok?: boolean; error?: string };
+    if (!response.ok || !result.ok) { setNotice(result.error || "Attachment could not be removed."); return; }
+    setPendingAttachments((current) => current.filter((item) => item.id !== attachment.id));
     setRequestKey(null);
   }
 
@@ -386,6 +495,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
       draftSaveTimer.current = null;
     }
 
+    const hadPendingAttachments = pendingAttachments.length > 0;
     const shouldSave = Boolean(mailboxId && (draftIdRef.current || to.trim() || subject.trim() || body.trim()));
     if (shouldSave) {
       const version = ++draftMutationVersion.current;
@@ -401,9 +511,15 @@ export default function LiveMailbox(props: LiveMailboxProps) {
       draftMutationVersion.current += 1;
     }
     resetComposerAfterClose();
+    if (hadPendingAttachments) {
+      setNotice(shouldSave
+        ? "Draft saved. Attachments are not stored with drafts yet, so the uploaded files were removed."
+        : "Uploaded attachments were removed because no draft was saved.");
+    }
   }
 
   function openCompose() {
+    discardPendingAttachments();
     setScheduleMode(false);
     setScheduledAt("");
     draftIdRef.current = null;
@@ -420,6 +536,9 @@ export default function LiveMailbox(props: LiveMailboxProps) {
 
   async function scheduleMessage() {
     if (busy || !mailboxId) return;
+    if (pendingAttachments.length) { setNotice("Remove attachments before scheduling. Scheduled attachments are not supported yet."); return; }
+    const scheduleRecipients = to.split(/[;,]/).map((value) => value.trim()).filter(Boolean);
+    if (scheduleRecipients.length !== 1) { setNotice("Scheduled messages currently support one recipient at a time."); return; }
     if (!to.trim() || !subject.trim() || !body.trim()) { setNotice("Enter a recipient, subject, and message before scheduling."); return; }
     if (!scheduledAt || !Number.isFinite(Date.parse(scheduledAt))) { setNotice("Choose a date and time for delivery."); return; }
     setBusy(true); setNotice("");
@@ -507,7 +626,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
       const response = await fetch("/api/mail/send", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Idempotency-Key": stableRequestKey },
-        body: JSON.stringify({ organizationId, mailboxId, to: to.trim(), subject: subject.trim(), text: finalBody }),
+        body: JSON.stringify({ organizationId, mailboxId, to: to.trim(), subject: subject.trim(), text: finalBody, attachments: pendingAttachments.map((attachment) => attachment.id) }),
       });
       const result = await response.json() as { ok?: boolean; error?: string; note?: string };
       if (!response.ok || !result.ok) {
@@ -542,7 +661,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
         }
       }
       setNotice(finalNotice);
-      resetComposerAfterClose();
+      resetComposerAfterClose(true);
       setDraftSaving(false);
       router.refresh();
     } catch {
