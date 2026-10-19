@@ -11,6 +11,7 @@ create table public.email_message_attachments (
   mailbox_id uuid not null,
   user_id uuid references auth.users(id) on delete set null,
   message_id uuid,
+  provider_attachment_id text,
   filename text not null check (char_length(btrim(filename)) between 1 and 255),
   content_type text not null default 'application/octet-stream'
     check (char_length(content_type) between 1 and 160),
@@ -27,6 +28,10 @@ create table public.email_message_attachments (
     or (message_id is not null and expires_at is null)
   )
 );
+
+create unique index email_message_attachments_provider_id_idx
+  on public.email_message_attachments (message_id, provider_attachment_id)
+  where message_id is not null and provider_attachment_id is not null;
 
 create index email_message_attachments_message_idx
   on public.email_message_attachments (organization_id, mailbox_id, message_id, created_at)
