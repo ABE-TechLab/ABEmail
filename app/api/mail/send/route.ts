@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
 
   const organizationId = payload.organizationId;
   const mailboxId = payload.mailboxId;
-  const draftId = typeof payload.draftId === "string" ? payload.draftId : null;
+  const draftId = "draftId" in payload && typeof payload.draftId === "string" ? payload.draftId : null;
   const subject = payload.subject.trim();
   const text = payload.text;
   const recipients = Array.from(new Set(payload.to.split(/[;,]/).map((value) => value.trim().toLowerCase()).filter(Boolean)));
