@@ -181,7 +181,6 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   const [requestKey, setRequestKey] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<EmailDraft[]>([]);
   const [draftId, setDraftId] = useState<string | null>(null);
-  const [draftUpdatedAt, setDraftUpdatedAt] = useState<string | null>(null);
   const [draftSaving, setDraftSaving] = useState(false);
   const draftSaveQueue = useRef<Promise<void>>(Promise.resolve());
   const draftMutationVersion = useRef(0);
@@ -211,7 +210,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   }, [composeOpen, body]);
 
   useEffect(() => {
-    if (activeView !== "Drafts" || !mailboxId) { setDrafts([]); return; }
+    if (activeView !== "Drafts" || !mailboxId) return;
     let active = true;
     void fetch("/api/mail/drafts?organizationId=" + encodeURIComponent(organizationId) + "&mailboxId=" + encodeURIComponent(mailboxId), { cache: "no-store" })
       .then(async (response) => { const result = await response.json() as { drafts?: EmailDraft[]; error?: string }; if (!response.ok) throw new Error(result.error || "Drafts could not be loaded."); if (active) setDrafts(result.drafts ?? []); })
@@ -230,7 +229,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
         const result = await response.json() as { ok?: boolean; draft?: EmailDraft; error?: string; conflict?: boolean };
         if (!response.ok || !result.ok || !result.draft) { if (version === draftMutationVersion.current) setNotice(result.error || "Draft could not be saved."); return; }
         draftIdRef.current = result.draft.id; draftUpdatedAtRef.current = result.draft.updated_at;
-        if (version === draftMutationVersion.current) { setDraftId(result.draft.id); setDraftUpdatedAt(result.draft.updated_at); setDrafts((current) => [result.draft!, ...current.filter((item) => item.id !== result.draft!.id)]); }
+        if (version === draftMutationVersion.current) { setDraftId(result.draft.id); setDrafts((current) => [result.draft!, ...current.filter((item) => item.id !== result.draft!.id)]); }
       }).catch(() => { if (version === draftMutationVersion.current) setNotice("Draft save failed. Keep this window open and try again."); }).finally(() => { if (version === draftMutationVersion.current) setDraftSaving(false); });
     }, 650);
     return () => window.clearTimeout(timer);
