@@ -233,6 +233,9 @@ export async function handleResendWebhook(request: NextRequest, tenantOrganizati
         const recipients = Array.from(new Set((mailboxes ?? []).map((mailbox) => mailbox.address)));
 
         for (const mailbox of mailboxes ?? []) {
+          const toAddresses = Array.from(new Set([...toAddressList(received.to), mailbox.address])).slice(0, 10);
+          const ccAddresses = Array.from(new Set(toAddressList(received.cc))).slice(0, 10);
+          const replyToAddresses = Array.from(new Set(toAddressList(received.replyTo))).slice(0, 10);
           const { data: domain, error: domainError } = await admin
             .from("organization_domains")
             .select("*")
@@ -271,7 +274,9 @@ export async function handleResendWebhook(request: NextRequest, tenantOrganizati
               provider_message_id: received.id ?? emailId,
               direction: "inbound",
               from_address: normalizeAddress(received.from ?? event.data?.from ?? "unknown@invalid"),
-              to_addresses: recipients,
+              to_addresses: toAddresses.length ? toAddresses : recipients,
+              cc_addresses: ccAddresses,
+              reply_to_addresses: replyToAddresses,
               subject: (received.subject ?? event.data?.subject ?? "").slice(0, 998),
               body_text: received.text,
               body_html: received.html,
