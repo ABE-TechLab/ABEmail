@@ -377,8 +377,22 @@ export default function LiveMailbox(props: LiveMailboxProps) {
       setDraftId(result.draft.id);
       setDrafts((current) => [result.draft!, ...current.filter((item) => item.id !== result.draft!.id)]);
     }
+    const attachmentIds = pendingAttachments.map((attachment) => attachment.id);
+    if (attachmentIds.length) {
+      const attachmentResponse = await fetch("/api/mail/attachments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "attach-to-draft", organizationId, mailboxId, draftId: result.draft.id, attachmentIds }),
+      });
+      const attachmentResult = await attachmentResponse.json() as { ok?: boolean; attachments?: PendingAttachment[]; error?: string };
+      if (!attachmentResponse.ok || !attachmentResult.ok) {
+        if (version === draftMutationVersion.current) setNotice(attachmentResult.error || "Attachments could not be saved with this draft.");
+        return false;
+      }
+      if (version === draftMutationVersion.current) setPendingAttachments(attachmentResult.attachments ?? pendingAttachments);
+    }
     return true;
-  }, [organizationId, mailboxId]);
+  }, [organizationId, mailboxId, pendingAttachments]);
 
   const queueDraftSnapshot = useCallback((toValue: string, subjectValue: string, bodyValue: string, version: number): Promise<boolean> => {
     let saved = false;
@@ -394,7 +408,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   }, [persistDraftSnapshot]);
 
   useEffect(() => {
-    if (!composeOpen || !mailboxId || (!draftIdRef.current && !to.trim() && !subject.trim() && !body.trim())) return;
+    if (!composeOpen || !mailboxId || (!draftIdRef.current && !to.trim() && !subject.trim() && !body.trim() && !pendingAttachments.length)) return;
     const version = ++draftMutationVersion.current;
     const timer = window.setTimeout(() => {
       draftSaveTimer.current = null;
@@ -408,7 +422,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
       window.clearTimeout(timer);
       if (draftSaveTimer.current === timer) draftSaveTimer.current = null;
     };
-  }, [composeOpen, organizationId, mailboxId, to, subject, body]);
+  }, [composeOpen, organizationId, mailboxId, to, subject, body, draftId, pendingAttachments.length, queueDraftSnapshot]);
 
   
 
@@ -450,6 +464,17 @@ export default function LiveMailbox(props: LiveMailboxProps) {
     const added: PendingAttachment[] = [];
     let totalBytes = existing.reduce((sum, item) => sum + item.size_bytes, 0);
     try {
+      if (!draftIdRef.current) {
+        if (draftSaveTimer.current !== null) {
+          window.clearTimeout(draftSaveTimer.current);
+          draftSaveTimer.current = null;
+        }
+        await draftSaveQueue.current;
+        const version = ++draftMutationVersion.current;
+        const created = await persistDraftSnapshot(to, subject, body, version);
+        if (!created || !draftIdRef.current) throw new Error("A draft could not be created for these attachments.");
+        setDraftSaving(false);
+      }
       for (const file of files) {
         if (existing.length + added.length >= 5) { setNotice("A message can contain up to five attachments."); break; }
         if (file.size < 1 || file.size > 4 * 1024 * 1024) {
@@ -460,6 +485,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
         const form = new FormData();
         form.set("organizationId", organizationId);
         form.set("mailboxId", mailboxId);
+        if (draftIdRef.current) form.set("draftId", draftIdRef.current);
         form.set("file", file);
         const response = await fetch("/api/mail/attachments", { method: "POST", body: form });
         const result = await response.json() as { ok?: boolean; attachment?: PendingAttachment; error?: string };
@@ -503,25 +529,27 @@ export default function LiveMailbox(props: LiveMailboxProps) {
     }
 
     const hadPendingAttachments = pendingAttachments.length > 0;
-    const shouldSave = Boolean(mailboxId && (draftIdRef.current || to.trim() || subject.trim() || body.trim()));
+    const shouldSave = Boolean(mailboxId && (draftIdRef.current || to.trim() || subject.trim() || body.trim() || hadPendingAttachments));
+    let attachmentsSavedWithDraft = false;
     if (shouldSave) {
       const version = ++draftMutationVersion.current;
       setDraftSaving(true);
       const saved = await queueDraftSnapshot(to, subject, body, version);
       setDraftSaving(false);
+      attachmentsSavedWithDraft = saved && hadPendingAttachments && Boolean(draftIdRef.current);
       // Draft persistence is best-effort for dismissal: a failed or unavailable
       // drafts table must never trap the user inside the compose modal.
       if (!saved || version !== draftMutationVersion.current) {
-        setNotice("Composer closed, but this draft could not be saved. Your latest changes may not be stored.");
+        setNotice("Composer closed, but this draft or its attachments could not be saved. Your latest changes may not be stored.");
       }
     } else {
       draftMutationVersion.current += 1;
     }
-    resetComposerAfterClose();
-    if (hadPendingAttachments) {
-      setNotice(shouldSave
-        ? "Draft saved. Attachments are not stored with drafts yet, so the uploaded files were removed."
-        : "Uploaded attachments were removed because no draft was saved.");
+    resetComposerAfterClose(attachmentsSavedWithDraft);
+    if (hadPendingAttachments && attachmentsSavedWithDraft) {
+      setNotice("Draft saved, including its attachments.");
+    } else if (hadPendingAttachments && !shouldSave) {
+      setNotice("Uploaded attachments were removed because no draft was saved.");
     }
   }
 
@@ -633,7 +661,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
       const response = await fetch("/api/mail/send", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Idempotency-Key": stableRequestKey },
-        body: JSON.stringify({ organizationId, mailboxId, to: to.trim(), subject: subject.trim(), text: finalBody, attachments: pendingAttachments.map((attachment) => attachment.id) }),
+        body: JSON.stringify({ organizationId, mailboxId, draftId: draftIdRef.current, to: to.trim(), subject: subject.trim(), text: finalBody, attachments: pendingAttachments.map((attachment) => attachment.id) }),
       });
       const result = await response.json() as { ok?: boolean; error?: string; note?: string };
       if (!response.ok || !result.ok) {
@@ -682,6 +710,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
     draftIdRef.current = draft.id;
     draftUpdatedAtRef.current = draft.updated_at;
     setDraftId(draft.id);
+    setPendingAttachments([]);
     setTo(draft.to_address);
     setSubject(draft.subject);
     setBody(draft.body_text);
@@ -689,6 +718,16 @@ export default function LiveMailbox(props: LiveMailboxProps) {
     setNotice("");
     setComposeOpen(true);
     composeCursorPosition.current = draft.body_text.length;
+    const params = new URLSearchParams({ organizationId, mailboxId, draftId: draft.id });
+    void fetch("/api/mail/attachments?" + params.toString(), { cache: "no-store" })
+      .then(async (response) => {
+        const result = await response.json() as { attachments?: PendingAttachment[]; error?: string };
+        if (!response.ok) throw new Error(result.error || "Draft attachments could not be loaded.");
+        if (draftIdRef.current === draft.id) setPendingAttachments(result.attachments ?? []);
+      })
+      .catch((error: unknown) => {
+        if (draftIdRef.current === draft.id) setNotice(error instanceof Error ? error.message : "Draft attachments could not be loaded.");
+      });
   }
 
   async function deleteDraft(draft: EmailDraft) {
