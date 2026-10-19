@@ -199,6 +199,8 @@ export default function ContactManager({ organizationId, organizationName, userE
     }
   }
 
+  const mailboxHref = "/dashboard/" + organizationId + "/mail";
+
   async function copyEmail(email: string) {
     try {
       if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
