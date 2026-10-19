@@ -3,7 +3,7 @@
 import Link from "next/link";
 import SignOutButton from "@/components/auth/sign-out-button";
 import { usePathname } from "next/navigation";
-import { Fragment, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
 const mailboxLinks = [
   { view: "Inbox", href: "/", label: "Inbox", icon: "▤" },
@@ -24,16 +24,6 @@ const workspaceLinks = [
   { href: "/settings", label: "Settings", icon: "⚙" },
 ] as const;
 
-const settingsSectionLinks = [
-  { id: "general", label: "General", icon: "⚙" },
-  { id: "appearance", label: "Appearance", icon: "◐" },
-  { id: "mail", label: "Mail & compose", icon: "✉" },
-  { id: "notifications", label: "Notifications", icon: "♧" },
-  { id: "team", label: "Team & access", icon: "♙" },
-  { id: "domains", label: "Domains", icon: "◎" },
-  { id: "mailboxes", label: "Mailboxes", icon: "▤" },
-  { id: "security", label: "Security", icon: "◇" },
-] as const;
 
 const SIDEBAR_COLLAPSED_KEY = "abemail:sidebar-collapsed";
 
@@ -70,7 +60,6 @@ export default function WorkspaceSidebar({
   homeHref = "/",
   mailboxBaseHref,
   activeMailboxView,
-  enabledMailboxViews = [],
   workspaceName = "Acme Studio",
   workspaceDescription = "Sample workspace",
   workspaceHref,
@@ -234,7 +223,6 @@ export default function WorkspaceSidebar({
               : disabledMailFeatures
                 ? item.view === activeView
                 : pathname === "/" && activeView === item.view;
-            const itemEnabled = !mailboxBaseHref || enabledMailboxViews.includes(item.view);
             const itemHref = mailboxBaseHref
               ? `${mailboxBaseHref}?view=${encodeURIComponent(item.view)}`
               : item.href;
@@ -246,22 +234,6 @@ export default function WorkspaceSidebar({
                 {count !== undefined && count > 0 && <span className="mail-nav-count">{count}</span>}
               </>
             );
-
-            if (disabledMailFeatures || !itemEnabled) {
-              return (
-                <button
-                  className={active ? "mail-nav-item active workspace-nav-disabled" : "mail-nav-item workspace-nav-disabled"}
-                  key={item.view}
-                  type="button"
-                  disabled
-                  aria-disabled="true"
-                  title={item.label + " is not available yet"}
-                >
-                  {children}
-                  <span className="mail-feature-pill">{disabledMailFeatures ? "Setup" : "Soon"}</span>
-                </button>
-              );
-            }
 
             return onMailboxNavigate ? (
               <button
@@ -298,39 +270,16 @@ export default function WorkspaceSidebar({
               : item.href;
             const active = pathname === scopedHref || pathname.startsWith(`${scopedHref}/`);
             return (
-              <Fragment key={item.href}>
-                <Link
-                  className={active ? "mail-nav-item active" : "mail-nav-item"}
-                  href={scopedHref}
-                  aria-current={active ? "page" : undefined}
-                  title={item.label}
-                >
-                  <span className="mail-nav-icon" aria-hidden="true">{item.icon}</span>
-                  <span>{item.label}</span>
-                </Link>
-                {item.href === "/settings" && active && (
-                  <div className="mail-settings-subnav" aria-label="Settings sections">
-                    {settingsSectionLinks.map((section) => {
-                      const sectionHref = section.id === "general" ? scopedHref : scopedHref + "/" + section.id;
-                      const sectionActive = section.id === "general"
-                        ? pathname === sectionHref
-                        : pathname === sectionHref || pathname.startsWith(sectionHref + "/");
-                      return (
-                        <Link
-                          key={section.id}
-                          className={sectionActive ? "mail-nav-item mail-settings-subnav-item active" : "mail-nav-item mail-settings-subnav-item"}
-                          href={sectionHref}
-                          aria-current={sectionActive ? "page" : undefined}
-                          title={section.label}
-                        >
-                          <span className="mail-nav-icon" aria-hidden="true">{section.icon}</span>
-                          <span>{section.label}</span>
-                        </Link>
-                      );
-                    })}
-                  </div>
-                )}
-              </Fragment>
+              <Link
+                key={item.href}
+                className={active ? "mail-nav-item active" : "mail-nav-item"}
+                href={scopedHref}
+                aria-current={active ? "page" : undefined}
+                title={item.label}
+              >
+                <span className="mail-nav-icon" aria-hidden="true">{item.icon}</span>
+                <span>{item.label}</span>
+              </Link>
             );
           })}
         </nav>
