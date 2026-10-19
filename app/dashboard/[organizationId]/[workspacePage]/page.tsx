@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import TemplateManager from "@/components/template-manager";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +42,10 @@ type WorkspaceFeaturePageProps = {
 
 export default async function WorkspaceFeaturePage({ params }: WorkspaceFeaturePageProps) {
   const { organizationId, workspacePage } = await params;
+  if (workspacePage === "templates") {
+    return <TemplateManager organizationId={organizationId} />;
+  }
+
   const page = WORKSPACE_PAGES[workspacePage];
   if (!page) notFound();
 
