@@ -192,7 +192,17 @@ export default function WorkspaceSidebar({
         </button>
       </div>
 
-      {disabledMailFeatures ? (
+      {collapsed && !mobileOpen ? (
+        <button
+          className="mail-compose-button mail-sidebar-reopen-button"
+          type="button"
+          onClick={toggleCollapsed}
+          aria-label="Expand navigation"
+          title="Expand navigation"
+        >
+          <span aria-hidden="true">›</span>
+        </button>
+      ) : disabledMailFeatures ? (
         <button className="mail-compose-button workspace-compose-disabled" disabled type="button" aria-label="Compose is unavailable until email is connected" title="Compose unavailable until email is connected">
           <span className="compose-plus">＋</span><span className="mail-compose-label">Compose</span>
         </button>
