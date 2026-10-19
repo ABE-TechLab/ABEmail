@@ -96,8 +96,9 @@ export async function GET(request: NextRequest) {
   if (draftId) {
     const admin = createAdminClient();
     if (!admin) return json({ error: "Mail storage is not configured." }, 503);
-    if (!(await hasMailboxPermission(admin, user.id, organizationId, mailboxId, "can_send"))) {
-      return json({ error: "You do not have permission to manage this draft." }, 403);
+    if (!(await hasMailboxPermission(admin, user.id, organizationId, mailboxId, "can_read")) ||
+        !(await hasMailboxPermission(admin, user.id, organizationId, mailboxId, "can_send"))) {
+      return json({ error: "You need mailbox read and send permission to manage this draft." }, 403);
     }
     const { data: draft, error: draftError } = await admin.from("email_drafts").select("id")
       .eq("id", draftId).eq("organization_id", organizationId).eq("mailbox_id", mailboxId).eq("user_id", user.id).maybeSingle();
@@ -142,8 +143,9 @@ export async function POST(request: NextRequest) {
           ids.some((id) => typeof id !== "string" || !UUID.test(id)) || new Set(ids).size !== ids.length) {
         return json({ error: "Invalid draft attachment request." }, 400);
       }
-      if (!(await hasMailboxPermission(admin, user.id, organizationId, mailboxId, "can_send"))) {
-        return json({ error: "You do not have permission to save attachments with this draft." }, 403);
+      if (!(await hasMailboxPermission(admin, user.id, organizationId, mailboxId, "can_read")) ||
+          !(await hasMailboxPermission(admin, user.id, organizationId, mailboxId, "can_send"))) {
+        return json({ error: "You need mailbox read and send permission to save attachments with this draft." }, 403);
       }
       const { data: draft, error: draftError } = await admin.from("email_drafts").select("id")
         .eq("id", draftId).eq("organization_id", organizationId).eq("mailbox_id", mailboxId)
@@ -246,6 +248,10 @@ export async function POST(request: NextRequest) {
   if (!UUID.test(organizationId) || !UUID.test(mailboxId) || (draftId && !UUID.test(draftId)) || !(file instanceof File)) return json({ error: "Choose a valid file for an active mailbox." }, 400);
   if (!(await hasMailboxPermission(admin, user.id, organizationId, mailboxId, "can_send"))) return json({ error: "You do not have permission to attach files from this mailbox." }, 403);
   if (draftId) {
+    if (!(await hasMailboxPermission(admin, user.id, organizationId, mailboxId, "can_read")) ||
+        !(await hasMailboxPermission(admin, user.id, organizationId, mailboxId, "can_send"))) {
+      return json({ error: "You need mailbox read and send permission to attach files to a draft." }, 403);
+    }
     const { data: draft, error: draftError } = await admin.from("email_drafts").select("id")
       .eq("id", draftId).eq("organization_id", organizationId).eq("mailbox_id", mailboxId).eq("user_id", user.id).maybeSingle();
     if (draftError) return json({ error: "Draft ownership could not be checked." }, 503);
@@ -284,10 +290,13 @@ export async function DELETE(request: NextRequest) {
   if (!admin) return json({ error: "Mail storage is not configured." }, 503);
   if (!(await hasMailboxPermission(admin, user.id, organizationId, mailboxId, "can_send"))) return json({ error: "You do not have permission to remove this attachment." }, 403);
   const { data: pending, error } = await admin.from("email_message_attachments")
-    .select("id, storage_path").eq("id", id).eq("organization_id", organizationId).eq("mailbox_id", mailboxId)
+    .select("id, draft_id, storage_path").eq("id", id).eq("organization_id", organizationId).eq("mailbox_id", mailboxId)
     .eq("user_id", user.id).is("message_id", null).maybeSingle();
   if (error) return json({ error: "Attachment could not be checked." }, 503);
   if (!pending) return json({ error: "This attachment is no longer pending." }, 404);
+  if (pending.draft_id && !(await hasMailboxPermission(admin, user.id, organizationId, mailboxId, "can_read"))) {
+    return json({ error: "You need mailbox read permission to remove an attachment from a draft." }, 403);
+  }
   const { error: removeError } = await admin.storage.from(BUCKET).remove([pending.storage_path]);
   if (removeError) return json({ error: "The attachment file could not be removed." }, 503);
   const { error: deleteError } = await admin.from("email_message_attachments").delete().eq("id", id).is("message_id", null);
