@@ -1,5 +1,4 @@
 import Link from "next/link";
-import WorkspaceSidebar from "@/components/workspace-sidebar";
 import AppearanceToggle from "@/components/appearance-toggle";
 import styles from "./workspace-home.module.css";
 
@@ -44,7 +43,6 @@ export default function WorkspaceHome({
   const mailboxReady = currentMailboxes.length > 0;
   const emailReady = Boolean(providerConnected && verifiedDomains.length > 0 && mailboxReady);
   const completedSetupSteps = Number(providerConnected) + Number(verifiedDomains.length > 0) + Number(mailboxReady);
-  const workspaceBase = selected ? "/dashboard/" + selected.id : undefined;
   const settingsHref = (section = "general") => selected
     ? section === "general"
       ? "/dashboard/" + selected.id + "/settings"
@@ -53,20 +51,6 @@ export default function WorkspaceHome({
 
   return (
     <div className={"mail-app " + styles.app}>
-      <WorkspaceSidebar
-        activeView="Inbox"
-        mailboxBaseHref={workspaceBase ? workspaceBase + "/mail" : undefined}
-        enabledMailboxViews={emailReady ? ["Inbox", "Sent"] : []}
-        disabledMailFeatures={!emailReady}
-        disableContacts
-        workspaceName={selected?.name ?? "Your workspaces"}
-        workspaceDescription={selected ? emailReady ? "Business email ready" : "Email setup required" : "Choose an organization"}
-        homeHref={workspaceBase ?? "/dashboard"}
-        workspaceBaseHref={workspaceBase}
-        workspaces={organizations}
-        activeWorkspaceId={selected?.id}
-      />
-
       <main className="mail-main">
         <header className={"mail-topbar " + styles.topbar}>
           <div className="mail-breadcrumb">

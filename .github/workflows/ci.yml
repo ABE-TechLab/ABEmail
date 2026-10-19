@@ -33,6 +33,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Verify workspace navigation contract
+        run: npm run check:navigation
+
       - name: Type-check
         run: npm run typecheck
 

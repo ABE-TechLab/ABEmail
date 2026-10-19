@@ -31,9 +31,9 @@ insert into public.organization_memberships (
   ('20000000-0000-4000-8000-000000000002', '10000000-0000-4000-8000-000000000004', 'admin', 'active', '10000000-0000-4000-8000-000000000002', now()),
   ('20000000-0000-4000-8000-000000000003', '10000000-0000-4000-8000-000000000005', 'owner', 'active', '10000000-0000-4000-8000-000000000005', now());
 
-insert into public.contacts (id, organization_id, name, email, company, created_by) values
-  ('40000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000001', 'Tenant A contact', 'contact@tenant-a.invalid', 'Tenant A', '10000000-0000-4000-8000-000000000001'),
-  ('40000000-0000-4000-8000-000000000002', '20000000-0000-4000-8000-000000000002', 'Tenant B contact', 'contact@tenant-b.invalid', 'Tenant B', '10000000-0000-4000-8000-000000000002');
+insert into public.contacts (id, organization_id, name, email, company, created_by, tags) values
+  ('40000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000001', 'Tenant A contact', 'contact@tenant-a.invalid', 'Tenant A', '10000000-0000-4000-8000-000000000001', array['client', 'priority']),
+  ('40000000-0000-4000-8000-000000000002', '20000000-0000-4000-8000-000000000002', 'Tenant B contact', 'contact@tenant-b.invalid', 'Tenant B', '10000000-0000-4000-8000-000000000002', array['vendor']);
 
 insert into public.user_preferences (user_id, appearance_mode, language, time_zone) values
   ('10000000-0000-4000-8000-000000000001', 'light', 'en', 'Africa/Lagos'),
@@ -109,6 +109,16 @@ select ok(not has_table_privilege('authenticated', 'public.provider_events', 'se
 select is((select count(*)::integer from public.organization_domains), 1, 'domain metadata is restricted to organizations the user administers');
 select is((select count(*)::integer from public.organization_invitations where organization_id = '20000000-0000-4000-8000-000000000002'), 0, 'membership alone does not expose another organization invitations');
 select is((select count(*)::integer from public.contacts where organization_id = '20000000-0000-4000-8000-000000000002'), 1, 'member can access tenant contacts in their second organization but only within that tenant');
+select is((select tags from public.contacts where id = '40000000-0000-4000-8000-000000000001'), array['client', 'priority']::text[], 'contact tags persist as normalized labels');
+select ok(exists (select 1 from pg_indexes where schemaname = 'public' and indexname = 'contacts_organization_tags_gin_idx'), 'contact tags have a GIN index for lookup');
+select throws_ok(
+  $tag_update$ update public.contacts
+    set tags = array['a','b','c','d','e','f','g','h','i','j','k','l','m']
+    where id = '40000000-0000-4000-8000-000000000001' $tag_update$,
+  '23514',
+  null,
+  'a contact cannot have more than twelve tags'
+);
 select ok(not has_table_privilege('authenticated', 'private.user_login_aliases', 'select'), 'login aliases are not directly readable through the Data API');
 
 -- A member can see only their assigned mailbox and cannot inspect a different tenant.

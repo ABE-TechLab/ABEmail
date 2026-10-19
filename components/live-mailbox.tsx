@@ -3,18 +3,43 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import WorkspaceSidebar, { type MailboxView, type WorkspaceChoice } from "@/components/workspace-sidebar";
 import AppearanceToggle from "@/components/appearance-toggle";
 import styles from "./live-mailbox.module.css";
+import type { Contact } from "@/lib/contacts/types";
 import workspaceStyles from "./workspace-home.module.css";
 
 const COMPACT_MESSAGE_LIST_KEY = "abemail:compact-message-list";
 const WORKSPACE_SETTINGS_KEY = "abemail:workspace-settings:";
-type MailPreferences = { timezone: string; language: string; font: string; signature: string; replyStyle: string; compactMessageList: boolean };
-const DEFAULT_MAIL_PREFERENCES: MailPreferences = { timezone: "Africa/Lagos", language: "en", font: "sans", signature: "", replyStyle: "reply", compactMessageList: false };
+type SavedSignature = { id: string; name: string; content: string };
+type MailboxSignaturePreference = { enabled: boolean; defaultSignatureId: string | null; signatures: SavedSignature[] };
+type MailPreferences = { timezone: string; language: string; font: string; signature: string; mailboxSignatures: Record<string, MailboxSignaturePreference>; replyStyle: string; compactMessageList: boolean };
+const DEFAULT_MAIL_PREFERENCES: MailPreferences = { timezone: "Africa/Lagos", language: "en", font: "sans", signature: "", mailboxSignatures: {}, replyStyle: "reply", compactMessageList: false };
+
+function availableMailboxSignatures(preferences: MailPreferences, mailboxId: string) {
+  const config = preferences.mailboxSignatures[mailboxId];
+  return [
+    ...(preferences.signature.trim() ? [{ id: "workspace-default", name: "Workspace default", content: preferences.signature.trim() }] : []),
+    ...(config?.signatures ?? []),
+  ];
+}
+
+function resolveMailboxSignature(preferences: MailPreferences, mailboxId: string, selectedSignatureId: string | null): string {
+  const config = preferences.mailboxSignatures[mailboxId];
+  if (!config) return preferences.signature.trim();
+  if (!config.enabled) return "";
+  const id = selectedSignatureId ?? config.defaultSignatureId ?? "";
+  if (id === "workspace-default") return preferences.signature.trim();
+  if (!id) return "";
+  return config.signatures.find((signature) => signature.id === id)?.content.trim() ?? "";
+}
+
+function appendSignature(body: string, signature: string): string {
+  const trimmedBody = body.trimEnd();
+  return signature && !trimmedBody.endsWith(signature) ? trimmedBody + "\n\n" + signature : trimmedBody;
+}
 
 type Mailbox = { id: string; address: string; display_name: string | null; canManage: boolean };
-type ActiveMailboxView = "Inbox" | "Sent" | "Starred" | "Drafts" | "Scheduled" | "Archive" | "Trash" | "Spam";
+type ActiveMailboxView = "Inbox" | "Sent" | "Starred" | "Drafts" | "Scheduled" | "Snoozed" | "Archive" | "Trash" | "Spam";
 type LifecycleAction = "mark_read" | "mark_unread" | "star" | "unstar" | "archive" | "unarchive" | "trash" | "restore" | "spam" | "not_spam" | "permanent_delete";
 type EmailDraft = { id: string; to_address: string; subject: string; body_text: string; created_at: string; updated_at: string };
 type PendingAttachment = { id: string; filename: string; content_type: string; size_bytes: number };
@@ -49,7 +74,8 @@ type LiveMailboxProps = {
   messages: EmailMessage[];
   messagesError: boolean;
   activeView?: ActiveMailboxView;
-  workspaces: WorkspaceChoice[];
+  initialRecipient?: string;
+  initialCompose?: boolean;
 };
 
 function plainText(message: EmailMessage): string {
@@ -99,7 +125,7 @@ function formatFileSize(bytes: number): string {
 }
 
 export default function LiveMailbox(props: LiveMailboxProps) {
-  const { organizationId, organizationName, userEmail, mailboxes, messages, messagesError, activeView = "Inbox", workspaces } = props;
+  const { organizationId, organizationName, userEmail, mailboxes, messages, messagesError, activeView = "Inbox", initialRecipient, initialCompose = false } = props;
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [compactMessageList, setCompactMessageList] = useState(false);
@@ -109,6 +135,8 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   const composeBodyRef = useRef<HTMLTextAreaElement>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const composeCursorPosition = useRef<number | null>(null);
+  const initialRecipientHandledRef = useRef(false);
+  const initialComposeHandledRef = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -192,7 +220,12 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   const [lifecycleBusy, setLifecycleBusy] = useState(false);
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);
+  const [composeSignatureId, setComposeSignatureId] = useState<string | null>(null);
   const [to, setTo] = useState("");
+  const [contactSuggestions, setContactSuggestions] = useState<Contact[]>([]);
+  const [contactSuggestionsOpen, setContactSuggestionsOpen] = useState(false);
+  const [contactSuggestionsLoading, setContactSuggestionsLoading] = useState(false);
+  const [activeContactSuggestionIndex, setActiveContactSuggestionIndex] = useState(0);
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [busy, setBusy] = useState(false);
@@ -219,6 +252,66 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   const draftMutationVersion = useRef(0);
   const draftIdRef = useRef<string | null>(null);
   const draftUpdatedAtRef = useRef<string | null>(null);
+
+const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
+
+  useEffect(() => {
+    if (!initialRecipient || initialRecipientHandledRef.current) return;
+    initialRecipientHandledRef.current = true;
+    setTo(initialRecipient);
+    setComposeOpen(true);
+    setNotice("");
+    const currentUrl = new URL(window.location.href);
+    currentUrl.searchParams.delete("composeTo");
+    router.replace(currentUrl.pathname + currentUrl.search, { scroll: false });
+  }, [initialRecipient, router]);
+
+  useEffect(() => {
+    if (!initialCompose || initialComposeHandledRef.current) return;
+    initialComposeHandledRef.current = true;
+    setComposeOpen(true);
+    const currentUrl = new URL(window.location.href);
+    currentUrl.searchParams.delete("compose");
+    router.replace(currentUrl.pathname + currentUrl.search, { scroll: false });
+  }, [initialCompose, router]);
+
+  useEffect(() => {
+    if (!composeOpen || !recipientQuery) return;
+
+    let active = true;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      setContactSuggestionsLoading(true);
+      setContactSuggestionsOpen(true);
+      void fetch("/api/organizations/" + organizationId + "/contacts?q=" + encodeURIComponent(recipientQuery), {
+        cache: "no-store",
+        signal: controller.signal,
+      })
+        .then(async (response) => {
+          const payload = await response.json() as { ok?: boolean; contacts?: Contact[] };
+          if (!response.ok || !payload.ok) throw new Error("Contact lookup failed.");
+          if (!active) return;
+          setContactSuggestions((payload.contacts ?? []).slice(0, 8));
+          setActiveContactSuggestionIndex(0);
+        })
+        .catch((error: unknown) => {
+          if (!active || (error instanceof Error && error.name === "AbortError")) return;
+          setContactSuggestions([]);
+          setContactSuggestionsOpen(false);
+        })
+        .finally(() => {
+          if (active) setContactSuggestionsLoading(false);
+        });
+    }, 180);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [composeOpen, organizationId, recipientQuery]);
+
+
 
   useEffect(() => {
     const media = window.matchMedia("(max-width: 760px)");
@@ -264,7 +357,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
 
   const visibleMessages = useMemo(() => {
     const term = query.trim().toLowerCase();
-    if (activeView === "Scheduled" || activeView === "Drafts") return [];
+    if (activeView === "Scheduled" || activeView === "Drafts" || activeView === "Snoozed") return [];
     return messages.filter((message) => {
       if (message.mailbox_id !== mailboxId) return false;
       const inTrash = Boolean(message.trashed_at);
@@ -451,6 +544,9 @@ export default function LiveMailbox(props: LiveMailboxProps) {
 
   function resetComposerAfterClose(attachmentsAlreadyLinked = false) {
     setComposeOpen(false);
+    setComposeSignatureId(null);
+    setContactSuggestions([]);
+    setContactSuggestionsOpen(false);
     setTo("");
     setSubject("");
     setBody("");
@@ -573,12 +669,24 @@ export default function LiveMailbox(props: LiveMailboxProps) {
     draftUpdatedAtRef.current = null;
     setDraftId(null);
     setComposeOpen(true);
+    setComposeSignatureId(null);
     setNotice("");
     setTo("");
     setSubject("");
     setBody("");
     setRequestKey(null);
     composeCursorPosition.current = 0;
+  }
+
+  function chooseContactSuggestion(contact: Contact) {
+    const delimiterIndex = Math.max(to.lastIndexOf(","), to.lastIndexOf(";"));
+    const prefix = delimiterIndex >= 0 ? to.slice(0, delimiterIndex + 1) : "";
+    const separator = prefix && !/\\s$/.test(prefix) ? " " : "";
+    setTo(prefix + separator + contact.email + ", ");
+    setRequestKey(null);
+    setContactSuggestions([]);
+    setContactSuggestionsOpen(false);
+    setActiveContactSuggestionIndex(0);
   }
 
   async function scheduleMessage() {
@@ -590,8 +698,8 @@ export default function LiveMailbox(props: LiveMailboxProps) {
     if (!scheduledAt || !Number.isFinite(Date.parse(scheduledAt))) { setNotice("Choose a date and time for delivery."); return; }
     setBusy(true); setNotice("");
     try {
-      const signature = mailPreferences.signature.trim();
-      const finalBody = body.trimEnd() + (signature && !body.trimEnd().endsWith(signature) ? "\n\n" + signature : "");
+      const signature = resolveMailboxSignature(mailPreferences, mailboxId, composeSignatureId);
+      const finalBody = appendSignature(body, signature);
       const response = await fetch("/api/mail/scheduled", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ organizationId, mailboxId, to: to.trim(), subject: subject.trim(), text: finalBody, scheduledAt: new Date(scheduledAt).toISOString() }) });
       const result = await response.json() as { ok?: boolean; error?: string; scheduled?: ScheduledEmail };
       if (!response.ok || !result.ok || !result.scheduled) { setNotice(result.error || "The message could not be scheduled."); return; }
@@ -668,8 +776,8 @@ export default function LiveMailbox(props: LiveMailboxProps) {
     const stableRequestKey = requestKey ?? crypto.randomUUID();
     setRequestKey(stableRequestKey);
     try {
-      const signature = mailPreferences.signature.trim();
-      const finalBody = body.trimEnd() + (signature && !body.trimEnd().endsWith(signature) ? "\n\n" + signature : "");
+      const signature = resolveMailboxSignature(mailPreferences, mailboxId, composeSignatureId);
+      const finalBody = appendSignature(body, signature);
       const response = await fetch("/api/mail/send", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Idempotency-Key": stableRequestKey },
@@ -724,6 +832,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
     setDraftId(draft.id);
     setPendingAttachments([]);
     setTo(draft.to_address);
+    setComposeSignatureId(null);
     setSubject(draft.subject);
     setBody(draft.body_text);
     setRequestKey(null);
@@ -759,6 +868,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
         .filter((address) => address && address !== ownAddress)))
       : replyTargets;
     setTo(recipients.join(", "));
+    setComposeSignatureId(null);
     setSubject(/^re:/i.test(message.subject) ? message.subject : "Re: " + message.subject);
     const quoted = plainText(message).split("\n").map((line) => "> " + line).join("\n");
     const quoteBlock = "—\nOn " + messageDate(message, mailPreferences.timezone, mailPreferences.language) + ", " + message.from_address + " wrote:\n" + quoted;
@@ -778,6 +888,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
     draftIdRef.current = null;
     draftUpdatedAtRef.current = null;
     setTo("");
+    setComposeSignatureId(null);
     setSubject(/^fwd:/i.test(message.subject) ? message.subject : "Fwd: " + message.subject);
     setBody("\n\n---------- Forwarded message ----------\nFrom: " + message.from_address +
       "\nDate: " + messageDate(message, mailPreferences.timezone, mailPreferences.language) +
@@ -804,24 +915,9 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   }
 
   return (
-    <div className={"mail-app mailbox-live-app " + workspaceStyles.app + (compactMessageList ? " " + workspaceStyles.compactList : "")}>
-      <WorkspaceSidebar
-        activeView={activeView}
-        mailboxBaseHref={"/dashboard/" + organizationId + "/mail"}
-        activeMailboxView={activeView as MailboxView}
-        enabledMailboxViews={["Inbox", "Sent", "Starred", "Drafts", "Scheduled", "Archive", "Trash", "Spam"]}
-        disabledMailFeatures={!mailboxes.length}
-        disableContacts
-        onCompose={openCompose}
-        homeHref={"/dashboard/" + organizationId + "/mail"}
-        workspaceBaseHref={"/dashboard/" + organizationId}
-        workspaceName={organizationName}
-        workspaceDescription="Business workspace"
-        workspaces={workspaces}
-        activeWorkspaceId={organizationId}
-      />
-      <button type="button" className="mail-mobile-compose-fab" onClick={openCompose} aria-label="Compose a new message" title="Compose a new message">+</button>
-      <main className="mail-main">
+    <>
+      <div className={"mailbox-live-page " + workspaceStyles.app + (compactMessageList ? " " + workspaceStyles.compactList : "")}>
+        <button type="button" className="mail-mobile-compose-fab" onClick={openCompose} aria-label="Compose a new message" title="Compose a new message">+</button>
         <header className={"mail-topbar " + workspaceStyles.topbar}>
           <div className="mail-breadcrumb">
             <span>Workspace</span><span className="mail-breadcrumb-slash">/</span><strong>{activeView}</strong>
@@ -872,7 +968,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
                   <span className="mail-sr-only">Mailbox</span>
                   <select
                     value={mailboxId}
-                    onChange={(event) => { setMailboxId(event.target.value); setSelectedMessageId(""); setMobileDetailOpen(false); }}
+                    onChange={(event) => { setMailboxId(event.target.value); setComposeSignatureId(null); setSelectedMessageId(""); setMobileDetailOpen(false); }}
                     aria-label="Select mailbox"
                   >
                     {mailboxes.map((mailbox) => (
@@ -1030,9 +1126,9 @@ export default function LiveMailbox(props: LiveMailboxProps) {
                 )}
                 {activeView !== "Drafts" && activeView !== "Scheduled" && !visibleMessages.length && (
                   <div className="mail-empty-list">
-                    <span>{activeView === "Inbox" ? "▤" : activeView === "Sent" ? "↗" : activeView === "Starred" ? "☆" : activeView === "Archive" ? "▱" : activeView === "Trash" ? "⌫" : "⊘"}</span>
-                    <strong>{query ? "No matching messages" : "No messages in " + activeView}</strong>
-                    <p>{query ? "Try another search term." : activeView === "Inbox" ? "New incoming messages will appear here." : activeView === "Sent" ? "Messages you send from this mailbox will appear here." : "Messages in this personal " + activeView.toLowerCase() + " view will appear here."}</p>
+                    <span>{activeView === "Inbox" ? "▤" : activeView === "Sent" ? "↗" : activeView === "Starred" ? "☆" : activeView === "Snoozed" ? "◴" : activeView === "Archive" ? "▱" : activeView === "Trash" ? "⌫" : "⊘"}</span>
+                    <strong>{query ? "No matching messages" : activeView === "Snoozed" ? "Snooze workflow not enabled" : "No messages in " + activeView}</strong>
+                    <p>{query ? "Try another search term." : activeView === "Inbox" ? "New incoming messages will appear here." : activeView === "Sent" ? "Messages you send from this mailbox will appear here." : activeView === "Snoozed" ? "The Snoozed destination is reserved in the workspace navigation. Message snoozing and automatic return scheduling still need to be implemented." : "Messages in this personal " + activeView.toLowerCase() + " view will appear here."}</p>
                     {activeView === "Inbox" && !query && <button type="button" onClick={openCompose}>Compose a message</button>}
                   </div>
                 )}
@@ -1120,12 +1216,85 @@ export default function LiveMailbox(props: LiveMailboxProps) {
                 <button type="button" onClick={() => void closeComposer()} aria-label="Close compose" disabled={busy}>×</button>
               </header>
               <form onSubmit={submitMessage}>
-                <label className="mail-compose-field"><span>To</span><input type="text" inputMode="email" required maxLength={4000} disabled={busy} value={to} onChange={(event) => { setTo(event.target.value); setRequestKey(null); }} placeholder="name@example.com, another@example.com" /></label>
+                <label className="mail-compose-field">
+                  <span>To</span>
+                  <div className={styles.recipientField}>
+                    <input
+                      className={styles.recipientInput}
+                      type="text"
+                      role="combobox"
+                      inputMode="email"
+                      required
+                      maxLength={4000}
+                      disabled={busy}
+                      value={to}
+                      aria-label="To"
+                      aria-autocomplete="list"
+                      aria-expanded={Boolean(recipientQuery) && contactSuggestionsOpen && (contactSuggestionsLoading || contactSuggestions.length > 0)}
+                      aria-controls="contact-recipient-suggestions"
+                      aria-activedescendant={contactSuggestionsOpen && contactSuggestions[activeContactSuggestionIndex] ? "contact-suggestion-" + contactSuggestions[activeContactSuggestionIndex].id : undefined}
+                      onChange={(event) => { setTo(event.target.value); setRequestKey(null); setActiveContactSuggestionIndex(0); }}
+                      onKeyDown={(event) => {
+                        if (event.key === "ArrowDown" && contactSuggestions.length > 0) {
+                          event.preventDefault();
+                          setContactSuggestionsOpen(true);
+                          setActiveContactSuggestionIndex((index) => Math.min(index + 1, contactSuggestions.length - 1));
+                        } else if (event.key === "ArrowUp" && contactSuggestions.length > 0) {
+                          event.preventDefault();
+                          setContactSuggestionsOpen(true);
+                          setActiveContactSuggestionIndex((index) => Math.max(index - 1, 0));
+                        } else if (event.key === "Enter" && contactSuggestionsOpen && contactSuggestions.length > 0) {
+                          event.preventDefault();
+                          chooseContactSuggestion(contactSuggestions[activeContactSuggestionIndex] ?? contactSuggestions[0]);
+                        } else if (event.key === "Escape") {
+                          setContactSuggestionsOpen(false);
+                        }
+                      }}
+                      onBlur={() => { window.setTimeout(() => setContactSuggestionsOpen(false), 100); }}
+                      placeholder="name@example.com, another@example.com"
+                    />
+                    {Boolean(recipientQuery) && contactSuggestionsOpen && (contactSuggestionsLoading || contactSuggestions.length > 0) && (
+                      <div className={styles.contactSuggestions} id="contact-recipient-suggestions" role="listbox" aria-label="Saved contacts">
+                        {contactSuggestionsLoading && <p className={styles.contactSuggestionsStatus}>Searching saved contacts…</p>}
+                        {contactSuggestions.map((contact, index) => (
+                          <button
+                            type="button"
+                            role="option"
+                            aria-selected={index === activeContactSuggestionIndex}
+                            id={"contact-suggestion-" + contact.id}
+                            key={contact.id}
+                            className={index === activeContactSuggestionIndex ? styles.contactSuggestionActive : styles.contactSuggestion}
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={() => chooseContactSuggestion(contact)}
+                          >
+                            <span className={styles.contactSuggestionAvatar}>{initials(contact.name)}</span>
+                            <span className={styles.contactSuggestionCopy}><strong>{contact.name}</strong><small>{contact.email}{contact.company ? " · " + contact.company : ""}</small></span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </label>
                 <label className="mail-compose-field"><span>Subject</span><input required maxLength={998} disabled={busy} value={subject} onChange={(event) => { setSubject(event.target.value); setRequestKey(null); }} placeholder="Add a subject" /></label>
                 <label className="mail-compose-body-label">
                   <span className="mail-sr-only">Message body</span>
                   <textarea ref={composeBodyRef} required maxLength={80000} rows={8} disabled={busy} value={body} style={{ fontFamily: mailPreferences.font === "serif" ? "Georgia, serif" : mailPreferences.font === "mono" ? "ui-monospace, SFMono-Regular, Consolas, monospace" : "inherit" }} onChange={(event) => { setBody(event.target.value); setRequestKey(null); composeCursorPosition.current = null; }} placeholder="Write your message…" />
                 </label>
+                {mailPreferences.mailboxSignatures[mailboxId] && (
+                  <label className="mail-compose-field">
+                    <span>Signature</span>
+                    <select
+                      value={composeSignatureId ?? mailPreferences.mailboxSignatures[mailboxId].defaultSignatureId ?? ""}
+                      onChange={(event) => setComposeSignatureId(event.target.value)}
+                      disabled={busy || !mailPreferences.mailboxSignatures[mailboxId].enabled}
+                    >
+                      <option value="">No signature</option>
+                      {availableMailboxSignatures(mailPreferences, mailboxId).map((signature) => (
+                        <option key={signature.id} value={signature.id}>{signature.name}</option>
+                      ))}
+                    </select>
+                  </label>
+                )}
                 <p className="mail-compose-warning"><span>i</span> Plain-text email · Up to 10 recipients separated by commas · Attachments up to 4 MB each / 20 MB total · {draftSaving ? "Saving draft…" : draftId ? "Draft saved" : "Changes save automatically"}</p>
                 {!scheduleMode && (
                   <section className={styles.composeAttachments} aria-label="Compose attachments">
@@ -1155,7 +1324,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
             </section>
           </div>
         )}
-      </main>
-    </div>
+      </div>
+    </>
   );
 }

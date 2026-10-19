@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
-import WorkspaceSidebar, { type WorkspaceChoice } from "@/components/workspace-sidebar";
 import { useAppearanceMode, type AppearanceMode } from "@/components/appearance-provider";
 import { useDesignTheme } from "@/components/design-theme-provider";
 import { DESIGN_THEMES, type DesignThemeId } from "@/lib/design-system";
@@ -15,9 +14,15 @@ export type WorkspaceSettingsContext = {
   organizationRole: string;
   email: string;
   userId: string;
-  workspaces: WorkspaceChoice[];
   mailboxes: { id: string; address: string; display_name: string | null }[];
   members: { user_id: string; role: string; status: string }[];
+};
+
+export type SavedSignature = { id: string; name: string; content: string };
+export type MailboxSignaturePreference = {
+  enabled: boolean;
+  defaultSignatureId: string | null;
+  signatures: SavedSignature[];
 };
 
 export type WorkspacePreferenceValues = {
@@ -25,6 +30,7 @@ export type WorkspacePreferenceValues = {
   language: string;
   font: string;
   signature: string;
+  mailboxSignatures: Record<string, MailboxSignaturePreference>;
   replyStyle: "reply" | "bottom";
   compactMessageList: boolean;
   notifications: { newMail: boolean; mentions: boolean; product: boolean; digest: boolean };
@@ -101,21 +107,11 @@ const DEFAULT_PREFERENCES: WorkspacePreferenceValues = {
   language: "en",
   font: "sans",
   signature: "",
+  mailboxSignatures: {},
   replyStyle: "reply",
   compactMessageList: false,
   notifications: { newMail: true, mentions: true, product: false, digest: false },
 };
-
-const SECTIONS = [
-  { id: "general", label: "General", icon: "⚙", group: "PREFERENCES" },
-  { id: "appearance", label: "Appearance", icon: "◐", group: "PREFERENCES" },
-  { id: "mail", label: "Mail & compose", icon: "✉", group: "PREFERENCES" },
-  { id: "notifications", label: "Notifications", icon: "♧", group: "PREFERENCES" },
-  { id: "team", label: "Team & access", icon: "♙", group: "WORKSPACE" },
-  { id: "domains", label: "Domains", icon: "◎", group: "WORKSPACE" },
-  { id: "mailboxes", label: "Mailboxes", icon: "▤", group: "WORKSPACE" },
-  { id: "security", label: "Security", icon: "◇", group: "ACCESS" },
-] as const;
 
 const SECTION_INFO: Record<string, { title: string; description: string }> = {
   general: { title: "General", description: "Workspace identity and regional preferences." },
@@ -124,9 +120,49 @@ const SECTION_INFO: Record<string, { title: string; description: string }> = {
   notifications: { title: "Notifications", description: "Save your notification preferences for this workspace." },
   team: { title: "Team & access", description: "Review the active membership grants for this workspace." },
   domains: { title: "Domains", description: "Connect a custom domain, add its DNS records, and verify it with Resend." },
-  mailboxes: { title: "Mailboxes", description: "Create real addresses on verified domains in this workspace." },
+  mailboxes: { title: "Mailboxes & aliases", description: "Manage workspace mailboxes and future alias routing." },
   security: { title: "Security", description: "Review your current access and account-session controls." },
+  rules: { title: "Rules & filters", description: "Define deterministic actions for incoming messages." },
+  "out-of-office": { title: "Out-of-office", description: "Configure automatic replies while you are away." },
+  branding: { title: "Brand profile", description: "Set up the organization identity shared by branded email templates." },
+  integrations: { title: "Integrations", description: "Manage external services connected to this workspace." },
 };
+
+const SETTINGS_NAV_GROUPS = [
+  {
+    heading: "WORKSPACE",
+    items: [
+      { id: "general", label: "General", icon: "⚙" },
+      { id: "appearance", label: "Appearance", icon: "◐" },
+      { id: "notifications", label: "Notifications", icon: "♧" },
+      { id: "team", label: "Team & access", icon: "♙" },
+      { id: "security", label: "Security", icon: "◇" },
+    ],
+  },
+  {
+    heading: "EMAIL",
+    items: [
+      { id: "mail", label: "Mail & compose", icon: "✉" },
+      { id: "domains", label: "Domains", icon: "◎" },
+      { id: "mailboxes", label: "Mailboxes & aliases", icon: "▤" },
+    ],
+  },
+  {
+    heading: "AUTOMATION",
+    items: [
+      { id: "rules", label: "Rules & filters", icon: "⇄" },
+      { id: "out-of-office", label: "Out-of-office", icon: "◷" },
+    ],
+  },
+  {
+    heading: "BRAND & CONNECTIONS",
+    items: [
+      { id: "branding", label: "Brand profile", icon: "✧" },
+      { id: "integrations", label: "Integrations", icon: "⛭" },
+    ],
+  },
+] as const;
+
 
 const APPEARANCE_MODES: { id: AppearanceMode; label: string; glyph: string }[] = [
   { id: "light", label: "Light", glyph: "☼" },
@@ -163,7 +199,6 @@ export default function WorkspaceSettingsPanel({
   organizationRole,
   email,
   userId,
-  workspaces,
   mailboxes,
   members,
 }: WorkspaceSettingsContext & { section: string }) {
@@ -204,7 +239,6 @@ export default function WorkspaceSettingsPanel({
 
   const base = "/dashboard/" + organizationId;
   const settingsBase = base + "/settings";
-  const liveMailAvailable = mailboxes.length > 0;
   const info = SECTION_INFO[section] ?? SECTION_INFO.general;
   const canManageWorkspace = organizationRole === "owner" || organizationRole === "admin";
   const verifiedReceivingDomains = domains.filter((domain) => domain.status === "verified" && domain.sendingEnabled && domain.receivingEnabled);
@@ -434,6 +468,45 @@ export default function WorkspaceSettingsPanel({
     }
     notify("Regional preferences saved for this workspace.");
     setSaving(false);
+  }
+
+  function updateMailboxSignatureConfig(
+    mailboxId: string,
+    update: (config: MailboxSignaturePreference) => MailboxSignaturePreference,
+  ) {
+    setPreferences((current) => {
+      const config = current.mailboxSignatures[mailboxId] ?? {
+        enabled: true,
+        defaultSignatureId: current.signature.trim() ? "workspace-default" : null,
+        signatures: [],
+      };
+      return {
+        ...current,
+        mailboxSignatures: {
+          ...current.mailboxSignatures,
+          [mailboxId]: update(config),
+        },
+      };
+    });
+  }
+
+  function addMailboxSignature(mailboxId: string) {
+    const signature: SavedSignature = { id: crypto.randomUUID(), name: "New signature", content: "" };
+    updateMailboxSignatureConfig(mailboxId, (config) => ({
+      ...config,
+      signatures: [...config.signatures, signature],
+      defaultSignatureId: config.defaultSignatureId ?? signature.id,
+    }));
+  }
+
+  function removeMailboxSignature(mailboxId: string, signatureId: string) {
+    updateMailboxSignatureConfig(mailboxId, (config) => ({
+      ...config,
+      signatures: config.signatures.filter((signature) => signature.id !== signatureId),
+      defaultSignatureId: config.defaultSignatureId === signatureId
+        ? (preferences.signature.trim() ? "workspace-default" : null)
+        : config.defaultSignatureId,
+    }));
   }
 
   async function saveMailPreferences(event: FormEvent<HTMLFormElement>) {
@@ -694,21 +767,7 @@ export default function WorkspaceSettingsPanel({
   }
 
   return (
-    <div className="mail-app workspace-settings-app">
-      <WorkspaceSidebar
-        homeHref={liveMailAvailable ? base + "/mail" : base}
-        mailboxBaseHref={base + "/mail"}
-        enabledMailboxViews={liveMailAvailable ? ["Inbox", "Sent"] : []}
-        disabledMailFeatures={!liveMailAvailable}
-        activeView="Inbox"
-        workspaceBaseHref={base}
-        workspaceName={organizationName}
-        workspaceDescription={organizationRole + " workspace"}
-        workspaces={workspaces}
-        activeWorkspaceId={organizationId}
-        disableContacts
-      />
-      <main className="mail-main">
+    <div className="workspace-settings-app">
         <header className="mail-topbar">
           <div className="mail-breadcrumb"><Link href={base}>Workspace</Link><span className="mail-breadcrumb-slash">/</span><strong>{info.title}</strong></div>
           <div className="settings-topbar-title">{organizationName}</div>
@@ -725,17 +784,27 @@ export default function WorkspaceSettingsPanel({
           </span></div>
           <div className="settings-layout">
             <nav className="settings-navigation" aria-label="Settings sections">
-              {(["PREFERENCES", "WORKSPACE", "ACCESS"] as const).map((group) => (
-                <div className="settings-nav-group" key={group}>
-                  <p>{group}</p>
-                  {SECTIONS.filter((item) => item.group === group).map((item) => {
-                    const href = item.id === "general" ? settingsBase : settingsBase + "/" + item.id;
-                    return <Link className={section === item.id ? "settings-nav-link active" : "settings-nav-link"} key={item.id} href={href} aria-current={section === item.id ? "page" : undefined}><span aria-hidden="true">{item.icon}</span>{item.label}</Link>;
+              {SETTINGS_NAV_GROUPS.map((group) => (
+                <div className="settings-nav-group" key={group.heading}>
+                  <p>{group.heading}</p>
+                  {group.items.map((item) => {
+                    const href = settingsBase + (item.id === "general" ? "" : "/" + item.id);
+                    const active = section === item.id;
+                    return (
+                      <Link
+                        key={item.id}
+                        href={href}
+                        className={active ? "settings-nav-link active" : "settings-nav-link"}
+                        aria-current={active ? "page" : undefined}
+                        title={item.label}
+                      >
+                        <span aria-hidden="true">{item.icon}</span>{item.label}
+                      </Link>
+                    );
                   })}
                 </div>
               ))}
             </nav>
-
             <section className="settings-panel" aria-labelledby="settings-heading">
               <header className="settings-panel-heading"><div><h2 id="settings-heading">{info.title}</h2><p>{info.description}</p></div></header>
 
@@ -779,8 +848,64 @@ export default function WorkspaceSettingsPanel({
                   <Field label="Default writing font"><select value={preferences.font} onChange={(event) => setPreferences((current) => ({ ...current, font: event.target.value }))}><option value="sans">Sans serif</option><option value="serif">Serif</option><option value="mono">Monospace</option></select></Field>
                   <div className="settings-divider" />
                   <div className="settings-choice-group"><p className="settings-subheading">When replying</p><label className="settings-radio-row"><input type="radio" name="workspace-reply-style" value="reply" checked={preferences.replyStyle === "reply"} onChange={() => setPreferences((current) => ({ ...current, replyStyle: "reply" }))} /><span><strong>Reply above the quoted message</strong><small>Start writing before the original message.</small></span></label><label className="settings-radio-row"><input type="radio" name="workspace-reply-style" value="bottom" checked={preferences.replyStyle === "bottom"} onChange={() => setPreferences((current) => ({ ...current, replyStyle: "bottom" }))} /><span><strong>Reply below the quoted message</strong><small>Place the cursor after the quoted original message.</small></span></label></div>
-                  <Field label="Email signature" hint="Added to outgoing messages from this workspace."><textarea rows={4} value={preferences.signature} onChange={(event) => setPreferences((current) => ({ ...current, signature: event.target.value }))} /></Field>
-                  <div className="settings-form-footer"><span>Mail preferences sync to your account in this workspace and apply to compose/reply.</span><button className="mail-primary-action" type="submit">Save mail preferences</button></div>
+                  <Field label="Workspace default signature" hint="Legacy fallback used when a mailbox has no custom signature configuration."><textarea rows={4} maxLength={10000} value={preferences.signature} onChange={(event) => setPreferences((current) => ({ ...current, signature: event.target.value }))} /></Field>
+                  <div className="settings-divider" />
+                  <div className="settings-section-summary">
+                    <div><strong>Signatures by mailbox</strong><p>Choose which signatures are available from each address, set a default, and turn signatures off for mailboxes that should not append one.</p></div>
+                    <span className="settings-summary-chip">{mailboxes.length} mailbox{mailboxes.length === 1 ? "" : "es"}</span>
+                  </div>
+                  {mailboxes.length === 0 ? (
+                    <div className="settings-empty-state"><strong>No mailboxes yet</strong><p>Create an active mailbox first. You can return here to add signatures for each address.</p></div>
+                  ) : (
+                    <div className="settings-domain-list">
+                      {mailboxes.map((mailbox) => {
+                        const config = preferences.mailboxSignatures[mailbox.id] ?? {
+                          enabled: true,
+                          defaultSignatureId: preferences.signature.trim() ? "workspace-default" : null,
+                          signatures: [],
+                        };
+                        const defaultLabel = config.defaultSignatureId === "workspace-default"
+                          ? "Workspace default"
+                          : config.signatures.find((signature) => signature.id === config.defaultSignatureId)?.name ?? "No signature";
+                        return (
+                          <article className="settings-domain-record" key={mailbox.id}>
+                            <div className="settings-domain-row">
+                              <span className="settings-domain-icon">✉</span>
+                              <span className="settings-domain-name"><strong>{mailbox.address}</strong><small>{mailbox.display_name || "Business mailbox"}</small></span>
+                              <span className={config.enabled ? "settings-status active" : "settings-status pending"}><span />{config.enabled ? "Signature enabled" : "Signature disabled"}</span>
+                            </div>
+                            <SettingRow title="Append a signature" description="Automatically add the selected signature when composing or scheduling from this mailbox.">
+                              <Toggle checked={config.enabled} onChange={(enabled) => updateMailboxSignatureConfig(mailbox.id, (current) => ({ ...current, enabled }))} label={"Enable signature for " + mailbox.address} />
+                            </SettingRow>
+                            <Field label="Default signature" hint={"Current default: " + defaultLabel}>
+                              <select value={config.defaultSignatureId ?? ""} onChange={(event) => updateMailboxSignatureConfig(mailbox.id, (current) => ({ ...current, defaultSignatureId: event.target.value || null }))} disabled={!config.enabled}>
+                                <option value="">No signature</option>
+                                {preferences.signature.trim() && <option value="workspace-default">Workspace default</option>}
+                                {config.signatures.map((signature) => <option key={signature.id} value={signature.id}>{signature.name}</option>)}
+                              </select>
+                            </Field>
+                            {config.signatures.map((signature, index) => (
+                              <div className="settings-domain-record" key={signature.id}>
+                                <div className="settings-section-summary">
+                                  <div><strong>Custom signature {index + 1}</strong><p>Reusable for sales, support, personal sign-offs, or other common cases.</p></div>
+                                  <button className="mail-secondary-action" type="button" onClick={() => removeMailboxSignature(mailbox.id, signature.id)}>Remove</button>
+                                </div>
+                                <div className="settings-form-grid">
+                                  <Field label="Signature name"><input value={signature.name} maxLength={80} required onChange={(event) => updateMailboxSignatureConfig(mailbox.id, (current) => ({ ...current, signatures: current.signatures.map((item) => item.id === signature.id ? { ...item, name: event.target.value } : item) }))} /></Field>
+                                  <Field label="Signature text" hint="Plain text appended to the email body."><textarea rows={3} value={signature.content} maxLength={10000} onChange={(event) => updateMailboxSignatureConfig(mailbox.id, (current) => ({ ...current, signatures: current.signatures.map((item) => item.id === signature.id ? { ...item, content: event.target.value } : item) }))} /></Field>
+                                </div>
+                              </div>
+                            ))}
+                            <div className="settings-form-footer">
+                              <span>{config.signatures.length} custom signature{config.signatures.length === 1 ? "" : "s"} saved in this mailbox&apos;s settings.</span>
+                              <button className="mail-secondary-action" type="button" disabled={config.signatures.length >= 8} onClick={() => addMailboxSignature(mailbox.id)}>＋ Add signature</button>
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <div className="settings-form-footer"><span>Workspace preferences and per-mailbox signature choices are saved together for your account.</span><button className="mail-primary-action" type="submit">Save mail preferences</button></div>
                 </form>
               </div>}
 
@@ -906,6 +1031,32 @@ export default function WorkspaceSettingsPanel({
                 {!mailboxesLoading && mailboxRows.length === 0 && <div className="settings-empty-state"><strong>No mailboxes yet</strong><p>Your active email addresses will appear here. Use the form above to create the first address.</p></div>}
                 {mailboxRows.length > 0 && <div className="settings-table-wrap mailbox-table-wrap"><table className="settings-table mailbox-settings-table"><thead><tr><th>Address</th><th>Display name</th><th>Status</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>{mailboxRows.map((mailbox) => <tr key={mailbox.id} className={editingMailboxId === mailbox.id ? "mailbox-row-editing" : undefined}><td><strong>{mailbox.address}</strong><small>Created {new Date(mailbox.created_at).toLocaleDateString()}</small></td><td>{mailbox.display_name || <span className="settings-table-empty">Not set</span>}</td><td><span className={mailbox.status === "active" ? "settings-status active" : "settings-status pending"}><span />{statusLabel(mailbox.status)}</span></td><td><button className="mail-secondary-action mailbox-edit-action" type="button" onClick={() => startEditMailbox(mailbox)} disabled={!canManageWorkspace || mailboxBusy || mailbox.status !== "active"}>{editingMailboxId === mailbox.id ? "Editing…" : "Edit"}</button></td></tr>)}</tbody></table></div>}
                 <div className="settings-info-banner"><span>i</span><p>Incoming email is delivered into ABEmail through the workspace&apos;s signed Resend webhook. If you change an address or domain, the previous address will no longer be assigned to this mailbox.</p></div>
+                <div className="settings-divider" />
+                <div className="settings-section-summary"><div><strong>Address aliases</strong><p>Alias addresses will route additional addresses such as hello@, sales@, or support@ into the appropriate mailbox.</p></div></div>
+                <div className="settings-empty-state"><strong>Alias routing is not configured</strong><p>Alias creation and inbound routing depend on the email transport and DNS routing design. Mailbox management remains available above.</p></div>
+              </div>}
+
+              {section === "rules" && <div>
+                <div className="settings-section-summary"><div><strong>Incoming rules</strong><p>Rules will run after incoming message ownership and authorization checks.</p></div></div>
+                <div className="settings-empty-state"><strong>No rules configured</strong><p>Rule creation, ordering, labels, and deterministic message actions are part of the Phase 2 automation work. No rule is being applied to incoming mail from this screen.</p></div>
+              </div>}
+
+              {section === "out-of-office" && <div>
+                <div className="settings-section-summary"><div><strong>Automatic replies</strong><p>Set a date range and message for periods when you are away.</p></div></div>
+                <div className="settings-empty-state"><strong>Automatic replies are not active</strong><p>Start/end scheduling, repeated-reply protection, and loop prevention must be implemented before this setting can send responses. Nothing is automatically replied to from this screen.</p></div>
+              </div>}
+
+              {section === "branding" && <div>
+                <div className="settings-section-summary"><div><strong>Organization brand profile</strong><p>Shared branding will be reused across saved and designed email templates.</p></div></div>
+                <div className="settings-empty-state"><strong>Brand profile</strong><p>Company logo, primary/secondary colors, contact details, website, social links, and default footer will be managed with the Templates and Visual Email Designer work.</p><Link href={base + "/templates"} className="mail-secondary-action">Open Templates</Link></div>
+              </div>}
+
+              {section === "integrations" && <div>
+                <div className="settings-section-summary"><div><strong>Connected services</strong><p>Provider setup and future calendar/CRM integrations for this workspace.</p></div></div>
+                <div className="settings-domain-list">
+                  <article className="settings-domain-record"><div className="settings-domain-row"><span className="settings-domain-icon">✉</span><span className="settings-domain-name"><strong>Resend</strong><small>Current email delivery provider</small></span><Link href={settingsBase + "/mail"} className="mail-secondary-action">Mail & compose</Link></div></article>
+                  <div className="settings-info-banner"><span>i</span><p>Calendar, CRM, and cloud-storage connectors require their own secure OAuth/token flows and are tracked in the integrations roadmap. No external account is connected from this page.</p></div>
+                </div>
               </div>}
 
               {section === "security" && <div>
@@ -918,7 +1069,6 @@ export default function WorkspaceSettingsPanel({
           </div>
           {toast && <div className="mail-toast settings-toast" role="status"><span>i</span>{toast}<button type="button" aria-label="Dismiss notice" onClick={() => setToast("")}>×</button></div>}
         </div>
-      </main>
     </div>
   );
 }

@@ -17,6 +17,10 @@ const SETTINGS_SECTIONS: SettingsSection[] = [
   "domains",
   "mailboxes",
   "security",
+  "rules",
+  "out-of-office",
+  "branding",
+  "integrations",
 ];
 
 type WorkspaceSettingsPageProps = {
@@ -55,27 +59,7 @@ export default async function WorkspaceSettingsPage({ params }: WorkspaceSetting
 
   if (organizationError || !organization) notFound();
 
-  const { data: workspaceMembershipRows } = await supabase
-    .from("organization_memberships")
-    .select("organization_id, role")
-    .eq("user_id", user.id)
-    .eq("status", "active");
 
-  const workspaceMemberships = workspaceMembershipRows ?? [];
-  const workspaceIds = [...new Set([...workspaceMemberships.map((row) => row.organization_id), organization.id])];
-  const { data: workspaceRows } = await supabase
-    .from("organizations")
-    .select("id, name, slug, status")
-    .in("id", workspaceIds)
-    .eq("status", "active");
-
-  const workspaces = (workspaceRows ?? []).map((workspace) => ({
-    id: workspace.id,
-    name: workspace.name,
-    slug: workspace.slug,
-    role: workspaceMemberships.find((row) => row.organization_id === workspace.id)?.role
-      ?? (workspace.id === organization.id ? membership.role : "member"),
-  }));
 
   const { data: mailboxRows } = await supabase
     .from("mailboxes")
@@ -98,7 +82,6 @@ export default async function WorkspaceSettingsPage({ params }: WorkspaceSetting
     organizationRole: membership.role,
     email: user.email ?? "",
     userId: user.id,
-    workspaces,
     mailboxes: (mailboxRows ?? []).map((mailbox) => ({
       id: mailbox.id,
       address: mailbox.address,
