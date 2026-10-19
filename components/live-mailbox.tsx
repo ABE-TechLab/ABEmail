@@ -76,6 +76,13 @@ function initials(value: string): string {
   return localPart.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "M";
 }
 
+function localDateTimeInput(value: string): string {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "";
+  date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
+  return date.toISOString().slice(0, 16);
+}
+
 function messagePreview(message: EmailMessage): string {
   const value = plainText(message).replace(/\s+/g, " ").trim();
   return value.length > 120 ? value.slice(0, 117) + "…" : value || "No text preview available.";
@@ -185,6 +192,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   const [scheduleMode, setScheduleMode] = useState(false);
   const [scheduledAt, setScheduledAt] = useState("");
   const [scheduledBusyId, setScheduledBusyId] = useState("");
+  const [scheduledTimeEdits, setScheduledTimeEdits] = useState<Record<string, string>>({});
   const [draftId, setDraftId] = useState<string | null>(null);
   const [draftSaving, setDraftSaving] = useState(false);
   const draftSaveQueue = useRef<Promise<void>>(Promise.resolve());
@@ -735,7 +743,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
                       <span className="mail-message-subject">{item.subject}</span>
                       <span className="mail-message-preview">{item.status === "failed" ? "Delivery failed: " + (item.last_error_code || "unknown error") : item.status === "processing" ? "Sending now…" : item.body_text.replace(/\s+/g, " ").slice(0, 120)}</span>
                       <div className={styles.rowActions}>
-                        {item.status === "scheduled" && <button type="button" className="mail-toolbar-button" disabled={Boolean(scheduledBusyId)} onClick={() => void sendScheduledNow(item)}>Send now</button>}{item.status === "scheduled" && <button type="button" className="mail-toolbar-button" disabled={Boolean(scheduledBusyId)} onClick={() => { const value = window.prompt("Choose a new date and time (ISO format, e.g. 2026-10-20T14:30:00+01:00)", item.scheduled_at); if (value) void updateScheduled(item, "reschedule", value); }} title="Reschedule">Reschedule</button>}
+                        {item.status === "scheduled" && <button type="button" className="mail-toolbar-button" disabled={Boolean(scheduledBusyId)} onClick={() => void sendScheduledNow(item)}>Send now</button>}{item.status === "scheduled" && <><input aria-label={"New send time for " + item.subject} type="datetime-local" min={(() => { const minDate = new Date(Date.now() + 60_000); minDate.setMinutes(minDate.getMinutes() - minDate.getTimezoneOffset()); return minDate.toISOString().slice(0, 16); })()} value={scheduledTimeEdits[item.id] ?? localDateTimeInput(item.scheduled_at)} onChange={(event) => setScheduledTimeEdits((current) => ({ ...current, [item.id]: event.target.value }))} disabled={Boolean(scheduledBusyId)} /><button type="button" className="mail-toolbar-button" disabled={Boolean(scheduledBusyId) || !(scheduledTimeEdits[item.id] ?? localDateTimeInput(item.scheduled_at))} onClick={() => void updateScheduled(item, "reschedule", scheduledTimeEdits[item.id] ?? localDateTimeInput(item.scheduled_at))} title="Reschedule">Reschedule</button></>}
                         {item.status === "scheduled" && <button type="button" className="mail-toolbar-button" disabled={Boolean(scheduledBusyId)} onClick={() => void updateScheduled(item, "cancel")} title="Cancel scheduled email">Cancel</button>}{item.status === "failed" && <button type="button" className="mail-toolbar-button" disabled={Boolean(scheduledBusyId)} onClick={() => void updateScheduled(item, "delete")} title="Delete failed scheduled email">Delete</button>}
                       </div>
                     </div>
