@@ -197,7 +197,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   const [uploadingAttachments, setUploadingAttachments] = useState(false);
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
   const [messageAttachments, setMessageAttachments] = useState<MessageAttachment[]>([]);
-  const [messageAttachmentsLoading, setMessageAttachmentsLoading] = useState(false);
+  const [messageAttachmentsMessageId, setMessageAttachmentsMessageId] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
   const [requestKey, setRequestKey] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<EmailDraft[]>([]);
@@ -292,27 +292,32 @@ export default function LiveMailbox(props: LiveMailboxProps) {
 
   useEffect(() => {
     const messageId = selectedMessage?.id;
-    if (!messageId || !mailboxId || activeView === "Drafts" || activeView === "Scheduled") {
-      setMessageAttachments([]);
-      setMessageAttachmentsLoading(false);
-      return;
-    }
+    if (!messageId || !mailboxId || activeView === "Drafts" || activeView === "Scheduled") return;
     let active = true;
-    setMessageAttachments([]);
-    setMessageAttachmentsLoading(true);
-    const params = new URLSearchParams({ organizationId, mailboxId, messageId });
-    void fetch("/api/mail/attachments?" + params.toString(), { cache: "no-store" })
-      .then(async (response) => {
-        const result = await response.json() as { attachments?: MessageAttachment[]; error?: string };
-        if (!response.ok) throw new Error(result.error || "Message attachments could not be loaded.");
-        if (active) setMessageAttachments(result.attachments ?? []);
-      })
-      .catch((error: unknown) => {
-        if (active) setNotice(error instanceof Error ? error.message : "Message attachments could not be loaded.");
-      })
-      .finally(() => { if (active) setMessageAttachmentsLoading(false); });
-    return () => { active = false; };
+    const timer = window.setTimeout(() => {
+      const params = new URLSearchParams({ organizationId, mailboxId, messageId });
+      void fetch("/api/mail/attachments?" + params.toString(), { cache: "no-store" })
+        .then(async (response) => {
+          const result = await response.json() as { attachments?: MessageAttachment[]; error?: string };
+          if (!response.ok) throw new Error(result.error || "Message attachments could not be loaded.");
+          if (active) {
+            setMessageAttachments(result.attachments ?? []);
+            setMessageAttachmentsMessageId(messageId);
+          }
+        })
+        .catch((error: unknown) => {
+          if (active) {
+            setMessageAttachments([]);
+            setMessageAttachmentsMessageId(messageId);
+            setNotice(error instanceof Error ? error.message : "Message attachments could not be loaded.");
+          }
+        });
+    }, 0);
+    return () => { active = false; window.clearTimeout(timer); };
   }, [selectedMessage?.id, activeView, mailboxId, organizationId]);
+
+  const messageAttachmentsLoading = Boolean(selectedMessage?.id && messageAttachmentsMessageId !== selectedMessage.id);
+  const visibleMessageAttachments = messageAttachmentsMessageId === selectedMessage?.id ? messageAttachments : [];
   const sentFromSelectedMailbox = messages.some((message) => message.mailbox_id === mailboxId && message.direction === "outbound");
   const receivedBySelectedMailbox = messages.some((message) => message.mailbox_id === mailboxId && message.direction === "inbound");
   const firstEmailChecksComplete = sentFromSelectedMailbox && receivedBySelectedMailbox;
@@ -1023,11 +1028,11 @@ export default function LiveMailbox(props: LiveMailboxProps) {
                       </div>
                     </div>
                     {messageAttachmentsLoading && <p className={styles.attachmentStatus}>Loading attachments…</p>}
-                    {!messageAttachmentsLoading && messageAttachments.length > 0 && (
+                    {!messageAttachmentsLoading && visibleMessageAttachments.length > 0 && (
                       <section className={styles.attachmentPanel} aria-label="Message attachments">
                         <h3>Attachments <span>{messageAttachments.length}</span></h3>
                         <div className={styles.attachmentList}>
-                          {messageAttachments.map((attachment) => (
+                          {visibleMessageAttachments.map((attachment) => (
                             <a key={attachment.id} href={"/api/mail/attachments/" + encodeURIComponent(attachment.id)} className={styles.messageAttachment} download>
                               <span className={styles.attachmentIcon} aria-hidden="true">↧</span>
                               <span className={styles.attachmentFileCopy}><strong>{attachment.filename}</strong><small>{formatFileSize(attachment.size_bytes)}</small></span>
