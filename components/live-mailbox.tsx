@@ -199,7 +199,9 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   const [uploadingAttachments, setUploadingAttachments] = useState(false);
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
   const pendingAttachmentsRef = useRef<PendingAttachment[]>([]);
-  pendingAttachmentsRef.current = pendingAttachments;
+  useEffect(() => {
+    pendingAttachmentsRef.current = pendingAttachments;
+  }, [pendingAttachments]);
   const [messageAttachments, setMessageAttachments] = useState<MessageAttachment[]>([]);
   const [messageAttachmentsMessageId, setMessageAttachmentsMessageId] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
