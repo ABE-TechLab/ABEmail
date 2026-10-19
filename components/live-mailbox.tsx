@@ -260,10 +260,17 @@ export default function LiveMailbox(props: LiveMailboxProps) {
 
 const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
 
+  function prepareTemplatePicker() {
+    setComposeTemplateId("");
+    setSavedTemplatesLoading(true);
+    setSavedTemplatesError("");
+  }
+
   useEffect(() => {
     if (!initialRecipient || initialRecipientHandledRef.current) return;
     initialRecipientHandledRef.current = true;
     setTo(initialRecipient);
+    prepareTemplatePicker();
     setComposeOpen(true);
     setNotice("");
     const currentUrl = new URL(window.location.href);
@@ -274,6 +281,7 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
   useEffect(() => {
     if (!initialCompose || initialComposeHandledRef.current) return;
     initialComposeHandledRef.current = true;
+    prepareTemplatePicker();
     setComposeOpen(true);
     const currentUrl = new URL(window.location.href);
     currentUrl.searchParams.delete("compose");
@@ -317,15 +325,10 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
   }, [composeOpen, organizationId, recipientQuery]);
 
   useEffect(() => {
-    if (!composeOpen) {
-      setComposeTemplateId("");
-      return;
-    }
+    if (!composeOpen) return;
 
     let active = true;
     const controller = new AbortController();
-    setSavedTemplatesLoading(true);
-    setSavedTemplatesError("");
     void fetch("/api/organizations/" + organizationId + "/templates", {
       cache: "no-store",
       signal: controller.signal,
@@ -580,6 +583,7 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
   }
 
   function resetComposerAfterClose(attachmentsAlreadyLinked = false) {
+    setComposeTemplateId("");
     setComposeOpen(false);
     setComposeSignatureId(null);
     setContactSuggestions([]);
@@ -705,6 +709,7 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
     draftIdRef.current = null;
     draftUpdatedAtRef.current = null;
     setDraftId(null);
+    prepareTemplatePicker();
     setComposeOpen(true);
     setComposeSignatureId(null);
     setNotice("");
@@ -874,6 +879,7 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
     setBody(draft.body_text);
     setRequestKey(null);
     setNotice("");
+    prepareTemplatePicker();
     setComposeOpen(true);
     composeCursorPosition.current = draft.body_text.length;
     const params = new URLSearchParams({ organizationId, mailboxId, draftId: draft.id });
@@ -916,6 +922,7 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
     setScheduleMode(false);
     setScheduledAt("");
     composeCursorPosition.current = mailPreferences.replyStyle === "bottom" ? initialBody.length : 0;
+    prepareTemplatePicker();
     setComposeOpen(true);
   }
 
@@ -936,6 +943,7 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
     setScheduledAt("");
     setNotice("");
     composeCursorPosition.current = 0;
+    prepareTemplatePicker();
     setComposeOpen(true);
     try {
       const response = await fetch("/api/mail/attachments", {
