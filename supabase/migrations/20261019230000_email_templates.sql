@@ -14,6 +14,10 @@ create table public.email_templates (
 create index email_templates_owner_updated_idx
   on public.email_templates (organization_id, user_id, updated_at desc);
 
+-- Keep cascading user deletion efficient; the owner index starts with organization_id.
+create index email_templates_user_id_idx
+  on public.email_templates (user_id);
+
 create or replace function private.prevent_email_template_tenant_reassignment()
 returns trigger
 language plpgsql
