@@ -264,7 +264,7 @@ export async function POST(request: NextRequest) {
   const pendingRows = pending ?? [];
   if (pendingRows.length >= MAX_ATTACHMENTS) return json({ error: "A message can contain up to five attachments." }, 413);
   if (pendingRows.reduce((sum, item) => sum + Number(item.size_bytes), 0) + file.size > MAX_MESSAGE_BYTES) return json({ error: "Attachments for one message cannot exceed 20 MB in total." }, 413);
-  const contentType = /^[a-z0-9!#$&^_.+-]+\\/[a-z0-9!#$&^_.+-]+$/i.test(file.type) ? file.type : "application/octet-stream";
+  const contentType = /^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/i.test(file.type) ? file.type : "application/octet-stream";
   const uploaded = await uploadPending(admin, { organizationId, mailboxId, userId: user.id, filename, contentType, draftId, bytes: Buffer.from(await file.arrayBuffer()) });
   if ("error" in uploaded) return json({ error: uploaded.error }, 503);
   return json({ ok: true, attachment: uploaded.attachment }, 201);
