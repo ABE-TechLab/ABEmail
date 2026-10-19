@@ -103,6 +103,8 @@ export default async function WorkspaceMailPage({ params, searchParams }: MailPa
     direction: "inbound" | "outbound";
     from_address: string;
     to_addresses: string[];
+    cc_addresses: string[];
+    reply_to_addresses: string[];
     subject: string;
     body_text: string | null;
     body_html: string | null;
@@ -131,7 +133,7 @@ export default async function WorkspaceMailPage({ params, searchParams }: MailPa
   if (mailboxes.length) {
     const { data, error } = await supabase
       .from("email_messages")
-      .select("id, mailbox_id, direction, from_address, to_addresses, subject, body_text, body_html, status, created_at, received_at, sent_at")
+      .select("id, mailbox_id, direction, from_address, to_addresses, cc_addresses, reply_to_addresses, subject, body_text, body_html, status, created_at, received_at, sent_at")
       .eq("organization_id", organizationId)
       .in("mailbox_id", mailboxes.map((mailbox) => mailbox.id))
       .order("created_at", { ascending: false })
