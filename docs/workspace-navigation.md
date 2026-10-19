@@ -4,7 +4,7 @@ This document is the fixed navigation contract for the authenticated, organizati
 
 ## Non-negotiable shell rule
 
-- `app/dashboard/[organizationId]/layout.tsx` is the only place that mounts `WorkspaceSidebar`.
+- Within authenticated, organization-scoped routes, `app/dashboard/[organizationId]/layout.tsx` is the only place that mounts `WorkspaceSidebar`. The public `/demo` route may reuse the component in demo mode, but it is outside the signed-in workspace and must not define or replace the production navigation map.
 - Workspace route components render page content only. They must not import or render `WorkspaceSidebar`, or create their own `.mail-app` shell.
 - `components/workspace-sidebar.tsx` is the single source of truth for the permanent navigation map and active-route behavior.
 - Page-specific CSS modules must not style `.mail-sidebar`, `.mail-nav`, `.mail-nav-item`, the brand row, or the Compose control.
