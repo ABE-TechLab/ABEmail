@@ -112,9 +112,9 @@ select is((select count(*)::integer from public.contacts where organization_id =
 select is((select tags from public.contacts where id = '40000000-0000-4000-8000-000000000001'), array['client', 'priority']::text[], 'contact tags persist as normalized labels');
 select ok(exists (select 1 from pg_indexes where schemaname = 'public' and indexname = 'contacts_organization_tags_gin_idx'), 'contact tags have a GIN index for lookup');
 select throws_ok(
-  $update public.contacts
+  $tag_update$ update public.contacts
     set tags = array['a','b','c','d','e','f','g','h','i','j','k','l','m']
-    where id = '40000000-0000-4000-8000-000000000001'$,
+    where id = '40000000-0000-4000-8000-000000000001' $tag_update$,
   '23514',
   null,
   'a contact cannot have more than twelve tags'
