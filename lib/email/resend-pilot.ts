@@ -114,9 +114,10 @@ export function verifyResendWebhookSignature(input: {
 
 export async function sendPilotEmail(input: {
   apiKey: string;
-  to: string;
+  to: string | string[];
   subject: string;
   text: string;
+  attachments?: Array<{ filename: string; contentType: string; content: string }>;
   idempotencyKey: string;
 }): Promise<{ id: string }> {
   const response = await fetch("https://api.resend.com/emails", {
@@ -129,9 +130,16 @@ export async function sendPilotEmail(input: {
     },
     body: JSON.stringify({
       from: OTTAWA_PILOT_FROM,
-      to: [input.to],
+      to: Array.isArray(input.to) ? input.to : [input.to],
       subject: input.subject,
       text: input.text,
+      ...(input.attachments?.length ? {
+        attachments: input.attachments.map((attachment) => ({
+          filename: attachment.filename,
+          content: attachment.content,
+          content_type: attachment.contentType,
+        })),
+      } : {}),
     }),
     cache: "no-store",
     signal: AbortSignal.timeout(15000),
@@ -144,19 +152,21 @@ export async function sendPilotEmail(input: {
       response.status,
     );
   }
-
   if (
-    typeof payload !== "object" ||
-    payload === null ||
-    !("id" in payload) ||
-    typeof payload.id !== "string" ||
-    payload.id.length < 1
+    typeof payload !== "object" || payload === null ||
+    !("id" in payload) || typeof payload.id !== "string" || payload.id.length < 1
   ) {
     throw new ResendPilotError("RESEND_SEND_RESPONSE_INVALID");
   }
-
   return { id: payload.id };
 }
+
+export type ReceivedEmailAttachment = {
+  id: string;
+  filename: string;
+  contentType: string;
+  sizeBytes: number;
+};
 
 export async function fetchReceivedEmail(apiKey: string, emailId: string): Promise<{
   id?: string;
@@ -165,6 +175,7 @@ export async function fetchReceivedEmail(apiKey: string, emailId: string): Promi
   subject?: string;
   text?: string | null;
   html?: string | null;
+  attachments: ReceivedEmailAttachment[];
 }> {
   if (!/^[a-zA-Z0-9_-]{6,200}$/.test(emailId)) {
     throw new ResendPilotError("RESEND_INBOUND_ID_INVALID");
@@ -193,6 +204,17 @@ export async function fetchReceivedEmail(apiKey: string, emailId: string): Promi
   const record = ("data" in payload && typeof payload.data === "object" && payload.data !== null)
     ? payload.data as Record<string, unknown>
     : payload as Record<string, unknown>;
+  const attachments = Array.isArray(record.attachments) ? record.attachments.flatMap((item) => {
+    if (typeof item !== "object" || item === null) return [];
+    const attachment = item as Record<string, unknown>;
+    if (typeof attachment.id !== "string" || !/^[a-zA-Z0-9_-]{6,200}$/.test(attachment.id)) return [];
+    return [{
+      id: attachment.id,
+      filename: typeof attachment.filename === "string" ? attachment.filename.slice(0, 255) : "attachment",
+      contentType: typeof attachment.content_type === "string" ? attachment.content_type.slice(0, 160) : "application/octet-stream",
+      sizeBytes: typeof attachment.size === "number" && Number.isSafeInteger(attachment.size) && attachment.size > 0 ? attachment.size : 0,
+    }];
+  }) : [];
 
   return {
     id: typeof record.id === "string" ? record.id : emailId,
@@ -201,5 +223,49 @@ export async function fetchReceivedEmail(apiKey: string, emailId: string): Promi
     subject: typeof record.subject === "string" ? record.subject.slice(0, 998) : "",
     text: typeof record.text === "string" ? record.text.slice(0, 500000) : null,
     html: typeof record.html === "string" ? record.html.slice(0, 500000) : null,
+    attachments,
+  };
+}
+
+export async function fetchReceivedAttachment(apiKey: string, emailId: string, attachmentId: string): Promise<{
+  bytes: Buffer;
+  filename: string;
+  contentType: string;
+}> {
+  if (!/^[a-zA-Z0-9_-]{6,200}$/.test(emailId) || !/^[a-zA-Z0-9_-]{6,200}$/.test(attachmentId)) {
+    throw new ResendPilotError("RESEND_ATTACHMENT_ID_INVALID");
+  }
+  const response = await fetch(
+    "https://api.resend.com/emails/receiving/" + encodeURIComponent(emailId) + "/attachments/" + encodeURIComponent(attachmentId),
+    {
+      headers: { Authorization: "Bearer " + apiKey, Accept: "application/json" },
+      cache: "no-store",
+      signal: AbortSignal.timeout(12000),
+    },
+  );
+  if (!response.ok) {
+    throw new ResendPilotError(
+      response.status === 401 || response.status === 403 ? "RESEND_ATTACHMENT_READ_FORBIDDEN" : "RESEND_ATTACHMENT_FETCH_FAILED",
+      response.status,
+    );
+  }
+  const payload: unknown = await response.json().catch(() => null);
+  if (typeof payload !== "object" || payload === null) throw new ResendPilotError("RESEND_ATTACHMENT_RESPONSE_INVALID");
+  const record = ("data" in payload && typeof payload.data === "object" && payload.data !== null)
+    ? payload.data as Record<string, unknown> : payload as Record<string, unknown>;
+  if (typeof record.download_url !== "string") throw new ResendPilotError("RESEND_ATTACHMENT_URL_MISSING");
+  let url: URL;
+  try { url = new URL(record.download_url); } catch { throw new ResendPilotError("RESEND_ATTACHMENT_URL_INVALID"); }
+  if (url.protocol !== "https:" || url.username || url.password) throw new ResendPilotError("RESEND_ATTACHMENT_URL_INVALID");
+  const fileResponse = await fetch(url.toString(), { cache: "no-store", signal: AbortSignal.timeout(15000) });
+  if (!fileResponse.ok) throw new ResendPilotError("RESEND_ATTACHMENT_DOWNLOAD_FAILED", fileResponse.status);
+  const declaredLength = Number(fileResponse.headers.get("content-length") || "0");
+  if (declaredLength > 4 * 1024 * 1024) throw new ResendPilotError("RESEND_ATTACHMENT_TOO_LARGE", 413);
+  const bytes = Buffer.from(await fileResponse.arrayBuffer());
+  if (!bytes.length || bytes.length > 4 * 1024 * 1024) throw new ResendPilotError("RESEND_ATTACHMENT_TOO_LARGE", 413);
+  return {
+    bytes,
+    filename: typeof record.filename === "string" ? record.filename.slice(0, 255) : "attachment",
+    contentType: typeof record.content_type === "string" ? record.content_type.slice(0, 160) : "application/octet-stream",
   };
 }
