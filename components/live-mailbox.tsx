@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import WorkspaceSidebar, { type MailboxView, type WorkspaceChoice } from "@/components/workspace-sidebar";
@@ -219,22 +219,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
     return () => { active = false; };
   }, [activeView, mailboxId, organizationId]);
 
-  useEffect(() => {
-    if (!composeOpen || !mailboxId || (!draftIdRef.current && !to.trim() && !subject.trim() && !body.trim())) return;
-    const version = ++draftMutationVersion.current;
-    const timer = window.setTimeout(() => {
-      draftSaveTimer.current = null;
-      setDraftSaving(true);
-      void queueDraftSnapshot(to, subject, body, version).finally(() => {
-        if (version === draftMutationVersion.current) setDraftSaving(false);
-      });
-    }, 650);
-    draftSaveTimer.current = timer;
-    return () => {
-      window.clearTimeout(timer);
-      if (draftSaveTimer.current === timer) draftSaveTimer.current = null;
-    };
-  }, [composeOpen, organizationId, mailboxId, to, subject, body]);
+
 
   const visibleMessages = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -299,7 +284,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
     }
   }
 
-  async function persistDraftSnapshot(toValue: string, subjectValue: string, bodyValue: string, version: number): Promise<boolean> {
+  const persistDraftSnapshot = useCallback(async (toValue: string, subjectValue: string, bodyValue: string, version: number): Promise<boolean> => {
     const payload = {
       organizationId,
       mailboxId,
@@ -326,9 +311,9 @@ export default function LiveMailbox(props: LiveMailboxProps) {
       setDrafts((current) => [result.draft!, ...current.filter((item) => item.id !== result.draft!.id)]);
     }
     return true;
-  }
+  }, [organizationId, mailboxId]);
 
-  function queueDraftSnapshot(toValue: string, subjectValue: string, bodyValue: string, version: number): Promise<boolean> {
+  const queueDraftSnapshot = useCallback((toValue: string, subjectValue: string, bodyValue: string, version: number): Promise<boolean> => {
     let saved = false;
     draftSaveQueue.current = draftSaveQueue.current
       .then(async () => {
@@ -339,7 +324,26 @@ export default function LiveMailbox(props: LiveMailboxProps) {
         saved = false;
       });
     return draftSaveQueue.current.then(() => saved);
-  }
+  }, [persistDraftSnapshot]);
+
+  useEffect(() => {
+    if (!composeOpen || !mailboxId || (!draftIdRef.current && !to.trim() && !subject.trim() && !body.trim())) return;
+    const version = ++draftMutationVersion.current;
+    const timer = window.setTimeout(() => {
+      draftSaveTimer.current = null;
+      setDraftSaving(true);
+      void queueDraftSnapshot(to, subject, body, version).finally(() => {
+        if (version === draftMutationVersion.current) setDraftSaving(false);
+      });
+    }, 650);
+    draftSaveTimer.current = timer;
+    return () => {
+      window.clearTimeout(timer);
+      if (draftSaveTimer.current === timer) draftSaveTimer.current = null;
+    };
+  }, [composeOpen, organizationId, mailboxId, to, subject, body]);
+
+  
 
   function resetComposerAfterClose() {
     setComposeOpen(false);
@@ -364,8 +368,8 @@ export default function LiveMailbox(props: LiveMailboxProps) {
       const version = ++draftMutationVersion.current;
       setDraftSaving(true);
       const saved = await queueDraftSnapshot(to, subject, body, version);
-      if (version === draftMutationVersion.current) setDraftSaving(false);
-      if (!saved) return;
+      setDraftSaving(false);
+      if (!saved || version !== draftMutationVersion.current) return;
     } else {
       draftMutationVersion.current += 1;
     }
