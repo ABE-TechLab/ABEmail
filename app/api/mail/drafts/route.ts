@@ -56,7 +56,11 @@ export async function POST(request: NextRequest) {
   const ctx = await context(request, organizationId, mailboxId);
   if ("response" in ctx) return ctx.response;
   if (typeof p.to !== "string" || typeof p.subject !== "string" || typeof p.text !== "string" ||
-      p.to.length > 320 || p.subject.length > 998 || p.text.length > 80000) return json({ error: "Draft fields exceed allowed limits." }, 400);
+      p.to.length > 4000 || p.subject.length > 998 || p.text.length > 80000) return json({ error: "Draft fields exceed allowed limits." }, 400);
+  const draftRecipients = p.to.split(/[;,]/).map((value) => value.trim()).filter(Boolean);
+  if (draftRecipients.length > 10 || draftRecipients.some((address) => !/^[^\\s@,;]+@[^\\s@,;]+\\.[^\\s@,;]+$/.test(address))) {
+    return json({ error: "Enter up to ten valid email recipients, separated by commas." }, 400);
+  }
   const id = typeof p.id === "string" && UUID.test(p.id) ? p.id : null;
   const { data: existing, error: lookupError } = id ? await ctx.admin.from("email_drafts").select("id, updated_at")
     .eq("id", id).eq("organization_id", organizationId).eq("mailbox_id", mailboxId).eq("user_id", ctx.user.id).maybeSingle() : { data: null, error: null };
