@@ -183,6 +183,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   const [draftId, setDraftId] = useState<string | null>(null);
   const [draftSaving, setDraftSaving] = useState(false);
   const draftSaveQueue = useRef<Promise<void>>(Promise.resolve());
+  const draftSaveTimer = useRef<number | null>(null);
   const draftMutationVersion = useRef(0);
   const draftIdRef = useRef<string | null>(null);
   const draftUpdatedAtRef = useRef<string | null>(null);
@@ -219,20 +220,20 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   }, [activeView, mailboxId, organizationId]);
 
   useEffect(() => {
-    if (!composeOpen || !mailboxId || (!to.trim() && !subject.trim() && !body.trim())) return;
+    if (!composeOpen || !mailboxId || (!draftIdRef.current && !to.trim() && !subject.trim() && !body.trim())) return;
     const version = ++draftMutationVersion.current;
     const timer = window.setTimeout(() => {
+      draftSaveTimer.current = null;
       setDraftSaving(true);
-      draftSaveQueue.current = draftSaveQueue.current.then(async () => {
-        const payload = { organizationId, mailboxId, id: draftIdRef.current, expectedUpdatedAt: draftUpdatedAtRef.current, to, subject, text: body };
-        const response = await fetch("/api/mail/drafts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-        const result = await response.json() as { ok?: boolean; draft?: EmailDraft; error?: string; conflict?: boolean };
-        if (!response.ok || !result.ok || !result.draft) { if (version === draftMutationVersion.current) setNotice(result.error || "Draft could not be saved."); return; }
-        draftIdRef.current = result.draft.id; draftUpdatedAtRef.current = result.draft.updated_at;
-        if (version === draftMutationVersion.current) { setDraftId(result.draft.id); setDrafts((current) => [result.draft!, ...current.filter((item) => item.id !== result.draft!.id)]); }
-      }).catch(() => { if (version === draftMutationVersion.current) setNotice("Draft save failed. Keep this window open and try again."); }).finally(() => { if (version === draftMutationVersion.current) setDraftSaving(false); });
+      void queueDraftSnapshot(to, subject, body, version).finally(() => {
+        if (version === draftMutationVersion.current) setDraftSaving(false);
+      });
     }, 650);
-    return () => window.clearTimeout(timer);
+    draftSaveTimer.current = timer;
+    return () => {
+      window.clearTimeout(timer);
+      if (draftSaveTimer.current === timer) draftSaveTimer.current = null;
+    };
   }, [composeOpen, organizationId, mailboxId, to, subject, body]);
 
   const visibleMessages = useMemo(() => {
@@ -298,7 +299,83 @@ export default function LiveMailbox(props: LiveMailboxProps) {
     }
   }
 
+  async function persistDraftSnapshot(toValue: string, subjectValue: string, bodyValue: string, version: number): Promise<boolean> {
+    const payload = {
+      organizationId,
+      mailboxId,
+      id: draftIdRef.current,
+      expectedUpdatedAt: draftUpdatedAtRef.current,
+      to: toValue,
+      subject: subjectValue,
+      text: bodyValue,
+    };
+    const response = await fetch("/api/mail/drafts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const result = await response.json() as { ok?: boolean; draft?: EmailDraft; error?: string; conflict?: boolean };
+    if (!response.ok || !result.ok || !result.draft) {
+      if (version === draftMutationVersion.current) setNotice(result.error || "Draft could not be saved.");
+      return false;
+    }
+    draftIdRef.current = result.draft.id;
+    draftUpdatedAtRef.current = result.draft.updated_at;
+    if (version === draftMutationVersion.current) {
+      setDraftId(result.draft.id);
+      setDrafts((current) => [result.draft!, ...current.filter((item) => item.id !== result.draft!.id)]);
+    }
+    return true;
+  }
+
+  function queueDraftSnapshot(toValue: string, subjectValue: string, bodyValue: string, version: number): Promise<boolean> {
+    let saved = false;
+    draftSaveQueue.current = draftSaveQueue.current
+      .then(async () => {
+        saved = await persistDraftSnapshot(toValue, subjectValue, bodyValue, version);
+      })
+      .catch(() => {
+        if (version === draftMutationVersion.current) setNotice("Draft save failed. Keep this window open and try again.");
+        saved = false;
+      });
+    return draftSaveQueue.current.then(() => saved);
+  }
+
+  function resetComposerAfterClose() {
+    setComposeOpen(false);
+    setTo("");
+    setSubject("");
+    setBody("");
+    draftIdRef.current = null;
+    draftUpdatedAtRef.current = null;
+    setDraftId(null);
+    setRequestKey(null);
+  }
+
+  async function closeComposer() {
+    if (busy) return;
+    if (draftSaveTimer.current !== null) {
+      window.clearTimeout(draftSaveTimer.current);
+      draftSaveTimer.current = null;
+    }
+
+    const shouldSave = Boolean(mailboxId && (draftIdRef.current || to.trim() || subject.trim() || body.trim()));
+    if (shouldSave) {
+      const version = ++draftMutationVersion.current;
+      setDraftSaving(true);
+      const saved = await queueDraftSnapshot(to, subject, body, version);
+      if (version === draftMutationVersion.current) setDraftSaving(false);
+      if (!saved) return;
+    } else {
+      draftMutationVersion.current += 1;
+    }
+    resetComposerAfterClose();
+  }
+
   function openCompose() {
+    draftIdRef.current = null;
+    draftUpdatedAtRef.current = null;
+    setDraftId(null);
     setComposeOpen(true);
     setNotice("");
     setTo("");
@@ -331,12 +408,33 @@ export default function LiveMailbox(props: LiveMailboxProps) {
         if (response.status !== 503) setRequestKey(null);
         return;
       }
-      setNotice(result.note || "Resend accepted the message. Delivery updates will appear after the signed webhook arrives.");
-      setComposeOpen(false);
-      setTo("");
-      setSubject("");
-      setBody("");
-      setRequestKey(null);
+
+      // Stop the debounce and wait for an already-started save before deleting this draft.
+      // A successful send must not leave a stale draft behind.
+      draftMutationVersion.current += 1;
+      if (draftSaveTimer.current !== null) {
+        window.clearTimeout(draftSaveTimer.current);
+        draftSaveTimer.current = null;
+      }
+      await draftSaveQueue.current;
+      let finalNotice = result.note || "Resend accepted the message. Delivery updates will appear after the signed webhook arrives.";
+      const savedDraftId = draftIdRef.current;
+      if (savedDraftId) {
+        try {
+          const deleteResponse = await fetch("/api/mail/drafts?organizationId=" + encodeURIComponent(organizationId) + "&mailboxId=" + encodeURIComponent(mailboxId) + "&id=" + encodeURIComponent(savedDraftId), { method: "DELETE" });
+          const deleteResult = await deleteResponse.json() as { ok?: boolean; error?: string };
+          if (deleteResponse.ok && deleteResult.ok) {
+            setDrafts((current) => current.filter((item) => item.id !== savedDraftId));
+          } else {
+            finalNotice += " The message was sent, but its saved draft could not be removed; delete it from Drafts.";
+          }
+        } catch {
+          finalNotice += " The message was sent, but its saved draft could not be removed; delete it from Drafts.";
+        }
+      }
+      setNotice(finalNotice);
+      resetComposerAfterClose();
+      setDraftSaving(false);
       router.refresh();
     } catch {
       setNotice("The connection was interrupted. Retry the same unchanged message; ABEmail will reuse its idempotency key.");
@@ -346,7 +444,16 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   }
 
   function openDraft(draft: EmailDraft) {
-    draftIdRef.current = draft.id; draftUpdatedAtRef.current = draft.updated_at; setDraftId(draft.id); setTo(draft.to_address); setSubject(draft.subject); setBody(draft.body_text); setRequestKey(null); setNotice(""); setComposeOpen(true); composeCursorPosition.current = draft.body_text.length;
+    draftIdRef.current = draft.id;
+    draftUpdatedAtRef.current = draft.updated_at;
+    setDraftId(draft.id);
+    setTo(draft.to_address);
+    setSubject(draft.subject);
+    setBody(draft.body_text);
+    setRequestKey(null);
+    setNotice("");
+    setComposeOpen(true);
+    composeCursorPosition.current = draft.body_text.length;
   }
 
   async function deleteDraft(draft: EmailDraft) {
@@ -356,7 +463,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
     setDrafts((current) => current.filter((item) => item.id !== draft.id));
   }
 
-  function replyTo(message: EmailMessage) {
+    function replyTo(message: EmailMessage) {
     if (message.direction !== "inbound") return;
     setTo(message.from_address);
     setSubject(/^re:/i.test(message.subject) ? message.subject : "Re: " + message.subject);
@@ -644,23 +751,23 @@ export default function LiveMailbox(props: LiveMailboxProps) {
         )}
 
         {composeOpen && (
-          <div className="mail-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) setComposeOpen(false); }}>
+          <div className="mail-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) void closeComposer(); }}>
             <section className="mail-compose-modal" role="dialog" aria-modal="true" aria-labelledby="compose-title">
               <header className="mail-compose-header">
                 <h2 id="compose-title">{draftId ? "Edit draft" : "New message"}</h2>
-                <button type="button" onClick={() => setComposeOpen(false)} aria-label="Close compose" disabled={busy}>×</button>
+                <button type="button" onClick={() => void closeComposer()} aria-label="Close compose" disabled={busy}>×</button>
               </header>
               <form onSubmit={submitMessage}>
-                <label className="mail-compose-field"><span>To</span><input type="email" required maxLength={320} value={to} onChange={(event) => { setTo(event.target.value); setRequestKey(null); }} placeholder="name@example.com" /></label>
-                <label className="mail-compose-field"><span>Subject</span><input required maxLength={998} value={subject} onChange={(event) => { setSubject(event.target.value); setRequestKey(null); }} placeholder="Add a subject" /></label>
+                <label className="mail-compose-field"><span>To</span><input type="email" required maxLength={320} disabled={busy} value={to} onChange={(event) => { setTo(event.target.value); setRequestKey(null); }} placeholder="name@example.com" /></label>
+                <label className="mail-compose-field"><span>Subject</span><input required maxLength={998} disabled={busy} value={subject} onChange={(event) => { setSubject(event.target.value); setRequestKey(null); }} placeholder="Add a subject" /></label>
                 <label className="mail-compose-body-label">
                   <span className="mail-sr-only">Message body</span>
-                  <textarea ref={composeBodyRef} required maxLength={80000} rows={8} value={body} style={{ fontFamily: mailPreferences.font === "serif" ? "Georgia, serif" : mailPreferences.font === "mono" ? "ui-monospace, SFMono-Regular, Consolas, monospace" : "inherit" }} onChange={(event) => { setBody(event.target.value); setRequestKey(null); composeCursorPosition.current = null; }} placeholder="Write your message…" />
+                  <textarea ref={composeBodyRef} required maxLength={80000} rows={8} disabled={busy} value={body} style={{ fontFamily: mailPreferences.font === "serif" ? "Georgia, serif" : mailPreferences.font === "mono" ? "ui-monospace, SFMono-Regular, Consolas, monospace" : "inherit" }} onChange={(event) => { setBody(event.target.value); setRequestKey(null); composeCursorPosition.current = null; }} placeholder="Write your message…" />
                 </label>
                 <p className="mail-compose-warning"><span>i</span> Plain-text email · One recipient · Workspace sending limits apply · {draftSaving ? "Saving draft…" : draftId ? "Draft saved" : "Changes save automatically"}</p>
                 <footer className="mail-compose-footer">
                   <button type="submit" className="mail-primary-action" disabled={busy || !mailboxId}>{busy ? "Sending…" : "Send"} <span>↗</span></button>
-                  <button type="button" className="mail-compose-discard" onClick={() => { setComposeOpen(false); setTo(""); setSubject(""); setBody(""); draftIdRef.current = null; draftUpdatedAtRef.current = null; setDraftId(null); setRequestKey(null); }} disabled={busy}>Close</button>
+                  <button type="button" className="mail-compose-discard" onClick={() => void closeComposer()} disabled={busy}>Close</button>
                 </footer>
               </form>
             </section>
