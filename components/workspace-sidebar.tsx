@@ -41,6 +41,7 @@ type WorkspaceSidebarProps = {
   workspaceBaseHref: string;
   workspaces: WorkspaceChoice[];
   activeWorkspaceId: string;
+  showWorkspaceLinks?: boolean;
 };
 
 export default function WorkspaceSidebar({
@@ -52,6 +53,7 @@ export default function WorkspaceSidebar({
   workspaceBaseHref,
   workspaces,
   activeWorkspaceId,
+  showWorkspaceLinks = true,
 }: WorkspaceSidebarProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -203,27 +205,7 @@ export default function WorkspaceSidebar({
             const itemHref = mailboxBaseHref
               ? `${mailboxBaseHref}?view=${encodeURIComponent(item.view)}`
               : item.href;
-            const count = mailboxCounts[item.view];
-            const children = (
-              <>
-                <span className="mail-nav-icon" aria-hidden="true">{item.icon}</span>
-                <span>{item.label}</span>
-                {count !== undefined && count > 0 && <span className="mail-nav-count">{count}</span>}
-              </>
-            );
-
-            return onMailboxNavigate ? (
-              <button
-                className={active ? "mail-nav-item active" : "mail-nav-item"}
-                key={item.view}
-                onClick={() => onMailboxNavigate(item.view)}
-                type="button"
-                aria-current={active ? "page" : undefined}
-                title={item.label}
-              >
-                {children}
-              </button>
-            ) : (
+            return (
               <Link
                 className={active ? "mail-nav-item active" : "mail-nav-item"}
                 href={itemHref}
@@ -231,29 +213,6 @@ export default function WorkspaceSidebar({
                 aria-current={active ? "page" : undefined}
                 title={item.label}
               >
-                {children}
-              </Link>
-            );
-          })}
-        </nav>
-      </div>
-
-      <div className="mail-nav-section">
-        <div className="mail-nav-label">WORKSPACE</div>
-        <nav className="mail-nav" aria-label="Workspace navigation">
-          {workspaceLinks.map((item) => {
-            const scopedHref = workspaceBaseHref
-              ? `${workspaceBaseHref}${item.href}`
-              : item.href;
-            const active = pathname === scopedHref || pathname.startsWith(`${scopedHref}/`);
-            return (
-              <Link
-                key={item.href}
-                className={active ? "mail-nav-item active" : "mail-nav-item"}
-                href={scopedHref}
-                aria-current={active ? "page" : undefined}
-                title={item.label}
-              >
                 <span className="mail-nav-icon" aria-hidden="true">{item.icon}</span>
                 <span>{item.label}</span>
               </Link>
@@ -261,6 +220,33 @@ export default function WorkspaceSidebar({
           })}
         </nav>
       </div>
+
+      {showWorkspaceLinks && (
+        <div className="mail-nav-section">
+          <div className="mail-nav-label">WORKSPACE</div>
+          <nav className="mail-nav" aria-label="Workspace navigation">
+            {workspaceLinks.map((item) => {
+              const scopedHref = workspaceBaseHref
+                ? `${workspaceBaseHref}${item.href}`
+                : item.href;
+              const active = pathname === scopedHref || pathname.startsWith(`${scopedHref}/`);
+              return (
+                <Link
+                  key={item.href}
+                  className={active ? "mail-nav-item active" : "mail-nav-item"}
+                  href={scopedHref}
+                  aria-current={active ? "page" : undefined}
+                  title={item.label}
+                >
+                  <span className="mail-nav-icon" aria-hidden="true">{item.icon}</span>
+                  <span>{item.label}</span>
+                </Link>
+              );
+            })}
+          </nav>
+        </div>
+  
+      )}
 
       <div className="mail-sidebar-bottom">
         <div className="mail-sidebar-divider" />
