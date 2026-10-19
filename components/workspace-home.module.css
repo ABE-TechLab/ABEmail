@@ -540,3 +540,66 @@
     grid-template-columns: minmax(260px, 38%) minmax(0, 1fr);
   }
 }
+
+/* Mailbox density: preserve sender, timestamp, subject, preview and row actions at both sizes. */
+.app:not(.compactList) :global(.mail-message-row) {
+  min-height: 76px;
+}
+.app:not(.compactList) :global(.mail-message-open) {
+  gap: 8px;
+  padding: 10px 3px 9px 14px;
+}
+.app:not(.compactList) :global(.mail-message-copy) {
+  gap: 3px;
+}
+.app:not(.compactList) :global(.mail-avatar) {
+  width: 29px;
+  height: 29px;
+  border-radius: 8px;
+}
+.app:not(.compactList) :global(.messageSelect) {
+  margin-left: 9px;
+}
+
+/* Compact is deliberately denser, but still keeps the full three-line message summary. */
+.compactList :global(.mail-message-row) {
+  min-height: 56px;
+}
+.compactList :global(.mail-message-open) {
+  align-items: center;
+  gap: 6px;
+  padding: 5px 2px 5px 9px;
+}
+.compactList :global(.mail-message-copy) {
+  gap: 2px;
+}
+.compactList :global(.mail-message-row-top strong) {
+  font-size: 9px;
+}
+.compactList :global(.mail-message-row-top time) {
+  font-size: 8px;
+}
+.compactList :global(.mail-message-subject) {
+  font-size: 9px;
+}
+.compactList :global(.mail-message-preview) {
+  font-size: 8px;
+  line-height: 1.25;
+}
+.compactList :global(.mail-avatar) {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  font-size: 8px;
+}
+.compactList :global(.messageSelect) {
+  width: 12px;
+  height: 12px;
+  margin-left: 7px;
+}
+.compactList :global(.messageStatus) {
+  margin-right: 6px;
+  padding: 3px 5px;
+  font-size: 7px;
+}
+
