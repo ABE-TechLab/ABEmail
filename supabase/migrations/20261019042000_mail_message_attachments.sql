@@ -1,3 +1,7 @@
+alter table public.email_messages
+  add column if not exists cc_addresses text[] not null default '{}'::text[],
+  add column if not exists reply_to_addresses text[] not null default '{}'::text[];
+
 alter table public.email_drafts drop constraint if exists email_drafts_to_address_check;
 alter table public.email_drafts add constraint email_drafts_to_address_check
   check (char_length(to_address) <= 4000);
