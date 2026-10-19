@@ -13,6 +13,7 @@ type ContactForm = {
   role: string;
   phone: string;
   notes: string;
+  tags: string;
 };
 
 type ContactManagerProps = {
@@ -22,7 +23,7 @@ type ContactManagerProps = {
   workspaces: WorkspaceChoice[];
 };
 
-const EMPTY_FORM: ContactForm = { name: "", email: "", company: "", role: "", phone: "", notes: "" };
+const EMPTY_FORM: ContactForm = { name: "", email: "", company: "", role: "", phone: "", notes: "", tags: "" };
 const TONES = ["green", "amber", "violet", "blue", "rose", "slate"] as const;
 
 function initials(value: string) {
@@ -43,6 +44,7 @@ function toForm(contact: Contact): ContactForm {
     role: contact.role ?? "",
     phone: contact.phone ?? "",
     notes: contact.notes ?? "",
+    tags: (contact.tags ?? []).join(", "),
   };
 }
 
@@ -153,6 +155,7 @@ export default function ContactManager({ organizationId, organizationName, userE
           role: formData.role.trim(),
           phone: formData.phone.trim(),
           notes: formData.notes.trim(),
+          tags: formData.tags.split(",").map((tag) => tag.trim()).filter(Boolean),
         }),
       });
       const payload = await response.json() as { ok?: boolean; error?: string; contact?: Contact };
@@ -227,7 +230,7 @@ export default function ContactManager({ organizationId, organizationName, userE
           <div className="mail-breadcrumb"><span>{organizationName}</span><span className="mail-breadcrumb-slash">/</span><strong>Contacts</strong></div>
           <label className="mail-search">
             <span className="mail-search-icon" aria-hidden="true">⌕</span>
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search contacts" aria-label="Search contacts" />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search contacts or tags" aria-label="Search contacts or tags" />
             {query && <button type="button" aria-label="Clear search" onClick={() => setQuery("")}>×</button>}
             {!query && <kbd>Search</kbd>}
           </label>
@@ -259,7 +262,7 @@ export default function ContactManager({ organizationId, organizationName, userE
                   return (
                     <button className={selected?.id === contact.id ? "contacts-row selected" : "contacts-row"} type="button" key={contact.id} onClick={() => setSelectedId(contact.id)}>
                       <span className={"mail-avatar tone-" + tone}>{initials(contact.name)}</span>
-                      <span className="contacts-row-copy"><strong>{contact.name}</strong><small>{contact.email}</small><em>{contact.company || "No company"}</em></span>
+                      <span className="contacts-row-copy"><strong>{contact.name}</strong><small>{contact.email}</small><em>{contact.company || "No company"}</em>{contact.tags?.length > 0 && <small className={styles.tagSummary}>{contact.tags.slice(0, 2).join(" · ")}{contact.tags.length > 2 ? " +" + (contact.tags.length - 2) : ""}</small>}</span>
                       <span className="contacts-row-arrow">›</span>
                     </button>
                   );
@@ -282,6 +285,7 @@ export default function ContactManager({ organizationId, organizationName, userE
                     <h2>{selected.name}</h2>
                     <p>{selected.role || "Contact"}</p>
                     <span className="contacts-company-chip">{selected.company || "No company"}</span>
+                    {selected.tags?.length > 0 && <div className={styles.tagList} aria-label="Contact tags">{selected.tags.map((tag) => <span className={styles.tagChip} key={tag}>{tag}</span>)}</div>}
                   </div>
                   <div className="contacts-information">
                     <p className="mail-overline">CONTACT INFORMATION</p>
@@ -319,6 +323,7 @@ export default function ContactManager({ organizationId, organizationName, userE
                 <label className="settings-field"><span>Role</span><input maxLength={120} value={formData.role} onChange={(event) => setFormData((current) => ({ ...current, role: event.target.value }))} placeholder="Role or title" disabled={saving} /></label>
                 <label className="settings-field"><span>Phone</span><input maxLength={80} value={formData.phone} onChange={(event) => setFormData((current) => ({ ...current, phone: event.target.value }))} placeholder="Phone number" disabled={saving} /></label>
               </div>
+              <label className={"settings-field " + styles.notesField}><span>Tags</span><input maxLength={600} value={formData.tags} onChange={(event) => setFormData((current) => ({ ...current, tags: event.target.value }))} placeholder="customer, lead, priority" aria-describedby="contact-tags-hint" disabled={saving} /><small id="contact-tags-hint">Comma-separated labels, up to 12. Use letters, numbers, hyphens or underscores.</small></label>
               <label className={"settings-field " + styles.notesField}><span>Notes</span><textarea rows={3} maxLength={5000} value={formData.notes} onChange={(event) => setFormData((current) => ({ ...current, notes: event.target.value }))} placeholder="Useful context about this person (optional)" disabled={saving} /></label>
               {formError && <p className={styles.formError} role="alert">{formError}</p>}
               <footer className="mail-compose-footer"><button className="mail-primary-action" type="submit" disabled={saving}>{saving ? "Saving…" : formMode === "edit" ? "Save changes" : "Save contact"}</button><button className="mail-secondary-action" type="button" onClick={closeForm} disabled={saving}>Cancel</button></footer>
