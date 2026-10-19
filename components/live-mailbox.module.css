@@ -211,3 +211,114 @@
 .rowActions { display: inline-flex; gap: 2px; align-items: center; flex: 0 0 auto; }
 .dangerButton { color: #a72b2b; background: transparent; border: 1px solid #e9b7b7; }
 @media (max-width: 700px) { .messageSelect { margin-left: 5px; } .rowActions { flex-wrap: wrap; } .bulkActions { padding-inline: 10px; } }
+
+
+.composeAttachments {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 0 2px;
+}
+.fileInput { display: none; }
+.pendingAttachmentList, .attachmentList {
+  display: grid;
+  width: 100%;
+  gap: 7px;
+}
+.pendingAttachment, .messageAttachment {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 11px;
+  border: 1px solid var(--border, #e1e8e0);
+  border-radius: 10px;
+  background: var(--card, #fff);
+}
+.pendingAttachment > button {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--border, #e1e8e0);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted-foreground, #657265);
+  cursor: pointer;
+}
+.pendingAttachment > button:disabled { opacity: .5; cursor: not-allowed; }
+.attachmentIcon {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--muted, #f4f7f3);
+  color: var(--primary, #28774c);
+  font-size: 15px;
+}
+.attachmentFileCopy {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 3px;
+}
+.attachmentFileCopy strong {
+  overflow: hidden;
+  color: var(--foreground, #1a261e);
+  font-size: 11px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.attachmentFileCopy small {
+  color: var(--muted-foreground, #748073);
+  font-size: 10px;
+}
+.attachmentPanel {
+  margin: 18px 0;
+  padding: 14px;
+  border: 1px solid var(--border, #e1e8e0);
+  border-radius: 12px;
+  background: var(--card, #fff);
+}
+.attachmentPanel h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  color: var(--foreground, #1a261e);
+  font-size: 12px;
+  font-weight: 750;
+}
+.attachmentPanel h3 span {
+  display: inline-grid;
+  min-width: 20px;
+  height: 20px;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--muted, #f4f7f3);
+  color: var(--muted-foreground, #657265);
+  font-size: 10px;
+}
+.messageAttachment {
+  color: inherit;
+  text-decoration: none;
+}
+.messageAttachment:hover {
+  border-color: var(--primary, #28774c);
+  background: var(--muted, #f8faf7);
+}
+.attachmentStatus {
+  margin: 14px 0;
+  color: var(--muted-foreground, #748073);
+  font-size: 11px;
+}
+@media (max-width: 600px) {
+  .attachmentPanel { margin: 14px 0; padding: 10px; }
+  .pendingAttachment, .messageAttachment { gap: 8px; padding: 8px; }
+}

@@ -17,6 +17,8 @@ type Mailbox = { id: string; address: string; display_name: string | null; canMa
 type ActiveMailboxView = "Inbox" | "Sent" | "Starred" | "Drafts" | "Scheduled" | "Archive" | "Trash" | "Spam";
 type LifecycleAction = "mark_read" | "mark_unread" | "star" | "unstar" | "archive" | "unarchive" | "trash" | "restore" | "spam" | "not_spam" | "permanent_delete";
 type EmailDraft = { id: string; to_address: string; subject: string; body_text: string; created_at: string; updated_at: string };
+type PendingAttachment = { id: string; filename: string; content_type: string; size_bytes: number };
+type MessageAttachment = PendingAttachment & { created_at: string };
 type ScheduledEmail = { id: string; to_address: string; subject: string; body_text: string; scheduled_at: string; status: "scheduled" | "processing" | "accepted" | "failed" | "cancelled"; attempt_count: number; last_error_code: string | null; created_at: string; updated_at: string };
 type EmailMessage = {
   id: string;
@@ -24,6 +26,8 @@ type EmailMessage = {
   direction: "inbound" | "outbound";
   from_address: string;
   to_addresses: string[];
+  cc_addresses: string[];
+  reply_to_addresses: string[];
   subject: string;
   body_text: string | null;
   body_html: string | null;
@@ -88,6 +92,12 @@ function messagePreview(message: EmailMessage): string {
   return value.length > 120 ? value.slice(0, 117) + "…" : value || "No text preview available.";
 }
 
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return bytes + " B";
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(0) + " KB";
+  return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+}
+
 export default function LiveMailbox(props: LiveMailboxProps) {
   const { organizationId, organizationName, userEmail, mailboxes, messages, messagesError, activeView = "Inbox", workspaces } = props;
   const router = useRouter();
@@ -97,6 +107,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   const [emailConnectionState, setEmailConnectionState] = useState<"checking" | "connected" | "not_connected" | "unavailable">("checking");
   const [mailboxId, setMailboxId] = useState(mailboxes[0]?.id ?? "");
   const composeBodyRef = useRef<HTMLTextAreaElement>(null);
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
   const composeCursorPosition = useRef<number | null>(null);
 
   useEffect(() => {
@@ -185,6 +196,14 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [busy, setBusy] = useState(false);
+  const [uploadingAttachments, setUploadingAttachments] = useState(false);
+  const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
+  const pendingAttachmentsRef = useRef<PendingAttachment[]>([]);
+  useEffect(() => {
+    pendingAttachmentsRef.current = pendingAttachments;
+  }, [pendingAttachments]);
+  const [messageAttachments, setMessageAttachments] = useState<MessageAttachment[]>([]);
+  const [messageAttachmentsMessageId, setMessageAttachmentsMessageId] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
   const [requestKey, setRequestKey] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<EmailDraft[]>([]);
@@ -276,6 +295,35 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   }, [messages, mailboxId, activeView, query]);
   const selectedMessage = visibleMessages.find((message) => message.id === selectedMessageId);
   const selectedMailbox = mailboxes.find((mailbox) => mailbox.id === mailboxId);
+
+  useEffect(() => {
+    const messageId = selectedMessage?.id;
+    if (!messageId || !mailboxId || activeView === "Drafts" || activeView === "Scheduled") return;
+    let active = true;
+    const timer = window.setTimeout(() => {
+      const params = new URLSearchParams({ organizationId, mailboxId, messageId });
+      void fetch("/api/mail/attachments?" + params.toString(), { cache: "no-store" })
+        .then(async (response) => {
+          const result = await response.json() as { attachments?: MessageAttachment[]; error?: string };
+          if (!response.ok) throw new Error(result.error || "Message attachments could not be loaded.");
+          if (active) {
+            setMessageAttachments(result.attachments ?? []);
+            setMessageAttachmentsMessageId(messageId);
+          }
+        })
+        .catch((error: unknown) => {
+          if (active) {
+            setMessageAttachments([]);
+            setMessageAttachmentsMessageId(messageId);
+            setNotice(error instanceof Error ? error.message : "Message attachments could not be loaded.");
+          }
+        });
+    }, 0);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [selectedMessage?.id, activeView, mailboxId, organizationId]);
+
+  const messageAttachmentsLoading = Boolean(selectedMessage?.id && messageAttachmentsMessageId !== selectedMessage.id);
+  const visibleMessageAttachments = messageAttachmentsMessageId === selectedMessage?.id ? messageAttachments : [];
   const sentFromSelectedMailbox = messages.some((message) => message.mailbox_id === mailboxId && message.direction === "outbound");
   const receivedBySelectedMailbox = messages.some((message) => message.mailbox_id === mailboxId && message.direction === "inbound");
   const firstEmailChecksComplete = sentFromSelectedMailbox && receivedBySelectedMailbox;
@@ -333,6 +381,28 @@ export default function LiveMailbox(props: LiveMailboxProps) {
       setDraftId(result.draft.id);
       setDrafts((current) => [result.draft!, ...current.filter((item) => item.id !== result.draft!.id)]);
     }
+    const attachmentIds = pendingAttachmentsRef.current.map((attachment) => attachment.id);
+    if (attachmentIds.length) {
+      const attachmentResponse = await fetch("/api/mail/attachments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "attach-to-draft", organizationId, mailboxId, draftId: result.draft.id, attachmentIds }),
+      });
+      const attachmentResult = await attachmentResponse.json() as { ok?: boolean; attachments?: PendingAttachment[]; error?: string };
+      if (!attachmentResponse.ok || !attachmentResult.ok) {
+        if (version === draftMutationVersion.current) setNotice(attachmentResult.error || "Attachments could not be saved with this draft.");
+        return false;
+      }
+      if (version === draftMutationVersion.current) {
+        const nextAttachments = attachmentResult.attachments ?? [];
+        setPendingAttachments((current) =>
+          current.length === nextAttachments.length &&
+          current.every((attachment, index) => attachment.id === nextAttachments[index]?.id)
+            ? current
+            : nextAttachments
+        );
+      }
+    }
     return true;
   }, [organizationId, mailboxId]);
 
@@ -350,7 +420,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   }, [persistDraftSnapshot]);
 
   useEffect(() => {
-    if (!composeOpen || !mailboxId || (!draftIdRef.current && !to.trim() && !subject.trim() && !body.trim())) return;
+    if (!composeOpen || !mailboxId || (!draftIdRef.current && !to.trim() && !subject.trim() && !body.trim() && !pendingAttachments.length)) return;
     const version = ++draftMutationVersion.current;
     const timer = window.setTimeout(() => {
       draftSaveTimer.current = null;
@@ -364,18 +434,102 @@ export default function LiveMailbox(props: LiveMailboxProps) {
       window.clearTimeout(timer);
       if (draftSaveTimer.current === timer) draftSaveTimer.current = null;
     };
-  }, [composeOpen, organizationId, mailboxId, to, subject, body]);
+  }, [composeOpen, organizationId, mailboxId, to, subject, body, draftId, pendingAttachments.length, queueDraftSnapshot]);
 
   
 
-  function resetComposerAfterClose() {
+  function discardPendingAttachments() {
+    const pending = [...pendingAttachments];
+    setPendingAttachments([]);
+    if (!pending.length || !mailboxId) return;
+    void Promise.all(pending.map((attachment) => fetch(
+      "/api/mail/attachments?organizationId=" + encodeURIComponent(organizationId) +
+      "&mailboxId=" + encodeURIComponent(mailboxId) + "&id=" + encodeURIComponent(attachment.id),
+      { method: "DELETE" },
+    ).catch(() => null)));
+  }
+
+  function resetComposerAfterClose(attachmentsAlreadyLinked = false) {
     setComposeOpen(false);
     setTo("");
     setSubject("");
     setBody("");
+    setScheduleMode(false);
+    setScheduledAt("");
+    if (attachmentsAlreadyLinked) setPendingAttachments([]);
+    else discardPendingAttachments();
     draftIdRef.current = null;
     draftUpdatedAtRef.current = null;
     setDraftId(null);
+    setRequestKey(null);
+  }
+
+  async function uploadSelectedFiles(fileList: FileList | null) {
+    const files = Array.from(fileList ?? []);
+    if (!files.length) return;
+    if (!mailboxId) { setNotice("Choose an active mailbox before attaching files."); return; }
+    if (scheduleMode) { setNotice("Remove attachments before scheduling. Scheduled attachments are not supported yet."); return; }
+    if (uploadingAttachments || busy) return;
+    setUploadingAttachments(true);
+    setNotice("");
+    const existing = [...pendingAttachments];
+    const added: PendingAttachment[] = [];
+    let totalBytes = existing.reduce((sum, item) => sum + item.size_bytes, 0);
+    try {
+      if (!draftIdRef.current) {
+        if (draftSaveTimer.current !== null) {
+          window.clearTimeout(draftSaveTimer.current);
+          draftSaveTimer.current = null;
+        }
+        await draftSaveQueue.current;
+        const version = ++draftMutationVersion.current;
+        const created = await persistDraftSnapshot(to, subject, body, version);
+        if (!created || !draftIdRef.current) throw new Error("A draft could not be created for these attachments.");
+        setDraftSaving(false);
+      }
+      for (const file of files) {
+        if (existing.length + added.length >= 5) { setNotice("A message can contain up to five attachments."); break; }
+        if (file.size < 1 || file.size > 4 * 1024 * 1024) {
+          setNotice(file.name + " was skipped. Each file must be no larger than 4 MB.");
+          continue;
+        }
+        if (totalBytes + file.size > 20 * 1024 * 1024) { setNotice("Attachments for one message cannot exceed 20 MB in total."); break; }
+        const form = new FormData();
+        form.set("organizationId", organizationId);
+        form.set("mailboxId", mailboxId);
+        if (draftIdRef.current) form.set("draftId", draftIdRef.current);
+        form.set("file", file);
+        const response = await fetch("/api/mail/attachments", { method: "POST", body: form });
+        const result = await response.json() as { ok?: boolean; attachment?: PendingAttachment; error?: string };
+        if (!response.ok || !result.ok || !result.attachment) {
+          setNotice(result.error || "A file could not be attached.");
+          continue;
+        }
+        added.push(result.attachment);
+        totalBytes += result.attachment.size_bytes;
+      }
+      if (added.length) {
+        setPendingAttachments((current) => [...current, ...added]);
+        setRequestKey(null);
+      }
+    } catch {
+      setNotice("The upload connection was interrupted. Check the attachment list before retrying.");
+    } finally {
+      setUploadingAttachments(false);
+      if (attachmentInputRef.current) attachmentInputRef.current.value = "";
+    }
+  }
+
+  async function removePendingAttachment(attachment: PendingAttachment) {
+    if (busy || uploadingAttachments) return;
+    const response = await fetch(
+      "/api/mail/attachments?organizationId=" + encodeURIComponent(organizationId) +
+      "&mailboxId=" + encodeURIComponent(mailboxId) + "&id=" + encodeURIComponent(attachment.id),
+      { method: "DELETE" },
+    );
+    const result = await response.json() as { ok?: boolean; error?: string };
+    if (!response.ok || !result.ok) { setNotice(result.error || "Attachment could not be removed."); return; }
+    setPendingAttachments((current) => current.filter((item) => item.id !== attachment.id));
     setRequestKey(null);
   }
 
@@ -386,24 +540,33 @@ export default function LiveMailbox(props: LiveMailboxProps) {
       draftSaveTimer.current = null;
     }
 
-    const shouldSave = Boolean(mailboxId && (draftIdRef.current || to.trim() || subject.trim() || body.trim()));
+    const hadPendingAttachments = pendingAttachments.length > 0;
+    const shouldSave = Boolean(mailboxId && (draftIdRef.current || to.trim() || subject.trim() || body.trim() || hadPendingAttachments));
+    let attachmentsSavedWithDraft = false;
     if (shouldSave) {
       const version = ++draftMutationVersion.current;
       setDraftSaving(true);
       const saved = await queueDraftSnapshot(to, subject, body, version);
       setDraftSaving(false);
+      attachmentsSavedWithDraft = saved && hadPendingAttachments && Boolean(draftIdRef.current);
       // Draft persistence is best-effort for dismissal: a failed or unavailable
       // drafts table must never trap the user inside the compose modal.
       if (!saved || version !== draftMutationVersion.current) {
-        setNotice("Composer closed, but this draft could not be saved. Your latest changes may not be stored.");
+        setNotice("Composer closed, but this draft or its attachments could not be saved. Your latest changes may not be stored.");
       }
     } else {
       draftMutationVersion.current += 1;
     }
-    resetComposerAfterClose();
+    resetComposerAfterClose(attachmentsSavedWithDraft);
+    if (hadPendingAttachments && attachmentsSavedWithDraft) {
+      setNotice("Draft saved, including its attachments.");
+    } else if (hadPendingAttachments && !shouldSave) {
+      setNotice("Uploaded attachments were removed because no draft was saved.");
+    }
   }
 
   function openCompose() {
+    discardPendingAttachments();
     setScheduleMode(false);
     setScheduledAt("");
     draftIdRef.current = null;
@@ -420,6 +583,9 @@ export default function LiveMailbox(props: LiveMailboxProps) {
 
   async function scheduleMessage() {
     if (busy || !mailboxId) return;
+    if (pendingAttachments.length) { setNotice("Remove attachments before scheduling. Scheduled attachments are not supported yet."); return; }
+    const scheduleRecipients = to.split(/[;,]/).map((value) => value.trim()).filter(Boolean);
+    if (scheduleRecipients.length !== 1) { setNotice("Scheduled messages currently support one recipient at a time."); return; }
     if (!to.trim() || !subject.trim() || !body.trim()) { setNotice("Enter a recipient, subject, and message before scheduling."); return; }
     if (!scheduledAt || !Number.isFinite(Date.parse(scheduledAt))) { setNotice("Choose a date and time for delivery."); return; }
     setBusy(true); setNotice("");
@@ -507,7 +673,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
       const response = await fetch("/api/mail/send", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Idempotency-Key": stableRequestKey },
-        body: JSON.stringify({ organizationId, mailboxId, to: to.trim(), subject: subject.trim(), text: finalBody }),
+        body: JSON.stringify({ organizationId, mailboxId, draftId: draftIdRef.current, to: to.trim(), subject: subject.trim(), text: finalBody, attachments: pendingAttachments.map((attachment) => attachment.id) }),
       });
       const result = await response.json() as { ok?: boolean; error?: string; note?: string };
       if (!response.ok || !result.ok) {
@@ -542,7 +708,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
         }
       }
       setNotice(finalNotice);
-      resetComposerAfterClose();
+      resetComposerAfterClose(true);
       setDraftSaving(false);
       router.refresh();
     } catch {
@@ -556,6 +722,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
     draftIdRef.current = draft.id;
     draftUpdatedAtRef.current = draft.updated_at;
     setDraftId(draft.id);
+    setPendingAttachments([]);
     setTo(draft.to_address);
     setSubject(draft.subject);
     setBody(draft.body_text);
@@ -563,6 +730,16 @@ export default function LiveMailbox(props: LiveMailboxProps) {
     setNotice("");
     setComposeOpen(true);
     composeCursorPosition.current = draft.body_text.length;
+    const params = new URLSearchParams({ organizationId, mailboxId, draftId: draft.id });
+    void fetch("/api/mail/attachments?" + params.toString(), { cache: "no-store" })
+      .then(async (response) => {
+        const result = await response.json() as { attachments?: PendingAttachment[]; error?: string };
+        if (!response.ok) throw new Error(result.error || "Draft attachments could not be loaded.");
+        if (draftIdRef.current === draft.id) setPendingAttachments(result.attachments ?? []);
+      })
+      .catch((error: unknown) => {
+        if (draftIdRef.current === draft.id) setNotice(error instanceof Error ? error.message : "Draft attachments could not be loaded.");
+      });
   }
 
   async function deleteDraft(draft: EmailDraft) {
@@ -572,9 +749,16 @@ export default function LiveMailbox(props: LiveMailboxProps) {
     setDrafts((current) => current.filter((item) => item.id !== draft.id));
   }
 
-    function replyTo(message: EmailMessage) {
+    function replyTo(message: EmailMessage, replyAll = false) {
     if (message.direction !== "inbound") return;
-    setTo(message.from_address);
+    const ownAddress = selectedMailbox?.address.toLowerCase();
+    const replyTargets = message.reply_to_addresses?.length ? message.reply_to_addresses : [message.from_address];
+    const recipients = replyAll
+      ? Array.from(new Set([...replyTargets, ...message.to_addresses, ...(message.cc_addresses ?? [])]
+        .map((address) => address.trim().toLowerCase())
+        .filter((address) => address && address !== ownAddress)))
+      : replyTargets;
+    setTo(recipients.join(", "));
     setSubject(/^re:/i.test(message.subject) ? message.subject : "Re: " + message.subject);
     const quoted = plainText(message).split("\n").map((line) => "> " + line).join("\n");
     const quoteBlock = "—\nOn " + messageDate(message, mailPreferences.timezone, mailPreferences.language) + ", " + message.from_address + " wrote:\n" + quoted;
@@ -582,8 +766,41 @@ export default function LiveMailbox(props: LiveMailboxProps) {
     setRequestKey(null);
     setNotice("");
     setBody(initialBody);
+    setScheduleMode(false);
+    setScheduledAt("");
     composeCursorPosition.current = mailPreferences.replyStyle === "bottom" ? initialBody.length : 0;
     setComposeOpen(true);
+  }
+
+  async function forwardMessage(message: EmailMessage) {
+    discardPendingAttachments();
+    setDraftId(null);
+    draftIdRef.current = null;
+    draftUpdatedAtRef.current = null;
+    setTo("");
+    setSubject(/^fwd:/i.test(message.subject) ? message.subject : "Fwd: " + message.subject);
+    setBody("\n\n---------- Forwarded message ----------\nFrom: " + message.from_address +
+      "\nDate: " + messageDate(message, mailPreferences.timezone, mailPreferences.language) +
+      "\nSubject: " + (message.subject || "(no subject)") +
+      "\nTo: " + message.to_addresses.join(", ") + "\n\n" + plainText(message));
+    setRequestKey(null);
+    setScheduleMode(false);
+    setScheduledAt("");
+    setNotice("");
+    composeCursorPosition.current = 0;
+    setComposeOpen(true);
+    try {
+      const response = await fetch("/api/mail/attachments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "copy", organizationId, mailboxId, sourceMessageId: message.id }),
+      });
+      const result = await response.json() as { attachments?: PendingAttachment[]; error?: string };
+      if (!response.ok) throw new Error(result.error || "Original attachments could not be copied.");
+      if (result.attachments?.length) setPendingAttachments(result.attachments);
+    } catch (error) {
+      setNotice((error instanceof Error ? error.message : "Original attachments could not be copied.") + " The forwarded message text is ready to send.");
+    }
   }
 
   return (
@@ -830,6 +1047,8 @@ export default function LiveMailbox(props: LiveMailboxProps) {
                     <span className={styles.messageStatus}>{selectedMessage.status}</span>
                     <div className="mail-detail-action-group">
                       {selectedMessage.direction === "inbound" && <button type="button" className="mail-reader-reply" onClick={() => replyTo(selectedMessage)}>Reply <span aria-hidden="true">↶</span></button>}
+                      {selectedMessage.direction === "inbound" && <button type="button" className="mail-toolbar-button" onClick={() => replyTo(selectedMessage, true)}>Reply all</button>}
+                      <button type="button" className="mail-toolbar-button" onClick={() => void forwardMessage(selectedMessage)}>Forward</button>
                       <button type="button" className="mail-toolbar-button" onClick={() => router.refresh()} aria-label="Refresh message">↻</button>
                     </div>
                   </div>
@@ -859,9 +1078,26 @@ export default function LiveMailbox(props: LiveMailboxProps) {
                         ))}
                       </div>
                     </div>
+                    {messageAttachmentsLoading && <p className={styles.attachmentStatus}>Loading attachments…</p>}
+                    {!messageAttachmentsLoading && visibleMessageAttachments.length > 0 && (
+                      <section className={styles.attachmentPanel} aria-label="Message attachments">
+                        <h3>Attachments <span>{visibleMessageAttachments.length}</span></h3>
+                        <div className={styles.attachmentList}>
+                          {visibleMessageAttachments.map((attachment) => (
+                            <a key={attachment.id} href={"/api/mail/attachments/" + encodeURIComponent(attachment.id)} className={styles.messageAttachment} download>
+                              <span className={styles.attachmentIcon} aria-hidden="true">↧</span>
+                              <span className={styles.attachmentFileCopy}><strong>{attachment.filename}</strong><small>{formatFileSize(attachment.size_bytes)}</small></span>
+                              <span aria-hidden="true">↓</span>
+                            </a>
+                          ))}
+                        </div>
+                      </section>
+                    )}
                     {selectedMessage.direction === "inbound" && (
                       <div className="mail-reply-actions">
                         <button type="button" className="mail-primary-action" onClick={() => replyTo(selectedMessage)}>↶ Reply</button>
+                        <button type="button" className="mail-secondary-action" onClick={() => replyTo(selectedMessage, true)}>Reply all</button>
+                        <button type="button" className="mail-secondary-action" onClick={() => void forwardMessage(selectedMessage)}>Forward</button>
                       </div>
                     )}
                     <p className="mail-demo-footnote"><span className="mail-demo-dot" /> Message status: {selectedMessage.status} · {selectedMessage.direction === "inbound" ? "Received" : "Sent"} {messageDate(selectedMessage, mailPreferences.timezone, mailPreferences.language)}</p>
@@ -884,16 +1120,35 @@ export default function LiveMailbox(props: LiveMailboxProps) {
                 <button type="button" onClick={() => void closeComposer()} aria-label="Close compose" disabled={busy}>×</button>
               </header>
               <form onSubmit={submitMessage}>
-                <label className="mail-compose-field"><span>To</span><input type="email" required maxLength={320} disabled={busy} value={to} onChange={(event) => { setTo(event.target.value); setRequestKey(null); }} placeholder="name@example.com" /></label>
+                <label className="mail-compose-field"><span>To</span><input type="text" inputMode="email" required maxLength={4000} disabled={busy} value={to} onChange={(event) => { setTo(event.target.value); setRequestKey(null); }} placeholder="name@example.com, another@example.com" /></label>
                 <label className="mail-compose-field"><span>Subject</span><input required maxLength={998} disabled={busy} value={subject} onChange={(event) => { setSubject(event.target.value); setRequestKey(null); }} placeholder="Add a subject" /></label>
                 <label className="mail-compose-body-label">
                   <span className="mail-sr-only">Message body</span>
                   <textarea ref={composeBodyRef} required maxLength={80000} rows={8} disabled={busy} value={body} style={{ fontFamily: mailPreferences.font === "serif" ? "Georgia, serif" : mailPreferences.font === "mono" ? "ui-monospace, SFMono-Regular, Consolas, monospace" : "inherit" }} onChange={(event) => { setBody(event.target.value); setRequestKey(null); composeCursorPosition.current = null; }} placeholder="Write your message…" />
                 </label>
-                <p className="mail-compose-warning"><span>i</span> Plain-text email · One recipient · Workspace sending limits apply · {draftSaving ? "Saving draft…" : draftId ? "Draft saved" : "Changes save automatically"}</p>
+                <p className="mail-compose-warning"><span>i</span> Plain-text email · Up to 10 recipients separated by commas · Attachments up to 4 MB each / 20 MB total · {draftSaving ? "Saving draft…" : draftId ? "Draft saved" : "Changes save automatically"}</p>
+                {!scheduleMode && (
+                  <section className={styles.composeAttachments} aria-label="Compose attachments">
+                    <input ref={attachmentInputRef} className={styles.fileInput} type="file" multiple disabled={busy || uploadingAttachments || !mailboxId} onChange={(event) => void uploadSelectedFiles(event.currentTarget.files)} aria-label="Choose attachment files" />
+                    <button type="button" className="mail-compose-discard" disabled={busy || uploadingAttachments || !mailboxId || pendingAttachments.length >= 5} onClick={() => attachmentInputRef.current?.click()}>
+                      {uploadingAttachments ? "Uploading…" : "Attach files"} <span aria-hidden="true">↥</span>
+                    </button>
+                    {pendingAttachments.length > 0 && (
+                      <div className={styles.pendingAttachmentList}>
+                        {pendingAttachments.map((attachment) => (
+                          <div className={styles.pendingAttachment} key={attachment.id}>
+                            <span className={styles.attachmentIcon} aria-hidden="true">↥</span>
+                            <span className={styles.attachmentFileCopy}><strong>{attachment.filename}</strong><small>{formatFileSize(attachment.size_bytes)}</small></span>
+                            <button type="button" disabled={busy || uploadingAttachments} aria-label={"Remove " + attachment.filename} onClick={() => void removePendingAttachment(attachment)}>×</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </section>
+                )}
                 {scheduleMode && <label className="mail-compose-field"><span>Send at</span><input type="datetime-local" required value={scheduledAt} onChange={(event) => setScheduledAt(event.target.value)} disabled={busy} /></label>}
                 <footer className="mail-compose-footer">
-                  {scheduleMode ? <button type="button" className="mail-primary-action" disabled={busy || !mailboxId || !scheduledAt} onClick={() => void scheduleMessage()}>{busy ? "Scheduling…" : "Schedule email"} <span>◷</span></button> : <><button type="submit" className="mail-primary-action" disabled={busy || !mailboxId}>{busy ? "Sending…" : "Send"} <span>↗</span></button><button type="button" className="mail-compose-discard" disabled={busy} onClick={() => { setScheduleMode(true); const date = new Date(Date.now() + 60 * 60 * 1000); date.setMinutes(date.getMinutes() - date.getTimezoneOffset()); setScheduledAt(date.toISOString().slice(0, 16)); }}>Schedule</button></>}
+                  {scheduleMode ? <button type="button" className="mail-primary-action" disabled={busy || uploadingAttachments || !mailboxId || !scheduledAt || pendingAttachments.length > 0 || to.split(/[;,]/).map((value) => value.trim()).filter(Boolean).length !== 1} onClick={() => void scheduleMessage()}>{busy ? "Scheduling…" : "Schedule email"} <span>◷</span></button> : <><button type="submit" className="mail-primary-action" disabled={busy || uploadingAttachments || !mailboxId}>{busy ? "Sending…" : "Send"} <span>↗</span></button><button type="button" className="mail-compose-discard" disabled={busy || uploadingAttachments || pendingAttachments.length > 0 || to.split(/[;,]/).map((value) => value.trim()).filter(Boolean).length !== 1} title={pendingAttachments.length > 0 ? "Remove attachments before scheduling" : "Scheduling currently supports one recipient"} onClick={() => { setScheduleMode(true); const date = new Date(Date.now() + 60 * 60 * 1000); date.setMinutes(date.getMinutes() - date.getTimezoneOffset()); setScheduledAt(date.toISOString().slice(0, 16)); }}>Schedule</button></>}
                   <button type="button" className="mail-compose-discard" onClick={() => void closeComposer()} disabled={busy}>Close</button>
                 </footer>
               </form>

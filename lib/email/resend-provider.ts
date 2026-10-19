@@ -201,12 +201,15 @@ export async function getResendDomain(apiKey: string, providerDomainId: string):
   return resendRequest<ResendDomain>(apiKey, "/domains/" + encodeURIComponent(providerDomainId));
 }
 
+export type ResendAttachmentInput = { filename: string; contentType: string; content: string };
+
 export async function sendResendEmail(input: {
   apiKey: string;
   from: string;
-  to: string;
+  to: string | string[];
   subject: string;
   text: string;
+  attachments?: ResendAttachmentInput[];
   idempotencyKey: string;
 }): Promise<{ id: string }> {
   let response: Response;
@@ -221,9 +224,16 @@ export async function sendResendEmail(input: {
       },
       body: JSON.stringify({
         from: input.from,
-        to: [input.to],
+        to: Array.isArray(input.to) ? input.to : [input.to],
         subject: input.subject,
         text: input.text,
+        ...(input.attachments?.length ? {
+          attachments: input.attachments.map((attachment) => ({
+            filename: attachment.filename,
+            content: attachment.content,
+            content_type: attachment.contentType,
+          })),
+        } : {}),
       }),
       cache: "no-store",
       signal: AbortSignal.timeout(15000),
