@@ -369,7 +369,11 @@ export default function LiveMailbox(props: LiveMailboxProps) {
       setDraftSaving(true);
       const saved = await queueDraftSnapshot(to, subject, body, version);
       setDraftSaving(false);
-      if (!saved || version !== draftMutationVersion.current) return;
+      // Draft persistence is best-effort for dismissal: a failed or unavailable
+      // drafts table must never trap the user inside the compose modal.
+      if (!saved || version !== draftMutationVersion.current) {
+        setNotice("Composer closed, but this draft could not be saved. Your latest changes may not be stored.");
+      }
     } else {
       draftMutationVersion.current += 1;
     }
