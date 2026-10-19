@@ -127,9 +127,10 @@ export async function POST(request: NextRequest) {
       .order("created_at", { ascending: true });
     if (attachmentsError) return json({ error: "Source attachments could not be loaded." }, 503);
     if (!sourceAttachments?.length) return json({ attachments: [] });
-    const { data: pending } = await admin.from("email_message_attachments")
+    const { data: pending, error: pendingError } = await admin.from("email_message_attachments")
       .select("id, size_bytes").eq("organization_id", organizationId).eq("mailbox_id", mailboxId)
       .eq("user_id", user.id).is("message_id", null).gt("expires_at", new Date().toISOString());
+    if (pendingError) return json({ error: "Current attachment limits could not be checked." }, 503);
     const pendingRows = pending ?? [];
     const pendingBytes = pendingRows.reduce((sum, item) => sum + Number(item.size_bytes), 0);
     const sourceBytes = sourceAttachments.reduce((sum, item) => sum + Number(item.size_bytes), 0);
@@ -140,7 +141,11 @@ export async function POST(request: NextRequest) {
     for (const source of sourceAttachments) {
       const { data: file, error: downloadError } = await admin.storage.from(BUCKET).download(source.storage_path);
       if (downloadError || !file) {
-        await Promise.all(copied.map((item) => admin.from("email_message_attachments").delete().eq("id", item.id)));
+        await Promise.all(copied.map(async (item) => {
+          const { data: row } = await admin.from("email_message_attachments").select("storage_path").eq("id", item.id).maybeSingle();
+          if (row?.storage_path) await admin.storage.from(BUCKET).remove([row.storage_path]);
+          await admin.from("email_message_attachments").delete().eq("id", item.id);
+        }));
         return json({ error: "A source attachment could not be read." }, 503);
       }
       const result = await uploadPending(admin, {
