@@ -2488,3 +2488,63 @@ html.dark .mail-appearance-toggle {
     pointer-events: none;
   }
 }
+
+
+/* Mail reader responsive behavior: keep the list uncluttered until a message is opened. */
+@media (min-width: 1201px) {
+  .mail-app.mailbox-live-app .mail-content-layout:not(.message-selected) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .mail-app.mailbox-live-app .mail-content-layout:not(.message-selected) .mail-detail-pane {
+    display: none;
+  }
+  .mail-app.mailbox-live-app .mail-content-layout:not(.message-selected) .mail-list-pane {
+    grid-column: 1 / -1;
+    border-right: 0;
+  }
+  .mail-app.mailbox-live-app .mail-content-layout.message-selected {
+    grid-template-columns: minmax(340px, 38%) minmax(0, 1fr);
+  }
+}
+
+/* On laptop-sized, split-screen, and tablet widths, open a message as its own view. */
+@media (max-width: 1200px) {
+  .mail-app.mailbox-live-app .mail-content-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+  .mail-app.mailbox-live-app .mail-content-layout .mail-list-pane,
+  .mail-app.mailbox-live-app .mail-content-layout .mail-detail-pane {
+    grid-column: 1;
+    grid-row: 1;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+  }
+  .mail-app.mailbox-live-app .mail-content-layout .mail-list-pane {
+    display: flex;
+    border-right: 0;
+  }
+  .mail-app.mailbox-live-app .mail-content-layout .mail-detail-pane {
+    display: none;
+  }
+  .mail-app.mailbox-live-app .mail-content-layout.mobile-detail-open .mail-list-pane {
+    display: none;
+  }
+  .mail-app.mailbox-live-app .mail-content-layout.mobile-detail-open .mail-detail-pane {
+    display: flex;
+  }
+  .mail-app.mailbox-live-app .mail-mobile-back {
+    display: inline-flex;
+    min-height: 31px;
+    align-items: center;
+    padding: 0 9px;
+    border: 1px solid var(--border, #dce5da);
+    border-radius: 7px;
+    background: var(--card, #fff);
+    color: var(--foreground, #3f5a43);
+    font-size: 10px;
+    font-weight: 750;
+  }
+}

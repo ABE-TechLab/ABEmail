@@ -231,7 +231,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
       ].join(" ").toLowerCase().includes(term);
     });
   }, [messages, mailboxId, activeView, query]);
-  const selectedMessage = visibleMessages.find((message) => message.id === selectedMessageId) ?? visibleMessages[0];
+  const selectedMessage = visibleMessages.find((message) => message.id === selectedMessageId);
   const selectedMailbox = mailboxes.find((mailbox) => mailbox.id === mailboxId);
   const sentFromSelectedMailbox = messages.some((message) => message.mailbox_id === mailboxId && message.direction === "outbound");
   const receivedBySelectedMailbox = messages.some((message) => message.mailbox_id === mailboxId && message.direction === "inbound");
@@ -379,7 +379,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
             </div>
           </section>
         ) : (
-          <div className={"mail-content-layout" + (mobileDetailOpen ? " mobile-detail-open" : "")}>
+          <div className={"mail-content-layout" + (selectedMessage ? " message-selected" : "") + (mobileDetailOpen ? " mobile-detail-open" : "")}>
             <section className="mail-list-pane" aria-label={activeView + " messages"}>
               {notice && <p className={styles.notice} role="status">{notice}</p>}
               {messagesError && <div className={styles.warning} role="alert">The mail database could not be read in this deployment. Refresh the page or contact an administrator.</div>}
