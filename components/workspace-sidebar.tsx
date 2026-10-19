@@ -3,7 +3,7 @@
 import Link from "next/link";
 import SignOutButton from "@/components/auth/sign-out-button";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 
 const mailboxLinks = [
   { view: "Inbox", href: "/", label: "Inbox", icon: "▤" },
@@ -24,6 +24,17 @@ const workspaceLinks = [
   { href: "/settings", label: "Settings", icon: "⚙" },
 ] as const;
 
+const settingsSectionLinks = [
+  { id: "general", label: "General", icon: "⚙" },
+  { id: "appearance", label: "Appearance", icon: "◐" },
+  { id: "mail", label: "Mail & compose", icon: "✉" },
+  { id: "notifications", label: "Notifications", icon: "♧" },
+  { id: "team", label: "Team & access", icon: "♙" },
+  { id: "domains", label: "Domains", icon: "◎" },
+  { id: "mailboxes", label: "Mailboxes", icon: "▤" },
+  { id: "security", label: "Security", icon: "◇" },
+] as const;
+
 const SIDEBAR_COLLAPSED_KEY = "abemail:sidebar-collapsed";
 
 type WorkspaceSidebarProps = {
@@ -35,7 +46,6 @@ type WorkspaceSidebarProps = {
   onWorkspaceToggle?: () => void;
   onWorkspaceSettings?: () => void;
   disabledMailFeatures?: boolean;
-  disableContacts?: boolean;
   homeHref?: string;
   mailboxBaseHref?: string;
   activeMailboxView?: MailboxView;
@@ -57,7 +67,6 @@ export default function WorkspaceSidebar({
   onWorkspaceToggle,
   onWorkspaceSettings,
   disabledMailFeatures = false,
-  disableContacts = false,
   homeHref = "/",
   mailboxBaseHref,
   activeMailboxView,
@@ -288,26 +297,38 @@ export default function WorkspaceSidebar({
               ? `${workspaceBaseHref}${item.href}`
               : item.href;
             const active = pathname === scopedHref || pathname.startsWith(`${scopedHref}/`);
-            if (disableContacts && item.href === "/contacts") {
-              return (
-                <div className="mail-nav-item workspace-nav-disabled" key={item.href} aria-disabled="true" title="Contacts setup required">
+            return (
+              <Fragment key={item.href}>
+                <Link
+                  className={active ? "mail-nav-item active" : "mail-nav-item"}
+                  href={scopedHref}
+                  aria-current={active ? "page" : undefined}
+                  title={item.label}
+                >
                   <span className="mail-nav-icon" aria-hidden="true">{item.icon}</span>
                   <span>{item.label}</span>
-                  <span className="mail-feature-pill">Setup</span>
-                </div>
-              );
-            }
-            return (
-              <Link
-                className={active ? "mail-nav-item active" : "mail-nav-item"}
-                href={scopedHref}
-                key={item.href}
-                aria-current={active ? "page" : undefined}
-                title={item.label}
-              >
-                <span className="mail-nav-icon" aria-hidden="true">{item.icon}</span>
-                <span>{item.label}</span>
-              </Link>
+                </Link>
+                {item.href === "/settings" && active && (
+                  <div className="mail-settings-subnav" aria-label="Settings sections">
+                    {settingsSectionLinks.map((section) => {
+                      const sectionHref = section.id === "general" ? scopedHref : scopedHref + "/" + section.id;
+                      const sectionActive = pathname === sectionHref || pathname.startsWith(sectionHref + "/");
+                      return (
+                        <Link
+                          key={section.id}
+                          className={sectionActive ? "mail-nav-item mail-settings-subnav-item active" : "mail-nav-item mail-settings-subnav-item"}
+                          href={sectionHref}
+                          aria-current={sectionActive ? "page" : undefined}
+                          title={section.label}
+                        >
+                          <span className="mail-nav-icon" aria-hidden="true">{section.icon}</span>
+                          <span>{section.label}</span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </Fragment>
             );
           })}
         </nav>

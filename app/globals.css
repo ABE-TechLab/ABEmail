@@ -600,7 +600,7 @@ h1 {
 .settings-page-heading > div > p:last-child, .contacts-heading > div > p:last-child { margin: 0; color: #879387; font-size: 11px; line-height: 1.6; }
 .settings-preview-chip { display: inline-flex; align-items: center; gap: 7px; margin-bottom: 4px; padding: 7px 10px; border: 1px solid #e6e9dd; border-radius: 999px; background: #fffdf7; color: #a07d43; font-size: 9px; font-weight: 700; white-space: nowrap; }
 .settings-preview-chip > span { width: 6px; height: 6px; border-radius: 50%; background: #c79845; }
-.settings-layout { display: grid; grid-template-columns: 194px minmax(0, 1fr); align-items: start; gap: 20px; }
+.settings-layout { display: block; min-width: 0; }
 .settings-navigation { display: flex; flex-direction: column; gap: 18px; padding: 13px 9px; border: 1px solid #e8ede6; border-radius: 11px; background: #fff; }
 .settings-nav-group { display: flex; flex-direction: column; gap: 3px; }
 .settings-nav-group > p { margin: 0 8px 6px; color: #a0aaa0; font-size: 8px; font-weight: 800; letter-spacing: 1.1px; }
@@ -729,7 +729,7 @@ h1 {
 .contacts-toast { right: 25px; bottom: 25px; }
 
 @media (max-width: 1050px) {
-  .settings-layout { grid-template-columns: 165px minmax(0,1fr); gap: 13px; }
+  .settings-layout { display: block; }
   .settings-panel { padding-right: 16px; padding-left: 16px; }
   .settings-invite-controls { grid-template-columns: minmax(0,1fr) 100px; }
   .settings-invite-controls .mail-primary-action { grid-column: 1 / -1; width: fit-content; margin-bottom: 0; }
@@ -737,7 +737,7 @@ h1 {
 }
 @media (max-width: 850px) {
   .settings-topbar-title { display: none; }
-  .settings-layout { grid-template-columns: minmax(0,1fr); }
+  .settings-layout { display: block; }
   .settings-navigation { flex-direction: row; gap: 14px; overflow-x: auto; padding: 8px; }
   .settings-nav-group { min-width: max-content; flex-direction: row; align-items: center; gap: 4px; }
   .settings-nav-group > p { display: none; }
@@ -2617,4 +2617,40 @@ html.dark .mail-appearance-toggle {
     font-size: 10px;
     font-weight: 750;
   }
+}
+
+
+/* Settings subsections live inside the shared workspace sidebar. */
+.mail-settings-subnav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 3px 0 8px 25px;
+  padding-left: 8px;
+  border-left: 1px solid #e4ebe1;
+}
+.mail-sidebar.is-collapsed .mail-settings-subnav {
+  margin-left: 5px;
+  padding-left: 0;
+  border-left: 0;
+}
+.mail-settings-subnav .mail-settings-subnav-item {
+  min-height: 29px;
+  padding: 6px 8px;
+  color: #748075;
+  font-size: 10px;
+}
+.mail-settings-subnav .mail-settings-subnav-item:hover {
+  background: #f5f8f3;
+  color: #346a42;
+}
+.mail-settings-subnav .mail-settings-subnav-item.active {
+  background: #eaf4eb;
+  color: #23673d;
+  font-weight: 700;
+}
+.mail-sidebar.is-collapsed .mail-settings-subnav .mail-settings-subnav-item {
+  justify-content: center;
+  padding-right: 0;
+  padding-left: 0;
 }

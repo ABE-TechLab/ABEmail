@@ -882,7 +882,6 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
         activeMailboxView={activeView as MailboxView}
         enabledMailboxViews={["Inbox", "Sent", "Starred", "Drafts", "Scheduled", "Archive", "Trash", "Spam"]}
         disabledMailFeatures={!mailboxes.length}
-        disableContacts
         onCompose={openCompose}
         homeHref={"/dashboard/" + organizationId + "/mail"}
         workspaceBaseHref={"/dashboard/" + organizationId}

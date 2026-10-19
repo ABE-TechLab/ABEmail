@@ -106,17 +106,6 @@ const DEFAULT_PREFERENCES: WorkspacePreferenceValues = {
   notifications: { newMail: true, mentions: true, product: false, digest: false },
 };
 
-const SECTIONS = [
-  { id: "general", label: "General", icon: "⚙", group: "PREFERENCES" },
-  { id: "appearance", label: "Appearance", icon: "◐", group: "PREFERENCES" },
-  { id: "mail", label: "Mail & compose", icon: "✉", group: "PREFERENCES" },
-  { id: "notifications", label: "Notifications", icon: "♧", group: "PREFERENCES" },
-  { id: "team", label: "Team & access", icon: "♙", group: "WORKSPACE" },
-  { id: "domains", label: "Domains", icon: "◎", group: "WORKSPACE" },
-  { id: "mailboxes", label: "Mailboxes", icon: "▤", group: "WORKSPACE" },
-  { id: "security", label: "Security", icon: "◇", group: "ACCESS" },
-] as const;
-
 const SECTION_INFO: Record<string, { title: string; description: string }> = {
   general: { title: "General", description: "Workspace identity and regional preferences." },
   appearance: { title: "Appearance", description: "Personalize the workspace shell and message list." },
@@ -706,7 +695,6 @@ export default function WorkspaceSettingsPanel({
         workspaceDescription={organizationRole + " workspace"}
         workspaces={workspaces}
         activeWorkspaceId={organizationId}
-        disableContacts
       />
       <main className="mail-main">
         <header className="mail-topbar">
@@ -724,18 +712,6 @@ export default function WorkspaceSettingsPanel({
             <span />{providerLoading ? "Checking connection" : providerStatus?.connected || providerStatus?.environmentManaged ? "Workspace connected" : providerStatus ? "Workspace not connected" : "Connection status unavailable"}
           </span></div>
           <div className="settings-layout">
-            <nav className="settings-navigation" aria-label="Settings sections">
-              {(["PREFERENCES", "WORKSPACE", "ACCESS"] as const).map((group) => (
-                <div className="settings-nav-group" key={group}>
-                  <p>{group}</p>
-                  {SECTIONS.filter((item) => item.group === group).map((item) => {
-                    const href = item.id === "general" ? settingsBase : settingsBase + "/" + item.id;
-                    return <Link className={section === item.id ? "settings-nav-link active" : "settings-nav-link"} key={item.id} href={href} aria-current={section === item.id ? "page" : undefined}><span aria-hidden="true">{item.icon}</span>{item.label}</Link>;
-                  })}
-                </div>
-              ))}
-            </nav>
-
             <section className="settings-panel" aria-labelledby="settings-heading">
               <header className="settings-panel-heading"><div><h2 id="settings-heading">{info.title}</h2><p>{info.description}</p></div></header>
 
