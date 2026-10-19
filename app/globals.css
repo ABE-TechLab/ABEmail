@@ -473,8 +473,13 @@ h1 {
 .mail-contact-detail-section > strong { color: #526253; font-size: 11px; overflow-wrap: anywhere; }
 .mail-contact-email { width: 100%; }
 
-.mail-modal-backdrop { position: fixed; z-index: 40; inset: 0; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(18, 30, 21, .36); backdrop-filter: blur(3px); }
-.mail-compose-modal { width: min(620px, 100%); max-height: min(740px, calc(100vh - 40px)); overflow: auto; border: 1px solid #e3eae1; border-radius: 13px; background: #fff; box-shadow: 0 28px 80px rgba(15, 35, 20, .22); }
+.mail-modal-backdrop { position: fixed; z-index: 40; inset: 0; display: flex; align-items: flex-end; justify-content: flex-end; padding: 16px; background: rgba(18, 30, 21, .14); backdrop-filter: blur(1px); animation: mail-compose-backdrop-in .18s ease-out both; }
+.mail-compose-modal { display: flex; width: min(560px, calc(100vw - 32px)); height: min(680px, calc(100dvh - 32px)); max-height: calc(100dvh - 32px); flex-direction: column; overflow: hidden; border: 1px solid #e3eae1; border-radius: 13px 13px 10px 10px; background: #fff; box-shadow: 0 18px 60px rgba(15, 35, 20, .24); transform-origin: bottom right; animation: mail-compose-drawer-in .24s cubic-bezier(.2,.75,.25,1) both; }
+@keyframes mail-compose-backdrop-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes mail-compose-drawer-in { from { opacity: 0; transform: translate(18px, 22px) scale(.97); } to { opacity: 1; transform: translate(0, 0) scale(1); } }
+.mail-compose-modal form { display: flex; min-height: 0; flex: 1; flex-direction: column; overflow-y: auto; }
+.mail-compose-body-label { min-height: 0; flex: 1; }
+.mail-compose-body-label textarea { min-height: 220px; height: 100%; }
 .mail-compose-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid #eaf0e8; background: #fbfcfa; }
 .mail-compose-header h2 { margin: 0; color: #334136; font-family: "Manrope", sans-serif; font-size: 14px; }
 .mail-compose-header button { width: 28px; height: 28px; border: 0; border-radius: 6px; background: transparent; color: #889489; font-size: 21px; }
@@ -520,6 +525,9 @@ h1 {
   .mail-content-layout { grid-template-columns: minmax(285px, 44%) minmax(0,1fr); }
 }
 @media (max-width: 620px) {
+  .mail-modal-backdrop { padding: 8px; }
+  .mail-compose-modal { width: calc(100vw - 16px); height: min(620px, calc(100dvh - 16px)); max-height: calc(100dvh - 16px); border-radius: 12px; }
+  .mail-compose-body-label textarea { min-height: 160px; }
   .mail-sidebar { width: 54px; min-width: 54px; flex-basis: 54px; padding-right: 5px; padding-left: 5px; }
   .mail-brand-mark { width: 29px; height: 29px; }
   .mail-compose-button { width: 38px; height: 38px; }
