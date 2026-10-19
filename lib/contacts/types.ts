@@ -6,6 +6,7 @@ export type Contact = {
   role: string | null;
   phone: string | null;
   notes: string | null;
+  tags: string[];
   created_at: string;
   updated_at: string;
 };
@@ -17,6 +18,7 @@ export type ContactInput = {
   role: string | null;
   phone: string | null;
   notes: string | null;
+  tags: string[];
 };
 
-export const CONTACT_FIELDS = "id, name, email, company, role, phone, notes, created_at, updated_at";
+export const CONTACT_FIELDS = "id, name, email, company, role, phone, notes, tags, created_at, updated_at";
