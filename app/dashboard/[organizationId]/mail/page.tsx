@@ -37,7 +37,7 @@ export default async function WorkspaceMailPage({ params, searchParams }: MailPa
     .maybeSingle();
 
   if (membershipError) {
-    return <main style={{ padding: 28 }}><h1>Mail is not ready</h1><p>Workspace membership could not be checked.</p></main>;
+    return <section className="workspace-route-error"><h1>Mail is not ready</h1><p>Workspace membership could not be checked.</p></section>;
   }
   if (!membership) notFound();
 
