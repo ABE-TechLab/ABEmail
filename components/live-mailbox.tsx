@@ -346,7 +346,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   }
 
   function openDraft(draft: EmailDraft) {
-    draftIdRef.current = draft.id; draftUpdatedAtRef.current = draft.updated_at; setDraftId(draft.id); setDraftUpdatedAt(draft.updated_at); setTo(draft.to_address); setSubject(draft.subject); setBody(draft.body_text); setRequestKey(null); setNotice(""); setComposeOpen(true); composeCursorPosition.current = draft.body_text.length;
+    draftIdRef.current = draft.id; draftUpdatedAtRef.current = draft.updated_at; setDraftId(draft.id); setTo(draft.to_address); setSubject(draft.subject); setBody(draft.body_text); setRequestKey(null); setNotice(""); setComposeOpen(true); composeCursorPosition.current = draft.body_text.length;
   }
 
   async function deleteDraft(draft: EmailDraft) {
@@ -660,7 +660,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
                 <p className="mail-compose-warning"><span>i</span> Plain-text email · One recipient · Workspace sending limits apply · {draftSaving ? "Saving draft…" : draftId ? "Draft saved" : "Changes save automatically"}</p>
                 <footer className="mail-compose-footer">
                   <button type="submit" className="mail-primary-action" disabled={busy || !mailboxId}>{busy ? "Sending…" : "Send"} <span>↗</span></button>
-                  <button type="button" className="mail-compose-discard" onClick={() => { setComposeOpen(false); setTo(""); setSubject(""); setBody(""); draftIdRef.current = null; draftUpdatedAtRef.current = null; setDraftId(null); setDraftUpdatedAt(null); setRequestKey(null); }} disabled={busy}>Close</button>
+                  <button type="button" className="mail-compose-discard" onClick={() => { setComposeOpen(false); setTo(""); setSubject(""); setBody(""); draftIdRef.current = null; draftUpdatedAtRef.current = null; setDraftId(null); setRequestKey(null); }} disabled={busy}>Close</button>
                 </footer>
               </form>
             </section>
