@@ -83,9 +83,15 @@ type LiveMailboxProps = {
   initialMessageId?: string;
 };
 
+const plainTextCache = new WeakMap<EmailMessage, string>();
+const messagePreviewCache = new WeakMap<EmailMessage, string>();
+const messageSearchTextCache = new WeakMap<EmailMessage, string>();
+
 function plainText(message: EmailMessage): string {
-  if (message.body_text) return message.body_text;
-  return (message.body_html ?? "")
+  const cached = plainTextCache.get(message);
+  if (cached !== undefined) return cached;
+
+  const value = message.body_text || (message.body_html ?? "")
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<br\s*\/?>/gi, "\n")
@@ -98,6 +104,9 @@ function plainText(message: EmailMessage): string {
     .replace(/&#39;/gi, "'")
     .replace(/&quot;/gi, '"')
     .trim();
+
+  plainTextCache.set(message, value);
+  return value;
 }
 
 function messageDate(message: EmailMessage, timezone = "Africa/Lagos", language = "en"): string {
@@ -119,8 +128,30 @@ function localDateTimeInput(value: string): string {
 }
 
 function messagePreview(message: EmailMessage): string {
+  const cached = messagePreviewCache.get(message);
+  if (cached !== undefined) return cached;
+
   const value = plainText(message).replace(/\s+/g, " ").trim();
-  return value.length > 120 ? value.slice(0, 117) + "…" : value || "No text preview available.";
+  const preview = value.length > 120 ? value.slice(0, 117) + "…" : value || "No text preview available.";
+  messagePreviewCache.set(message, preview);
+  return preview;
+}
+
+function searchableMessageText(message: EmailMessage): string {
+  const cached = messageSearchTextCache.get(message);
+  if (cached !== undefined) return cached;
+
+  const value = [
+    message.from_address,
+    message.to_addresses.join(" "),
+    message.subject,
+    message.body_text ?? "",
+    message.body_html ?? "",
+    message.status,
+  ].join(" ").toLowerCase();
+
+  messageSearchTextCache.set(message, value);
+  return value;
 }
 
 function formatFileSize(bytes: number): string {
@@ -516,14 +547,7 @@ const scheduledLoading = activeView === "Scheduled" && Boolean(mailboxId) && sch
                   : inSpam && !inTrash);
       if (!inFolder) return false;
       if (!term) return true;
-      return [
-        message.from_address,
-        message.to_addresses.join(" "),
-        message.subject,
-        message.body_text ?? "",
-        message.body_html ?? "",
-        message.status,
-      ].join(" ").toLowerCase().includes(term);
+      return searchableMessageText(message).includes(term);
     });
   }, [messages, mailboxId, activeView, query, snoozeNow]);
   const selectedMessage = visibleMessages.find((message) => message.id === selectedMessageId);
