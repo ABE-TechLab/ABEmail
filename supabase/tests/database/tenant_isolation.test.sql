@@ -154,6 +154,21 @@ select throws_ok(
   'Choose a future reminder time within one year',
   'database rejects a reminder set in the past'
 );
+select throws_ok(
+  $insert into public.email_message_reminders (organization_id, mailbox_id, message_id, user_id, reminder_at, note)
+    values ('20000000-0000-4000-8000-000000000001', '31000000-0000-4000-8000-000000000001',
+      '60000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001',
+      now() + interval '366 days', 'Reminder too far away')$,
+  '22023',
+  'Choose a future reminder time within one year',
+  'database rejects a reminder more than one year away'
+);
+select is(
+  (update public.email_message_reminders set status = 'completed', completed_at = now(), dismissed_at = null
+   where id = '80000000-0000-4000-8000-000000000001' returning id),
+  '80000000-0000-4000-8000-000000000001'::uuid,
+  'owner can mark their own reminder complete'
+);
 
 select is((select count(*)::integer from public.email_messages where organization_id = '20000000-0000-4000-8000-000000000002'), 1, 'mailbox grant exposes only the assigned mailbox messages in the second organization');
 select ok(not has_table_privilege('authenticated', 'public.provider_events', 'select'), 'provider event ledger cannot be read directly by authenticated clients');
