@@ -41,7 +41,7 @@ function appendSignature(body: string, signature: string): string {
 
 type Mailbox = { id: string; address: string; display_name: string | null; canManage: boolean };
 type ActiveMailboxView = "Inbox" | "Sent" | "Starred" | "Drafts" | "Scheduled" | "Snoozed" | "Archive" | "Trash" | "Spam";
-type LifecycleAction = "mark_read" | "mark_unread" | "star" | "unstar" | "archive" | "unarchive" | "trash" | "restore" | "spam" | "not_spam" | "permanent_delete";
+type LifecycleAction = "mark_read" | "mark_unread" | "star" | "unstar" | "archive" | "unarchive" | "trash" | "restore" | "spam" | "not_spam" | "snooze" | "unsnooze" | "permanent_delete";
 type EmailDraft = { id: string; to_address: string; subject: string; body_text: string; created_at: string; updated_at: string };
 type PendingAttachment = { id: string; filename: string; content_type: string; size_bytes: number };
 type MessageAttachment = PendingAttachment & { created_at: string };
@@ -66,6 +66,7 @@ type EmailMessage = {
   archived_at: string | null;
   trashed_at: string | null;
   spam_at: string | null;
+  snoozed_until: string | null;
 };
 type LiveMailboxProps = {
   organizationId: string;
@@ -219,6 +220,8 @@ export default function LiveMailbox(props: LiveMailboxProps) {
     }));
   }
   const [lifecycleBusy, setLifecycleBusy] = useState(false);
+  const [snoozeNow, setSnoozeNow] = useState<number>(() => Date.now());
+  const [snoozeUntilInput, setSnoozeUntilInput] = useState(() => localDateTimeInput(new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()));
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);
   const [composeSignatureId, setComposeSignatureId] = useState<string | null>(null);
@@ -395,25 +398,41 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
     return () => { active = false; window.clearInterval(timer); };
   }, [activeView, mailboxId, organizationId]);
 
+  useEffect(() => {
+    const now = Date.now();
+    const nextDue = messages.reduce<number | null>((next, message) => {
+      if (!message.snoozed_until) return next;
+      const deadline = Date.parse(message.snoozed_until);
+      if (!Number.isFinite(deadline) || deadline <= now) return next;
+      return next === null || deadline < next ? deadline : next;
+    }, null);
+    if (nextDue === null) return;
+    const timer = window.setTimeout(() => setSnoozeNow(Date.now()), Math.max(0, nextDue - now + 100));
+    return () => window.clearTimeout(timer);
+  }, [messages, snoozeNow]);
+
   const visibleMessages = useMemo(() => {
     const term = query.trim().toLowerCase();
-    if (activeView === "Scheduled" || activeView === "Drafts" || activeView === "Snoozed") return [];
+    if (activeView === "Scheduled" || activeView === "Drafts") return [];
     return messages.filter((message) => {
       if (message.mailbox_id !== mailboxId) return false;
       const inTrash = Boolean(message.trashed_at);
       const inSpam = Boolean(message.spam_at);
       const inArchive = Boolean(message.archived_at);
-      const inFolder = activeView === "Inbox"
-        ? message.direction === "inbound" && !inTrash && !inSpam && !inArchive
-        : activeView === "Sent"
-          ? message.direction === "outbound" && !inTrash && !inSpam
-          : activeView === "Starred"
-            ? message.is_starred && !inTrash && !inSpam
-            : activeView === "Archive"
-              ? inArchive && !inTrash && !inSpam
-              : activeView === "Trash"
-                ? inTrash
-                : inSpam && !inTrash;
+      const isSnoozed = Boolean(message.snoozed_until && Date.parse(message.snoozed_until) > snoozeNow);
+      const inFolder = activeView === "Snoozed"
+        ? isSnoozed && !inTrash && !inSpam
+        : !isSnoozed && (activeView === "Inbox"
+          ? message.direction === "inbound" && !inTrash && !inSpam && !inArchive
+          : activeView === "Sent"
+            ? message.direction === "outbound" && !inTrash && !inSpam
+            : activeView === "Starred"
+              ? message.is_starred && !inTrash && !inSpam
+              : activeView === "Archive"
+                ? inArchive && !inTrash && !inSpam
+                : activeView === "Trash"
+                  ? inTrash
+                  : inSpam && !inTrash);
       if (!inFolder) return false;
       if (!term) return true;
       return [
@@ -425,7 +444,7 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
         message.status,
       ].join(" ").toLowerCase().includes(term);
     });
-  }, [messages, mailboxId, activeView, query]);
+  }, [messages, mailboxId, activeView, query, snoozeNow]);
   const selectedMessage = visibleMessages.find((message) => message.id === selectedMessageId);
   const selectedMailbox = mailboxes.find((mailbox) => mailbox.id === mailboxId);
 
@@ -461,16 +480,33 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
   const receivedBySelectedMailbox = messages.some((message) => message.mailbox_id === mailboxId && message.direction === "inbound");
   const firstEmailChecksComplete = sentFromSelectedMailbox && receivedBySelectedMailbox;
 
-  async function runLifecycle(messageIds: string[], action: LifecycleAction) {
+  async function runLifecycle(messageIds: string[], action: LifecycleAction, snoozeValue?: string) {
     const ids = [...new Set(messageIds)];
     if (!ids.length || ids.length > 100 || lifecycleBusy || !mailboxId) return;
+
+    let snoozedUntil: string | null = null;
+    if (action === "snooze") {
+      const deadline = Date.parse(snoozeValue ?? "");
+      if (!Number.isFinite(deadline) || deadline <= Date.now() + 1000 || deadline > Date.now() + 365 * 24 * 60 * 60 * 1000) {
+        setNotice("Choose a future snooze time within the next year.");
+        return;
+      }
+      snoozedUntil = new Date(deadline).toISOString();
+    }
+
     setLifecycleBusy(true);
     setNotice("");
     try {
       const response = await fetch("/api/mail/lifecycle", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ organizationId, mailboxId, messageIds: ids, action }),
+        body: JSON.stringify({
+          organizationId,
+          mailboxId,
+          messageIds: ids,
+          action,
+          ...(action === "snooze" ? { snoozedUntil } : {}),
+        }),
       });
       const result = await response.json() as { ok?: boolean; affected?: number; error?: string };
       if (!response.ok || !result.ok) {
@@ -479,7 +515,14 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
       }
       setSelectedMessageIds((current) => current.filter((id) => !ids.includes(id)));
       const affected = Number.isFinite(result.affected) ? Number(result.affected) : ids.length;
-      setNotice(affected + " message" + (affected === 1 ? "" : "s") + " updated.");
+      if (action === "snooze" && snoozedUntil) {
+        const formatted = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: mailPreferences.timezone || undefined }).format(new Date(snoozedUntil));
+        setNotice(affected + " message" + (affected === 1 ? "" : "s") + " snoozed until " + formatted + ".");
+      } else if (action === "unsnooze") {
+        setNotice(affected + " message" + (affected === 1 ? "" : "s") + " returned to your Inbox.");
+      } else {
+        setNotice(affected + " message" + (affected === 1 ? "" : "s") + " updated.");
+      }
       router.refresh();
     } catch {
       setNotice("The connection was interrupted. Refresh the mailbox to confirm the saved message state.");
