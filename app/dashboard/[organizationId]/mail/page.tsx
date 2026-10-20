@@ -102,6 +102,7 @@ export default async function WorkspaceMailPage({ params, searchParams }: MailPa
     archived_at: string | null;
     trashed_at: string | null;
     spam_at: string | null;
+    snoozed_until: string | null;
   };
   let messages: (MailRow & {
     is_read: boolean;
@@ -129,7 +130,7 @@ export default async function WorkspaceMailPage({ params, searchParams }: MailPa
       if (messageRows.length) {
         const { data: persistedState, error: stateError } = await supabase
           .from("email_message_user_state")
-          .select("message_id, is_read, is_starred, archived_at, trashed_at, spam_at")
+          .select("message_id, is_read, is_starred, archived_at, trashed_at, spam_at, snoozed_until")
           .eq("organization_id", organizationId)
           .eq("user_id", user.id)
           .in("message_id", messageRows.map((message) => message.id));
@@ -149,6 +150,7 @@ export default async function WorkspaceMailPage({ params, searchParams }: MailPa
           archived_at: state?.archived_at ?? null,
           trashed_at: state?.trashed_at ?? null,
           spam_at: state?.spam_at ?? null,
+          snoozed_until: state?.snoozed_until ?? null,
         };
       });
     }
