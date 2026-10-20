@@ -40,40 +40,43 @@ export default async function WorkspaceSettingsPage({ params }: WorkspaceSetting
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) redirect("/auth/sign-in?next=" + encodeURIComponent(nextPath));
 
-  const { data: membership, error: membershipError } = await supabase
-    .from("organization_memberships")
-    .select("organization_id, role")
-    .eq("organization_id", organizationId)
-    .eq("user_id", user.id)
-    .eq("status", "active")
-    .maybeSingle();
+  const [membershipResult, organizationResult] = await Promise.all([
+    supabase
+      .from("organization_memberships")
+      .select("organization_id, role")
+      .eq("organization_id", organizationId)
+      .eq("user_id", user.id)
+      .eq("status", "active")
+      .maybeSingle(),
+    supabase
+      .from("organizations")
+      .select("id, name, slug, status")
+      .eq("id", organizationId)
+      .eq("status", "active")
+      .maybeSingle(),
+  ]);
+  const { data: membership, error: membershipError } = membershipResult;
+  const { data: organization, error: organizationError } = organizationResult;
 
   if (membershipError || !membership) notFound();
-
-  const { data: organization, error: organizationError } = await supabase
-    .from("organizations")
-    .select("id, name, slug, status")
-    .eq("id", organizationId)
-    .eq("status", "active")
-    .maybeSingle();
-
   if (organizationError || !organization) notFound();
 
-
-
-  const { data: mailboxRows } = await supabase
-    .from("mailboxes")
-    .select("id, address, display_name")
-    .eq("organization_id", organization.id)
-    .eq("status", "active")
-    .order("address");
-
-  const { data: memberRows } = await supabase
-    .from("organization_memberships")
-    .select("user_id, role, status")
-    .eq("organization_id", organization.id)
-    .eq("status", "active")
-    .order("created_at", { ascending: true });
+  const [mailboxResult, memberResult] = await Promise.all([
+    supabase
+      .from("mailboxes")
+      .select("id, address, display_name")
+      .eq("organization_id", organization.id)
+      .eq("status", "active")
+      .order("address"),
+    supabase
+      .from("organization_memberships")
+      .select("user_id, role, status")
+      .eq("organization_id", organization.id)
+      .eq("status", "active")
+      .order("created_at", { ascending: true }),
+  ]);
+  const { data: mailboxRows } = mailboxResult;
+  const { data: memberRows } = memberResult;
 
   const workspaceContext: WorkspaceSettingsContext = {
     organizationId: organization.id,

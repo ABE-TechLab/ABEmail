@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import AppearanceToggle from "@/components/appearance-toggle";
 import styles from "./live-mailbox.module.css";
@@ -42,6 +42,7 @@ function appendSignature(body: string, signature: string): string {
 
 type Mailbox = { id: string; address: string; display_name: string | null; canManage: boolean };
 type ActiveMailboxView = "Inbox" | "Sent" | "Starred" | "Drafts" | "Scheduled" | "Snoozed" | "Archive" | "Trash" | "Spam";
+const MAILBOX_VIEW_OPTIONS: readonly ActiveMailboxView[] = ["Inbox", "Sent", "Starred", "Drafts", "Scheduled", "Snoozed", "Archive", "Trash", "Spam"];
 type LifecycleAction = "mark_read" | "mark_unread" | "star" | "unstar" | "archive" | "unarchive" | "trash" | "restore" | "spam" | "not_spam" | "snooze" | "unsnooze" | "permanent_delete";
 type EmailDraft = { id: string; to_address: string; subject: string; body_text: string; created_at: string; updated_at: string };
 type PendingAttachment = { id: string; filename: string; content_type: string; size_bytes: number };
@@ -129,8 +130,13 @@ function formatFileSize(bytes: number): string {
 }
 
 export default function LiveMailbox(props: LiveMailboxProps) {
-  const { organizationId, organizationName, userEmail, mailboxes, messages, messagesError, activeView = "Inbox", initialRecipient, initialCompose = false, initialMessageId } = props;
+  const { organizationId, organizationName, userEmail, mailboxes, messages, messagesError, activeView: initialActiveView = "Inbox", initialRecipient, initialCompose = false, initialMessageId } = props;
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const requestedMailboxView = searchParams.get("view");
+  const activeView = MAILBOX_VIEW_OPTIONS.includes(requestedMailboxView as ActiveMailboxView)
+    ? requestedMailboxView as ActiveMailboxView
+    : initialActiveView;
   const [query, setQuery] = useState("");
   const [compactMessageList, setCompactMessageList] = useState(false);
   const [mailPreferences, setMailPreferences] = useState<MailPreferences>(DEFAULT_MAIL_PREFERENCES);

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { useAppearanceMode, type AppearanceMode } from "@/components/appearance-provider";
 import { useDesignTheme } from "@/components/design-theme-provider";
@@ -192,7 +192,7 @@ function statusLabel(status: string) {
 }
 
 export default function WorkspaceSettingsPanel({
-  section,
+  section: initialSection,
   organizationId,
   organizationName,
   organizationSlug,
@@ -239,6 +239,11 @@ export default function WorkspaceSettingsPanel({
 
   const base = "/dashboard/" + organizationId;
   const settingsBase = base + "/settings";
+  const pathname = usePathname();
+  const requestedSection = pathname.startsWith(settingsBase)
+    ? pathname.slice(settingsBase.length).split("/").filter(Boolean)[0] ?? "general"
+    : initialSection;
+  const section = Object.prototype.hasOwnProperty.call(SECTION_INFO, requestedSection) ? requestedSection : initialSection;
   const info = SECTION_INFO[section] ?? SECTION_INFO.general;
   const canManageWorkspace = organizationRole === "owner" || organizationRole === "admin";
   const verifiedReceivingDomains = domains.filter((domain) => domain.status === "verified" && domain.sendingEnabled && domain.receivingEnabled);
@@ -797,6 +802,11 @@ export default function WorkspaceSettingsPanel({
                         className={active ? "settings-nav-link active" : "settings-nav-link"}
                         aria-current={active ? "page" : undefined}
                         title={item.label}
+                        onClick={(event) => {
+                          if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                          event.preventDefault();
+                          window.history.pushState(null, "", href);
+                        }}
                       >
                         <span aria-hidden="true">{item.icon}</span>{item.label}
                       </Link>
