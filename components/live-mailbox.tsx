@@ -482,11 +482,19 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
 
   useEffect(() => {
     if (!initialMessageId) return;
-    const linkedMessage = messages.find((message) => message.id === initialMessageId);
-    if (!linkedMessage) return;
-    setMailboxId(linkedMessage.mailbox_id);
-    setSelectedMessageId(linkedMessage.id);
-    setMobileDetailOpen(true);
+    let active = true;
+    const timer = window.setTimeout(() => {
+      if (!active) return;
+      const linkedMessage = messages.find((message) => message.id === initialMessageId);
+      if (!linkedMessage) return;
+      setMailboxId(linkedMessage.mailbox_id);
+      setSelectedMessageId(linkedMessage.id);
+      setMobileDetailOpen(true);
+    }, 0);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
   }, [initialMessageId, messages]);
   const selectedMailbox = mailboxes.find((mailbox) => mailbox.id === mailboxId);
 
