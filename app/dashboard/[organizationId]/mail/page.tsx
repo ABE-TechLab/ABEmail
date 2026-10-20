@@ -102,6 +102,7 @@ export default async function WorkspaceMailPage({ params, searchParams }: MailPa
     archived_at: string | null;
     trashed_at: string | null;
     spam_at: string | null;
+    snoozed_until: string | null;
   };
   let messages: (MailRow & {
     is_read: boolean;
@@ -109,6 +110,7 @@ export default async function WorkspaceMailPage({ params, searchParams }: MailPa
     archived_at: string | null;
     trashed_at: string | null;
     spam_at: string | null;
+    snoozed_until: string | null;
   })[] = [];
   let messagesError = false;
 
@@ -124,12 +126,69 @@ export default async function WorkspaceMailPage({ params, searchParams }: MailPa
     if (error) {
       messagesError = true;
     } else {
-      const messageRows = (data ?? []) as MailRow[];
+      let messageRows = (data ?? []) as MailRow[];
+
+      // Keep active snoozes and recently expired messages available outside the latest-message window.
+      // Inbox loads both recently expired items and the soonest upcoming deadlines so either can return visibly.
+      if (activeView === "Inbox" || activeView === "Snoozed") {
+        const snoozeCutoff = new Date().toISOString();
+        const querySnoozedState = () => supabase
+          .from("email_message_user_state")
+          .select("message_id, snoozed_until")
+          .eq("organization_id", organizationId)
+          .eq("user_id", user.id)
+          .in("mailbox_id", mailboxes.map((mailbox) => mailbox.id));
+
+        const snoozedStateResults = activeView === "Inbox"
+          ? await Promise.all([
+              querySnoozedState()
+                .lte("snoozed_until", snoozeCutoff)
+                .order("snoozed_until", { ascending: false })
+                .limit(120),
+              querySnoozedState()
+                .gt("snoozed_until", snoozeCutoff)
+                .order("snoozed_until", { ascending: true })
+                .limit(120),
+            ])
+          : [
+              await querySnoozedState()
+                .gt("snoozed_until", snoozeCutoff)
+                .order("snoozed_until", { ascending: true })
+                .limit(120),
+            ];
+
+        if (snoozedStateResults.some(({ error }) => error)) {
+          messagesError = true;
+        } else {
+          const snoozedStateRows = snoozedStateResults.flatMap(({ data }) => data ?? []);
+          const presentIds = new Set(messageRows.map((message) => message.id));
+          const extraIds = [...new Set(snoozedStateRows.map((state) => state.message_id))]
+            .filter((messageId) => !presentIds.has(messageId));
+
+          if (extraIds.length) {
+            const { data: retainedRows, error: retainedError } = await supabase
+              .from("email_messages")
+              .select("id, mailbox_id, direction, from_address, to_addresses, cc_addresses, reply_to_addresses, subject, body_text, body_html, status, created_at, received_at, sent_at")
+              .eq("organization_id", organizationId)
+              .in("mailbox_id", mailboxes.map((mailbox) => mailbox.id))
+              .in("id", extraIds);
+
+            if (retainedError) {
+              messagesError = true;
+            } else {
+              const combined = new Map<string, MailRow>(messageRows.map((message) => [message.id, message]));
+              for (const message of (retainedRows ?? []) as MailRow[]) combined.set(message.id, message);
+              messageRows = [...combined.values()].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+            }
+          }
+        }
+      }
+
       let stateRows: MailStateRow[] = [];
       if (messageRows.length) {
         const { data: persistedState, error: stateError } = await supabase
           .from("email_message_user_state")
-          .select("message_id, is_read, is_starred, archived_at, trashed_at, spam_at")
+          .select("message_id, is_read, is_starred, archived_at, trashed_at, spam_at, snoozed_until")
           .eq("organization_id", organizationId)
           .eq("user_id", user.id)
           .in("message_id", messageRows.map((message) => message.id));
@@ -149,6 +208,7 @@ export default async function WorkspaceMailPage({ params, searchParams }: MailPa
           archived_at: state?.archived_at ?? null,
           trashed_at: state?.trashed_at ?? null,
           spam_at: state?.spam_at ?? null,
+          snoozed_until: state?.snoozed_until ?? null,
         };
       });
     }

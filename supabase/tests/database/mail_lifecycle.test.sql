@@ -126,6 +126,63 @@ select is(
   2,
   'bulk unarchive restores both messages to the inbox lifecycle'
 );
+
+select is(
+  public.update_email_message_lifecycle(
+    '20000000-0000-4000-8000-000000000101',
+    '31000000-0000-4000-8000-000000000101',
+    array['60000000-0000-4000-8000-000000000101'::uuid],
+    'snooze',
+    now() + interval '1 hour'
+  ),
+  1,
+  'authorized user can snooze a message until a future deadline'
+);
+select ok(
+  (select snoozed_until > now() from public.email_message_user_state
+   where user_id = '10000000-0000-4000-8000-000000000101'
+     and message_id = '60000000-0000-4000-8000-000000000101'),
+  'snooze deadline is persisted in per-user state'
+);
+select is(
+  public.update_email_message_lifecycle(
+    '20000000-0000-4000-8000-000000000101',
+    '31000000-0000-4000-8000-000000000101',
+    array['60000000-0000-4000-8000-000000000101'::uuid],
+    'archive'
+  ),
+  1,
+  'archive remains available for a snoozed message'
+);
+select is(
+  (select snoozed_until from public.email_message_user_state
+   where user_id = '10000000-0000-4000-8000-000000000101'
+     and message_id = '60000000-0000-4000-8000-000000000101'),
+  null::timestamptz,
+  'archiving clears the snooze deadline'
+);
+select is(
+  public.update_email_message_lifecycle(
+    '20000000-0000-4000-8000-000000000101',
+    '31000000-0000-4000-8000-000000000101',
+    array['60000000-0000-4000-8000-000000000101'::uuid],
+    'unarchive'
+  ),
+  1,
+  'unarchiving returns the message to the active inbox state'
+);
+select throws_ok(
+  $$select public.update_email_message_lifecycle(
+    '20000000-0000-4000-8000-000000000101',
+    '31000000-0000-4000-8000-000000000101',
+    array['60000000-0000-4000-8000-000000000102'::uuid],
+    'snooze',
+    now() - interval '1 minute'
+  )$$,
+  '22023',
+  'Choose a future snooze time within one year',
+  'expired snooze deadlines are rejected'
+);
 select is(
   public.update_email_message_lifecycle(
     '20000000-0000-4000-8000-000000000101',
@@ -135,6 +192,18 @@ select is(
   ),
   2,
   'bulk trash updates both state rows'
+);
+select throws_ok(
+  $$select public.update_email_message_lifecycle(
+    '20000000-0000-4000-8000-000000000101',
+    '31000000-0000-4000-8000-000000000101',
+    array['60000000-0000-4000-8000-000000000101'::uuid],
+    'snooze',
+    now() + interval '1 hour'
+  )$$,
+  '22023',
+  'Messages in Trash or Spam cannot be snoozed',
+  'messages in Trash cannot be snoozed'
 );
 select is(
   public.update_email_message_lifecycle(
@@ -189,6 +258,51 @@ select is(
   1,
   'authorized mailbox member can change their own lifecycle state'
 );
+select is(
+  public.update_email_message_lifecycle(
+    '20000000-0000-4000-8000-000000000101',
+    '31000000-0000-4000-8000-000000000101',
+    array['60000000-0000-4000-8000-000000000102'::uuid],
+    'snooze',
+    now() + interval '1 day'
+  ),
+  1,
+  'authorized mailbox member can snooze messages in their assigned mailbox'
+);
+select ok(
+  (select snoozed_until > now() from public.email_message_user_state
+   where user_id = '10000000-0000-4000-8000-000000000103'
+     and message_id = '60000000-0000-4000-8000-000000000102'),
+  'snooze state belongs to the acting mailbox member'
+);
+select is(
+  public.update_email_message_lifecycle(
+    '20000000-0000-4000-8000-000000000101',
+    '31000000-0000-4000-8000-000000000101',
+    array['60000000-0000-4000-8000-000000000102'::uuid],
+    'unsnooze'
+  ),
+  1,
+  'authorized mailbox member can manually return a message to Inbox'
+);
+select is(
+  (select snoozed_until from public.email_message_user_state
+   where user_id = '10000000-0000-4000-8000-000000000103'
+     and message_id = '60000000-0000-4000-8000-000000000102'),
+  null::timestamptz,
+  'manual return clears the per-user snooze deadline'
+);
+select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000101', true);
+select set_config('request.jwt.claims', '{"sub":"10000000-0000-4000-8000-000000000101","role":"authenticated","email":"alice@lifecycle-a.invalid"}', true);
+select is(
+  (select snoozed_until from public.email_message_user_state
+   where user_id = '10000000-0000-4000-8000-000000000101'
+     and message_id = '60000000-0000-4000-8000-000000000102'),
+  null::timestamptz,
+  'a member snooze does not mutate the owner personal snooze state'
+);
+select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000103', true);
+select set_config('request.jwt.claims', '{"sub":"10000000-0000-4000-8000-000000000103","role":"authenticated","email":"carol@lifecycle-a.invalid"}', true);
 select is(
   (select count(*)::integer from public.email_message_user_state
    where user_id = '10000000-0000-4000-8000-000000000103'
