@@ -172,13 +172,13 @@ select is(
   'unarchiving returns the message to the active inbox state'
 );
 select throws_ok(
-  $select public.update_email_message_lifecycle(
+  $$select public.update_email_message_lifecycle(
     '20000000-0000-4000-8000-000000000101',
     '31000000-0000-4000-8000-000000000101',
     array['60000000-0000-4000-8000-000000000102'::uuid],
     'snooze',
     now() - interval '1 minute'
-  )$,
+  )$$,
   '22023',
   'Choose a future snooze time within one year',
   'expired snooze deadlines are rejected'
@@ -194,13 +194,13 @@ select is(
   'bulk trash updates both state rows'
 );
 select throws_ok(
-  $select public.update_email_message_lifecycle(
+  $$select public.update_email_message_lifecycle(
     '20000000-0000-4000-8000-000000000101',
     '31000000-0000-4000-8000-000000000101',
     array['60000000-0000-4000-8000-000000000101'::uuid],
     'snooze',
     now() + interval '1 hour'
-  )$,
+  )$$,
   '22023',
   'Messages in Trash or Spam cannot be snoozed',
   'messages in Trash cannot be snoozed'
@@ -221,7 +221,7 @@ select is(
   'restored message is no longer in Trash'
 );
 select throws_ok(
-  $$select public.update_email_message_lifecycle(
+  $$$select public.update_email_message_lifecycle(
     '20000000-0000-4000-8000-000000000101',
     '31000000-0000-4000-8000-000000000101',
     array['60000000-0000-4000-8000-000000000101'::uuid],
@@ -233,7 +233,7 @@ select throws_ok(
 );
 
 select throws_ok(
-  $$select public.update_email_message_lifecycle(
+  $$$select public.update_email_message_lifecycle(
     '20000000-0000-4000-8000-000000000102',
     '31000000-0000-4000-8000-000000000102',
     array['60000000-0000-4000-8000-000000000103'::uuid],
