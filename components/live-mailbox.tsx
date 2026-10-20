@@ -221,6 +221,10 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   }
   const [lifecycleBusy, setLifecycleBusy] = useState(false);
   const [snoozeNow, setSnoozeNow] = useState<number>(() => Date.now());
+  const [snoozePickerBounds] = useState(() => ({
+    min: localDateTimeInput(new Date(Date.now() + 60_000).toISOString()),
+    max: localDateTimeInput(new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()),
+  }));
   const [snoozeUntilInput, setSnoozeUntilInput] = useState(() => localDateTimeInput(new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()));
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);
@@ -1116,8 +1120,8 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
                         <input
                           type="datetime-local"
                           value={snoozeUntilInput}
-                          min={localDateTimeInput(new Date(snoozeNow + 60_000).toISOString())}
-                          max={localDateTimeInput(new Date(snoozeNow + 365 * 24 * 60 * 60 * 1000).toISOString())}
+                          min={snoozePickerBounds.min}
+                          max={snoozePickerBounds.max}
                           onChange={(event) => setSnoozeUntilInput(event.target.value)}
                           aria-label="Snooze selected messages until"
                           disabled={lifecycleBusy}
@@ -1284,8 +1288,8 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
                             <input
                               type="datetime-local"
                               value={snoozeUntilInput}
-                              min={localDateTimeInput(new Date(snoozeNow + 60_000).toISOString())}
-                              max={localDateTimeInput(new Date(snoozeNow + 365 * 24 * 60 * 60 * 1000).toISOString())}
+                              min={snoozePickerBounds.min}
+                              max={snoozePickerBounds.max}
                               onChange={(event) => setSnoozeUntilInput(event.target.value)}
                               aria-label="Snooze this message until"
                               disabled={lifecycleBusy}
