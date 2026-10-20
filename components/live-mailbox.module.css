@@ -235,7 +235,7 @@
 .bulkActions button:disabled, .rowActions button:disabled { opacity: .5; cursor: not-allowed; }
 .rowActions { display: inline-flex; gap: 2px; align-items: center; flex: 0 0 auto; }
 .dangerButton { color: #a72b2b; background: transparent; border: 1px solid #e9b7b7; }
-@media (max-width: 700px) { .messageSelect { margin-left: 5px; } .rowActions { flex-wrap: wrap; } .bulkActions { padding-inline: 10px; } }
+@media (max-width: 700px) { .messageSelect { margin-left: 5px; } .rowActions { flex-wrap: wrap; } .bulkActions { padding-inline: 10px; } .snoozePicker { gap: 4px; } .snoozePicker input { width: 155px; } }
 
 
 .composeAttachments {
