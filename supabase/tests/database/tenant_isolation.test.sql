@@ -163,9 +163,14 @@ select throws_ok(
   'Choose a future reminder time within one year',
   'database rejects a reminder more than one year away'
 );
+with completed_reminder as (
+  update public.email_message_reminders
+  set status = 'completed', completed_at = now(), dismissed_at = null
+  where id = '80000000-0000-4000-8000-000000000001'
+  returning id
+)
 select is(
-  (update public.email_message_reminders set status = 'completed', completed_at = now(), dismissed_at = null
-   where id = '80000000-0000-4000-8000-000000000001' returning id),
+  (select id from completed_reminder),
   '80000000-0000-4000-8000-000000000001'::uuid,
   'owner can mark their own reminder complete'
 );
