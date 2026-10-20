@@ -128,25 +128,41 @@ export default async function WorkspaceMailPage({ params, searchParams }: MailPa
     } else {
       let messageRows = (data ?? []) as MailRow[];
 
-      // Keep snoozed messages available even when they fall outside the latest-message window.
-      // Expired deadlines remain in personal state and therefore also need to be returned to Inbox.
+      // Keep active snoozes and recently expired messages available outside the latest-message window.
+      // Inbox loads both recently expired items and the soonest upcoming deadlines so either can return visibly.
       if (activeView === "Inbox" || activeView === "Snoozed") {
-        const { data: snoozedStateRows, error: snoozeStateError } = await supabase
+        const snoozeCutoff = new Date().toISOString();
+        const querySnoozedState = () => supabase
           .from("email_message_user_state")
           .select("message_id, snoozed_until")
           .eq("organization_id", organizationId)
           .eq("user_id", user.id)
-          .in("mailbox_id", mailboxes.map((mailbox) => mailbox.id))
-          .not("snoozed_until", "is", null)
-          .order("snoozed_until", { ascending: false })
-          .limit(120);
+          .in("mailbox_id", mailboxes.map((mailbox) => mailbox.id));
 
-        if (snoozeStateError) {
+        const snoozedStateResults = activeView === "Inbox"
+          ? await Promise.all([
+              querySnoozedState()
+                .lte("snoozed_until", snoozeCutoff)
+                .order("snoozed_until", { ascending: false })
+                .limit(120),
+              querySnoozedState()
+                .gt("snoozed_until", snoozeCutoff)
+                .order("snoozed_until", { ascending: true })
+                .limit(120),
+            ])
+          : [
+              await querySnoozedState()
+                .gt("snoozed_until", snoozeCutoff)
+                .order("snoozed_until", { ascending: true })
+                .limit(120),
+            ];
+
+        if (snoozedStateResults.some(({ error }) => error)) {
           messagesError = true;
         } else {
+          const snoozedStateRows = snoozedStateResults.flatMap(({ data }) => data ?? []);
           const presentIds = new Set(messageRows.map((message) => message.id));
-          const extraIds = (snoozedStateRows ?? [])
-            .map((state) => state.message_id)
+          const extraIds = [...new Set(snoozedStateRows.map((state) => state.message_id))]
             .filter((messageId) => !presentIds.has(messageId));
 
           if (extraIds.length) {
