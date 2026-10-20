@@ -203,7 +203,7 @@ export default function ReminderManager({ organizationId }: { organizationId: st
           <header className={styles.panelHeader}>
             <div>
               <h2 id="reminder-list-heading">Your reminders</h2>
-              <p>Personal to you in this workspace; due times follow your device's local time.</p>
+              <p>Personal to you in this workspace; due times follow your device&apos;s local time.</p>
             </div>
           </header>
 
