@@ -85,7 +85,6 @@ export default function ReminderManager({ organizationId }: { organizationId: st
   useEffect(() => {
     const controller = new AbortController();
     let active = true;
-    setLoading(true);
     void fetch(endpoint, { cache: "no-store", signal: controller.signal })
       .then(async (response) => {
         const payload = await response.json() as ApiPayload;
