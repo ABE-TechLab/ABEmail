@@ -140,25 +140,25 @@ select throws_ok(
   $reminder_insert$ insert into public.email_message_reminders (organization_id, mailbox_id, message_id, user_id, reminder_at, note)
     values ('20000000-0000-4000-8000-000000000001', '31000000-0000-4000-8000-000000000001',
       '60000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000003',
-      now() + interval '1 day', 'Impersonated reminder')$,
+      now() + interval '1 day', 'Impersonated reminder')$reminder_insert$,
   '42501',
   null,
   'user cannot create a reminder owned by another member'
 );
 select throws_ok(
-  $insert into public.email_message_reminders (organization_id, mailbox_id, message_id, user_id, reminder_at, note)
+  $reminder_insert$ insert into public.email_message_reminders (organization_id, mailbox_id, message_id, user_id, reminder_at, note)
     values ('20000000-0000-4000-8000-000000000001', '31000000-0000-4000-8000-000000000001',
       '60000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001',
-      now() - interval '1 minute', 'Past reminder')$,
+      now() - interval '1 minute', 'Past reminder')$reminder_insert$,
   '22023',
   'Choose a future reminder time within one year',
   'database rejects a reminder set in the past'
 );
 select throws_ok(
-  $insert into public.email_message_reminders (organization_id, mailbox_id, message_id, user_id, reminder_at, note)
+  $reminder_insert$ insert into public.email_message_reminders (organization_id, mailbox_id, message_id, user_id, reminder_at, note)
     values ('20000000-0000-4000-8000-000000000001', '31000000-0000-4000-8000-000000000001',
       '60000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001',
-      now() + interval '366 days', 'Reminder too far away')$,
+      now() + interval '366 days', 'Reminder too far away')$reminder_insert$,
   '22023',
   'Choose a future reminder time within one year',
   'database rejects a reminder more than one year away'
