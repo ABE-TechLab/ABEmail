@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import TemplateManager from "@/components/template-manager";
+import ReminderManager from "@/components/reminder-manager";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +21,7 @@ const WORKSPACE_PAGES: Record<string, {
     title: "Reminders",
     description: "Keep important follow-ups and commitments visible alongside your email.",
     panelTitle: "Follow-up reminders",
-    panelDescription: "Scheduled email delivery is available under Scheduled. Persisted one-time reminders and follow-up nudges are a separate roadmap feature and are not active in this build.",
+    panelDescription: "Keep personal one-time reminders attached to messages. Reschedule a follow-up, mark it done, or dismiss it when it is no longer needed.",
   },
   labels: {
     title: "Labels",
@@ -44,6 +45,9 @@ export default async function WorkspaceFeaturePage({ params }: WorkspaceFeatureP
   const { organizationId, workspacePage } = await params;
   if (workspacePage === "templates") {
     return <TemplateManager organizationId={organizationId} />;
+  }
+  if (workspacePage === "reminders") {
+    return <ReminderManager organizationId={organizationId} />;
   }
 
   const page = WORKSPACE_PAGES[workspacePage];

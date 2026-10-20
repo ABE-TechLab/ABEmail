@@ -75,6 +75,19 @@ insert into public.email_messages (
    'Tenant B message', 'Test-only tenant B message', 'accepted', 'test-b-team-0001', repeat('b', 64),
    '10000000-0000-4000-8000-000000000002', now(), null);
 
+insert into public.email_message_reminders (
+  id, organization_id, mailbox_id, message_id, user_id, reminder_at, note
+) values
+  ('80000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000001',
+   '31000000-0000-4000-8000-000000000001', '60000000-0000-4000-8000-000000000001',
+   '10000000-0000-4000-8000-000000000001', now() + interval '1 day', 'Alice follow-up'),
+  ('80000000-0000-4000-8000-000000000002', '20000000-0000-4000-8000-000000000001',
+   '31000000-0000-4000-8000-000000000002', '60000000-0000-4000-8000-000000000002',
+   '10000000-0000-4000-8000-000000000003', now() + interval '2 days', 'Carol follow-up'),
+  ('80000000-0000-4000-8000-000000000003', '20000000-0000-4000-8000-000000000002',
+   '31000000-0000-4000-8000-000000000003', '60000000-0000-4000-8000-000000000003',
+   '10000000-0000-4000-8000-000000000002', now() + interval '3 days', 'Bob follow-up');
+
 insert into public.email_templates (id, organization_id, user_id, name, subject, body_text) values
   ('70000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001', 'Alice payment reminder', 'Payment reminder', 'Hello, please see the attached payment reminder.'),
   ('70000000-0000-4000-8000-000000000002', '20000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000003', 'Carol follow-up', 'Following up', 'Hello, checking in on this.'),
@@ -109,6 +122,59 @@ select is((select role from public.organization_memberships where organization_i
 select is((select role from public.organization_memberships where organization_id = '20000000-0000-4000-8000-000000000002' and user_id = '10000000-0000-4000-8000-000000000001'), 'member', 'the same identity can be a member in the second organization');
 select is((select count(*)::integer from public.mailboxes), 3, 'owner sees all own organization mailboxes and only assigned mailboxes in the second');
 select is((select count(*)::integer from public.email_messages), 3, 'mail reads include own organization and explicitly granted cross-organization mailbox only');
+select is((select count(*)::integer from public.email_message_reminders), 1, 'user sees only their own reminder records across accessible workspaces');
+select is((select count(*)::integer from public.email_message_reminders where id = '80000000-0000-4000-8000-000000000002'), 0, 'user cannot read another members reminder in the same workspace');
+select is((select count(*)::integer from public.email_message_reminders where organization_id = '20000000-0000-4000-8000-000000000002'), 0, 'user cannot read another members reminder in a second workspace');
+with changed_reminders as (
+  update public.email_message_reminders set note = 'Cross-user modification'
+  where id = '80000000-0000-4000-8000-000000000002'
+  returning id
+)
+select is((select count(*)::integer from changed_reminders), 0, 'user cannot update another members reminder');
+with deleted_reminders as (
+  delete from public.email_message_reminders where id = '80000000-0000-4000-8000-000000000002'
+  returning id
+)
+select is((select count(*)::integer from deleted_reminders), 0, 'user cannot delete another members reminder');
+select throws_ok(
+  $reminder_insert$ insert into public.email_message_reminders (organization_id, mailbox_id, message_id, user_id, reminder_at, note)
+    values ('20000000-0000-4000-8000-000000000001', '31000000-0000-4000-8000-000000000001',
+      '60000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000003',
+      now() + interval '1 day', 'Impersonated reminder')$reminder_insert$,
+  '42501',
+  null,
+  'user cannot create a reminder owned by another member'
+);
+select throws_ok(
+  $reminder_insert$ insert into public.email_message_reminders (organization_id, mailbox_id, message_id, user_id, reminder_at, note)
+    values ('20000000-0000-4000-8000-000000000001', '31000000-0000-4000-8000-000000000001',
+      '60000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001',
+      now() - interval '1 minute', 'Past reminder')$reminder_insert$,
+  '22023',
+  'Choose a future reminder time within one year',
+  'database rejects a reminder set in the past'
+);
+select throws_ok(
+  $reminder_insert$ insert into public.email_message_reminders (organization_id, mailbox_id, message_id, user_id, reminder_at, note)
+    values ('20000000-0000-4000-8000-000000000001', '31000000-0000-4000-8000-000000000001',
+      '60000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001',
+      now() + interval '366 days', 'Reminder too far away')$reminder_insert$,
+  '22023',
+  'Choose a future reminder time within one year',
+  'database rejects a reminder more than one year away'
+);
+with completed_reminder as (
+  update public.email_message_reminders
+  set status = 'completed', completed_at = now(), dismissed_at = null
+  where id = '80000000-0000-4000-8000-000000000001'
+  returning id
+)
+select is(
+  (select id from completed_reminder),
+  '80000000-0000-4000-8000-000000000001'::uuid,
+  'owner can mark their own reminder complete'
+);
+
 select is((select count(*)::integer from public.email_messages where organization_id = '20000000-0000-4000-8000-000000000002'), 1, 'mailbox grant exposes only the assigned mailbox messages in the second organization');
 select ok(not has_table_privilege('authenticated', 'public.provider_events', 'select'), 'provider event ledger cannot be read directly by authenticated clients');
 select is((select count(*)::integer from public.organization_domains), 1, 'domain metadata is restricted to organizations the user administers');
@@ -181,6 +247,10 @@ with deleted as (
 select is((select count(*)::integer from deleted), 0, 'member cannot delete another tenant contact');
 select is((select count(*)::integer from public.mailboxes), 1, 'member sees only their assigned mailbox');
 select is((select count(*)::integer from public.email_messages), 1, 'member sees only messages in their assigned mailbox');
+select is((select count(*)::integer from public.email_message_reminders), 1, 'member sees their own reminder on their assigned mailbox');
+select is((select count(*)::integer from public.email_message_reminders where id = '80000000-0000-4000-8000-000000000001'), 0, 'member cannot read the workspace owner reminder');
+select is((select count(*)::integer from public.email_message_reminders where organization_id = '20000000-0000-4000-8000-000000000002'), 0, 'member cannot read reminders from another tenant');
+
 select is((select subject from public.email_messages), 'Tenant A team message', 'member cannot infer the other mailbox messages');
 select is((select address from public.mailboxes), 'team@tenant-a.example.com', 'assigned mailbox address is the one shown to the member');
 select is((select count(*)::integer from public.organization_domains), 0, 'regular members cannot read DNS verification details');

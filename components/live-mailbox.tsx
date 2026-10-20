@@ -78,6 +78,7 @@ type LiveMailboxProps = {
   activeView?: ActiveMailboxView;
   initialRecipient?: string;
   initialCompose?: boolean;
+  initialMessageId?: string;
 };
 
 function plainText(message: EmailMessage): string {
@@ -127,7 +128,7 @@ function formatFileSize(bytes: number): string {
 }
 
 export default function LiveMailbox(props: LiveMailboxProps) {
-  const { organizationId, organizationName, userEmail, mailboxes, messages, messagesError, activeView = "Inbox", initialRecipient, initialCompose = false } = props;
+  const { organizationId, organizationName, userEmail, mailboxes, messages, messagesError, activeView = "Inbox", initialRecipient, initialCompose = false, initialMessageId } = props;
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [compactMessageList, setCompactMessageList] = useState(false);
@@ -226,6 +227,14 @@ export default function LiveMailbox(props: LiveMailboxProps) {
     max: localDateTimeInput(new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()),
   }));
   const [snoozeUntilInput, setSnoozeUntilInput] = useState(() => localDateTimeInput(new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()));
+  const [reminderFormOpen, setReminderFormOpen] = useState(false);
+  const [reminderAtInput, setReminderAtInput] = useState(() => localDateTimeInput(new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()));
+  const [reminderNoteInput, setReminderNoteInput] = useState("");
+  const [reminderSaving, setReminderSaving] = useState(false);
+  const [reminderPickerBounds] = useState(() => ({
+    min: localDateTimeInput(new Date(Date.now() + 60_000).toISOString()),
+    max: localDateTimeInput(new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()),
+  }));
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);
   const [composeSignatureId, setComposeSignatureId] = useState<string | null>(null);
@@ -470,6 +479,23 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
     });
   }, [messages, mailboxId, activeView, query, snoozeNow]);
   const selectedMessage = visibleMessages.find((message) => message.id === selectedMessageId);
+
+  useEffect(() => {
+    if (!initialMessageId) return;
+    let active = true;
+    const timer = window.setTimeout(() => {
+      if (!active) return;
+      const linkedMessage = messages.find((message) => message.id === initialMessageId);
+      if (!linkedMessage) return;
+      setMailboxId(linkedMessage.mailbox_id);
+      setSelectedMessageId(linkedMessage.id);
+      setMobileDetailOpen(true);
+    }, 0);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [initialMessageId, messages]);
   const selectedMailbox = mailboxes.find((mailbox) => mailbox.id === mailboxId);
 
   useEffect(() => {
@@ -503,6 +529,42 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
   const sentFromSelectedMailbox = messages.some((message) => message.mailbox_id === mailboxId && message.direction === "outbound");
   const receivedBySelectedMailbox = messages.some((message) => message.mailbox_id === mailboxId && message.direction === "inbound");
   const firstEmailChecksComplete = sentFromSelectedMailbox && receivedBySelectedMailbox;
+
+  async function saveReminder(message: EmailMessage) {
+    if (reminderSaving) return;
+    const deadline = Date.parse(reminderAtInput);
+    if (!Number.isFinite(deadline) || deadline <= Date.now() + 1000 || deadline > Date.now() + 365 * 24 * 60 * 60 * 1000) {
+      setNotice("Choose a future reminder time within the next year.");
+      return;
+    }
+
+    setReminderSaving(true);
+    setNotice("");
+    try {
+      const response = await fetch("/api/organizations/" + organizationId + "/reminders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messageId: message.id,
+          mailboxId: message.mailbox_id,
+          reminderAt: new Date(deadline).toISOString(),
+          note: reminderNoteInput,
+        }),
+      });
+      const result = await response.json() as { ok?: boolean; error?: string };
+      if (!response.ok || !result.ok) {
+        setNotice(result.error || "The follow-up reminder could not be saved.");
+        return;
+      }
+      setReminderFormOpen(false);
+      setReminderNoteInput("");
+      setNotice("Follow-up reminder saved.");
+    } catch {
+      setNotice("The follow-up reminder could not be saved. Check your connection and try again.");
+    } finally {
+      setReminderSaving(false);
+    }
+  }
 
   async function runLifecycle(messageIds: string[], action: LifecycleAction, snoozeValue?: string) {
     const ids = [...new Set(messageIds)];
@@ -1279,6 +1341,20 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
                       {selectedMessage.direction === "inbound" && <button type="button" className="mail-reader-reply" onClick={() => replyTo(selectedMessage)}>Reply <span aria-hidden="true">↶</span></button>}
                       {selectedMessage.direction === "inbound" && <button type="button" className="mail-toolbar-button" onClick={() => replyTo(selectedMessage, true)}>Reply all</button>}
                       <button type="button" className="mail-toolbar-button" onClick={() => void forwardMessage(selectedMessage)}>Forward</button>
+                      {activeView !== "Trash" && activeView !== "Spam" && (
+                        <button
+                          type="button"
+                          className="mail-toolbar-button"
+                          aria-expanded={reminderFormOpen}
+                          onClick={() => {
+                            setReminderFormOpen((current) => !current);
+                            setReminderAtInput(localDateTimeInput(new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()));
+                            setNotice("");
+                          }}
+                        >
+                          {reminderFormOpen ? "Close reminder" : "Remind me"}
+                        </button>
+                      )}
                       {activeView === "Snoozed" ? (
                         <button type="button" className="mail-toolbar-button" disabled={lifecycleBusy} onClick={() => void runLifecycle([selectedMessage.id], "unsnooze")}>Return to Inbox</button>
                       ) : activeView !== "Trash" && activeView !== "Spam" ? (
@@ -1301,6 +1377,43 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
                       <button type="button" className="mail-toolbar-button" onClick={() => router.refresh()} aria-label="Refresh message">↻</button>
                     </div>
                   </div>
+                  {reminderFormOpen && activeView !== "Trash" && activeView !== "Spam" && (
+                    <form
+                      className={styles.reminderInlineForm}
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        void saveReminder(selectedMessage);
+                      }}
+                    >
+                      <label className={styles.reminderInlineField}>
+                        <span>Remind me at</span>
+                        <input
+                          type="datetime-local"
+                          value={reminderAtInput}
+                          min={reminderPickerBounds.min}
+                          max={reminderPickerBounds.max}
+                          onChange={(event) => setReminderAtInput(event.target.value)}
+                          required
+                          disabled={reminderSaving}
+                        />
+                      </label>
+                      <label className={styles.reminderInlineField}>
+                        <span>Follow-up note <small>Optional · up to 500 characters</small></span>
+                        <textarea
+                          value={reminderNoteInput}
+                          rows={2}
+                          maxLength={500}
+                          onChange={(event) => setReminderNoteInput(event.target.value)}
+                          placeholder="What do you need to follow up on?"
+                          disabled={reminderSaving}
+                        />
+                      </label>
+                      <div className={styles.reminderInlineActions}>
+                        <button type="submit" className="mail-toolbar-button" disabled={reminderSaving}>{reminderSaving ? "Saving…" : "Save reminder"}</button>
+                        <button type="button" className="mail-toolbar-button" disabled={reminderSaving} onClick={() => setReminderFormOpen(false)}>Cancel</button>
+                      </div>
+                    </form>
+                  )}
                   <div className="mail-detail-scroll">
                     <div className="mail-reader-heading">
                       <p className="mail-overline">{selectedMessage.direction === "inbound" ? "INCOMING MESSAGE" : "SENT MESSAGE"}</p>
