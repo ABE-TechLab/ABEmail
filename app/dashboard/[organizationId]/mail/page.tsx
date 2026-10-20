@@ -125,7 +125,48 @@ export default async function WorkspaceMailPage({ params, searchParams }: MailPa
     if (error) {
       messagesError = true;
     } else {
-      const messageRows = (data ?? []) as MailRow[];
+      let messageRows = (data ?? []) as MailRow[];
+
+      // Keep snoozed messages available even when they fall outside the latest-message window.
+      // Expired deadlines remain in personal state and therefore also need to be returned to Inbox.
+      if (activeView === "Inbox" || activeView === "Snoozed") {
+        const { data: snoozedStateRows, error: snoozeStateError } = await supabase
+          .from("email_message_user_state")
+          .select("message_id, snoozed_until")
+          .eq("organization_id", organizationId)
+          .eq("user_id", user.id)
+          .in("mailbox_id", mailboxes.map((mailbox) => mailbox.id))
+          .not("snoozed_until", "is", null)
+          .order("snoozed_until", { ascending: false })
+          .limit(120);
+
+        if (snoozeStateError) {
+          messagesError = true;
+        } else {
+          const presentIds = new Set(messageRows.map((message) => message.id));
+          const extraIds = (snoozedStateRows ?? [])
+            .map((state) => state.message_id)
+            .filter((messageId) => !presentIds.has(messageId));
+
+          if (extraIds.length) {
+            const { data: retainedRows, error: retainedError } = await supabase
+              .from("email_messages")
+              .select("id, mailbox_id, direction, from_address, to_addresses, cc_addresses, reply_to_addresses, subject, body_text, body_html, status, created_at, received_at, sent_at")
+              .eq("organization_id", organizationId)
+              .in("mailbox_id", mailboxes.map((mailbox) => mailbox.id))
+              .in("id", extraIds);
+
+            if (retainedError) {
+              messagesError = true;
+            } else {
+              const combined = new Map<string, MailRow>(messageRows.map((message) => [message.id, message]));
+              for (const message of (retainedRows ?? []) as MailRow[]) combined.set(message.id, message);
+              messageRows = [...combined.values()].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+            }
+          }
+        }
+      }
+
       let stateRows: MailStateRow[] = [];
       if (messageRows.length) {
         const { data: persistedState, error: stateError } = await supabase
