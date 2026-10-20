@@ -276,6 +276,23 @@ select ok(
   'snooze state belongs to the acting mailbox member'
 );
 select is(
+  public.update_email_message_lifecycle(
+    '20000000-0000-4000-8000-000000000101',
+    '31000000-0000-4000-8000-000000000101',
+    array['60000000-0000-4000-8000-000000000102'::uuid],
+    'unsnooze'
+  ),
+  1,
+  'authorized mailbox member can manually return a message to Inbox'
+);
+select is(
+  (select snoozed_until from public.email_message_user_state
+   where user_id = '10000000-0000-4000-8000-000000000103'
+     and message_id = '60000000-0000-4000-8000-000000000102'),
+  null::timestamptz,
+  'manual return clears the per-user snooze deadline'
+);
+select is(
   (select snoozed_until from public.email_message_user_state
    where user_id = '10000000-0000-4000-8000-000000000101'
      and message_id = '60000000-0000-4000-8000-000000000102'),
