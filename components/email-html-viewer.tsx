@@ -30,7 +30,7 @@ function sanitizeAnchorTags(markup: string): string {
       "<a" +
       attributes +
       (safeHref ? ' href="' + safeHref + '"' : "") +
-      (fragmentOnly ? "" : ' target="_blank" rel="noopener noreferrer') +
+      (fragmentOnly ? "" : ' target="_blank" rel="noopener noreferrer"') +
       ">"
     );
   });
@@ -53,6 +53,10 @@ function sanitizeEmailMarkup(markup: string): string {
       )
       .replace(
         /\s+(?:srcdoc|formaction|action|ping|manifest)\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi,
+        "",
+      )
+      .replace(
+        /\s+(?:href|xlink:href)\s*=\s*(?:"\s*(?:javascript|vbscript|data|file):[^"]*"|'\s*(?:javascript|vbscript|data|file):[^']*'|\s*(?:javascript|vbscript|data|file):[^\s>]+)/gi,
         "",
       )
       .replace(
