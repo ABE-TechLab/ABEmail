@@ -83,9 +83,15 @@ type LiveMailboxProps = {
   initialMessageId?: string;
 };
 
+const plainTextCache = new WeakMap<EmailMessage, string>();
+const messagePreviewCache = new WeakMap<EmailMessage, string>();
+const messageSearchTextCache = new WeakMap<EmailMessage, string>();
+
 function plainText(message: EmailMessage): string {
-  if (message.body_text) return message.body_text;
-  return (message.body_html ?? "")
+  const cached = plainTextCache.get(message);
+  if (cached !== undefined) return cached;
+
+  const value = message.body_text || (message.body_html ?? "")
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<br\s*\/?>/gi, "\n")
@@ -98,6 +104,9 @@ function plainText(message: EmailMessage): string {
     .replace(/&#39;/gi, "'")
     .replace(/&quot;/gi, '"')
     .trim();
+
+  plainTextCache.set(message, value);
+  return value;
 }
 
 function messageDate(message: EmailMessage, timezone = "Africa/Lagos", language = "en"): string {
@@ -119,8 +128,30 @@ function localDateTimeInput(value: string): string {
 }
 
 function messagePreview(message: EmailMessage): string {
+  const cached = messagePreviewCache.get(message);
+  if (cached !== undefined) return cached;
+
   const value = plainText(message).replace(/\s+/g, " ").trim();
-  return value.length > 120 ? value.slice(0, 117) + "…" : value || "No text preview available.";
+  const preview = value.length > 120 ? value.slice(0, 117) + "…" : value || "No text preview available.";
+  messagePreviewCache.set(message, preview);
+  return preview;
+}
+
+function searchableMessageText(message: EmailMessage): string {
+  const cached = messageSearchTextCache.get(message);
+  if (cached !== undefined) return cached;
+
+  const value = [
+    message.from_address,
+    message.to_addresses.join(" "),
+    message.subject,
+    message.body_text ?? "",
+    message.body_html ?? "",
+    message.status,
+  ].join(" ").toLowerCase();
+
+  messageSearchTextCache.set(message, value);
+  return value;
 }
 
 function formatFileSize(bytes: number): string {
@@ -268,7 +299,11 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   const [notice, setNotice] = useState("");
   const [requestKey, setRequestKey] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<EmailDraft[]>([]);
+  const [draftsLoadedKey, setDraftsLoadedKey] = useState<string | null>(null);
+  const draftsLoadedKeyRef = useRef<string | null>(null);
   const [scheduledMessages, setScheduledMessages] = useState<ScheduledEmail[]>([]);
+  const [scheduledLoadedKey, setScheduledLoadedKey] = useState<string | null>(null);
+  const scheduledLoadedKeyRef = useRef<string | null>(null);
   const [scheduleMode, setScheduleMode] = useState(false);
   const [scheduledAt, setScheduledAt] = useState("");
   const [scheduledBusyId, setScheduledBusyId] = useState("");
@@ -282,6 +317,11 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   const draftUpdatedAtRef = useRef<string | null>(null);
 
 const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
+const mailboxDataKey = organizationId + ":" + mailboxId;
+const visibleDrafts = draftsLoadedKey === mailboxDataKey ? drafts : [];
+const visibleScheduledMessages = scheduledLoadedKey === mailboxDataKey ? scheduledMessages : [];
+const draftsLoading = activeView === "Drafts" && Boolean(mailboxId) && draftsLoadedKey !== mailboxDataKey;
+const scheduledLoading = activeView === "Scheduled" && Boolean(mailboxId) && scheduledLoadedKey !== mailboxDataKey;
 
   function prepareTemplatePicker() {
     setComposeTemplateId("");
@@ -401,18 +441,50 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
   useEffect(() => {
     if (activeView !== "Drafts" || !mailboxId) return;
     let active = true;
+    const dataKey = organizationId + ":" + mailboxId;
     void fetch("/api/mail/drafts?organizationId=" + encodeURIComponent(organizationId) + "&mailboxId=" + encodeURIComponent(mailboxId), { cache: "no-store" })
-      .then(async (response) => { const result = await response.json() as { drafts?: EmailDraft[]; error?: string }; if (!response.ok) throw new Error(result.error || "Drafts could not be loaded."); if (active) setDrafts(result.drafts ?? []); })
-      .catch((error: unknown) => { if (active) setNotice(error instanceof Error ? error.message : "Drafts could not be loaded."); });
+      .then(async (response) => {
+        const result = await response.json() as { drafts?: EmailDraft[]; error?: string };
+        if (!response.ok) throw new Error(result.error || "Drafts could not be loaded.");
+        if (active) {
+          setDrafts(result.drafts ?? []);
+          draftsLoadedKeyRef.current = dataKey;
+          setDraftsLoadedKey(dataKey);
+        }
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        if (draftsLoadedKeyRef.current !== dataKey) setDrafts([]);
+        draftsLoadedKeyRef.current = dataKey;
+        setDraftsLoadedKey(dataKey);
+        setNotice(error instanceof Error ? error.message : "Drafts could not be loaded.");
+      });
     return () => { active = false; };
   }, [activeView, mailboxId, organizationId]);
 
   useEffect(() => {
     if (activeView !== "Scheduled" || !mailboxId) return;
     let active = true;
-    const load = () => void fetch("/api/mail/scheduled?organizationId=" + encodeURIComponent(organizationId) + "&mailboxId=" + encodeURIComponent(mailboxId), { cache: "no-store" })
-      .then(async (response) => { const result = await response.json() as { scheduled?: ScheduledEmail[]; error?: string }; if (!response.ok) throw new Error(result.error || "Scheduled messages could not be loaded."); if (active) setScheduledMessages(result.scheduled ?? []); })
-      .catch((error: unknown) => { if (active) setNotice(error instanceof Error ? error.message : "Scheduled messages could not be loaded."); });
+    const dataKey = organizationId + ":" + mailboxId;
+    const load = () => {
+      void fetch("/api/mail/scheduled?organizationId=" + encodeURIComponent(organizationId) + "&mailboxId=" + encodeURIComponent(mailboxId), { cache: "no-store" })
+        .then(async (response) => {
+          const result = await response.json() as { scheduled?: ScheduledEmail[]; error?: string };
+          if (!response.ok) throw new Error(result.error || "Scheduled messages could not be loaded.");
+          if (active) {
+            setScheduledMessages(result.scheduled ?? []);
+            scheduledLoadedKeyRef.current = dataKey;
+            setScheduledLoadedKey(dataKey);
+          }
+        })
+        .catch((error: unknown) => {
+          if (!active) return;
+          if (scheduledLoadedKeyRef.current !== dataKey) setScheduledMessages([]);
+          scheduledLoadedKeyRef.current = dataKey;
+          setScheduledLoadedKey(dataKey);
+          setNotice(error instanceof Error ? error.message : "Scheduled messages could not be loaded.");
+        });
+    };
     load();
     const timer = window.setInterval(load, 60_000);
     return () => { active = false; window.clearInterval(timer); };
@@ -475,14 +547,7 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
                   : inSpam && !inTrash);
       if (!inFolder) return false;
       if (!term) return true;
-      return [
-        message.from_address,
-        message.to_addresses.join(" "),
-        message.subject,
-        message.body_text ?? "",
-        message.body_html ?? "",
-        message.status,
-      ].join(" ").toLowerCase().includes(term);
+      return searchableMessageText(message).includes(term);
     });
   }, [messages, mailboxId, activeView, query, snoozeNow]);
   const selectedMessage = visibleMessages.find((message) => message.id === selectedMessageId);
@@ -1249,7 +1314,7 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
             <p className={styles.firstEmailFootnote}>A sent status confirms Resend accepted a message; delivery events update its status separately. Check the recipient inbox and send a reply to verify both directions.</p>
                   </section>
                 )}
-                {activeView === "Scheduled" && scheduledMessages.filter((item) => !query || [item.to_address, item.subject, item.body_text, item.status].join(" ").toLowerCase().includes(query.toLowerCase())).map((item) => (
+                {activeView === "Scheduled" && visibleScheduledMessages.filter((item) => !query || [item.to_address, item.subject, item.body_text, item.status].join(" ").toLowerCase().includes(query.toLowerCase())).map((item) => (
                   <article className="mail-message-row" key={item.id}>
                     <span className="mail-avatar tone-slate">◷</span>
                     <div className="mail-message-copy">
@@ -1263,7 +1328,7 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
                     </div>
                   </article>
                 ))}
-                {activeView === "Drafts" && drafts.map((draft) => (
+                {activeView === "Drafts" && visibleDrafts.map((draft) => (
                   <article className="mail-message-row" key={draft.id}>
                     <button className="mail-message-open" type="button" onClick={() => openDraft(draft)} aria-label={"Edit draft " + (draft.subject || "no subject")}>
                       <span className="mail-avatar tone-slate">✎</span><span className="mail-message-copy"><span className="mail-message-row-top"><strong>{draft.to_address || "Draft recipient"}</strong><time>{new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(draft.updated_at))}</time></span><span className="mail-message-subject">{draft.subject || "(no subject)"}</span><span className="mail-message-preview">{draft.body_text.replace(/\s+/g, " ").slice(0, 120) || "No message text yet."}</span></span>
@@ -1321,10 +1386,16 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
                     </div>
                   </article>
                 ))}
-                {activeView === "Drafts" && !drafts.length && (
+                {activeView === "Drafts" && draftsLoading && !drafts.length && (
+                  <div className="mail-empty-list" role="status"><span>▧</span><strong>Loading drafts…</strong><p>Your saved drafts are being loaded.</p></div>
+                )}
+                {activeView === "Drafts" && !draftsLoading && !visibleDrafts.length && (
                   <div className="mail-empty-list"><span>▧</span><strong>No drafts yet</strong><p>Unfinished messages are saved here automatically while you compose.</p><button type="button" onClick={openCompose}>Compose a draft</button></div>
                 )}
-                {activeView === "Scheduled" && !scheduledMessages.length && (
+                {activeView === "Scheduled" && scheduledLoading && !scheduledMessages.length && (
+                  <div className="mail-empty-list" role="status"><span>◷</span><strong>Loading scheduled emails…</strong><p>Your scheduled messages are being loaded.</p></div>
+                )}
+                {activeView === "Scheduled" && !scheduledLoading && !visibleScheduledMessages.length && (
                   <div className="mail-empty-list"><span>◷</span><strong>No scheduled emails</strong><p>Emails you schedule for later will appear here.</p><button type="button" onClick={openCompose}>Compose and schedule</button></div>
                 )}
                 {activeView !== "Drafts" && activeView !== "Scheduled" && !visibleMessages.length && (
