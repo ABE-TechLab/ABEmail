@@ -244,5 +244,8 @@ begin
 end;
 $function$;
 
+revoke all on function public.update_email_message_lifecycle(uuid, uuid, uuid[], text, timestamptz) from public, anon;
+grant execute on function public.update_email_message_lifecycle(uuid, uuid, uuid[], text, timestamptz) to authenticated;
+
 comment on column public.email_message_user_state.snoozed_until is
   'Per-user snooze deadline. Messages become Inbox-visible automatically once this timestamp has passed.';
