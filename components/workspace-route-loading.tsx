@@ -1,4 +1,4 @@
-"import styles from "./workspace-route-loading.module.css";
+import styles from "./workspace-route-loading.module.css";
 
 type WorkspaceLoadingVariant = "mail" | "settings" | "feature";
 
