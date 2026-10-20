@@ -50,6 +50,35 @@ $function$;
 
 revoke all on function private.prevent_email_message_reminder_reassignment() from public, anon, authenticated;
 
+create or replace function private.validate_email_message_reminder_time()
+returns trigger
+language plpgsql
+set search_path = ''
+as $function$
+begin
+  if new.status = 'pending'
+     and (
+       tg_op = 'INSERT'
+       or new.status is distinct from old.status
+       or new.reminder_at is distinct from old.reminder_at
+     )
+     and (
+       new.reminder_at <= now()
+       or new.reminder_at > now() + interval '365 days'
+     ) then
+    raise exception 'Choose a future reminder time within one year'
+      using errcode = '22023';
+  end if;
+  return new;
+end;
+$function$;
+
+revoke all on function private.validate_email_message_reminder_time() from public, anon, authenticated;
+
+create trigger email_message_reminders_validate_time
+  before insert or update of reminder_at, status on public.email_message_reminders
+  for each row execute function private.validate_email_message_reminder_time();
+
 create trigger email_message_reminders_touch_updated_at
   before update on public.email_message_reminders
   for each row execute function private.touch_updated_at();
