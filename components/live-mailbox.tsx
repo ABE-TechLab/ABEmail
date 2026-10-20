@@ -7,6 +7,7 @@ import AppearanceToggle from "@/components/appearance-toggle";
 import styles from "./live-mailbox.module.css";
 import type { Contact } from "@/lib/contacts/types";
 import workspaceStyles from "./workspace-home.module.css";
+import EmailHtmlViewer from "@/components/email-html-viewer";
 
 const COMPACT_MESSAGE_LIST_KEY = "abemail:compact-message-list";
 const WORKSPACE_SETTINGS_KEY = "abemail:workspace-settings:";
@@ -1431,15 +1432,25 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
                       </div>
                       <time>{messageDate(selectedMessage, mailPreferences.timezone, mailPreferences.language)}</time>
                     </div>
-                    <div className="mail-message-body-card">
-                      <div className="mail-message-body">
-                        {plainText(selectedMessage).split("\n").map((line, index) => (
-                          line
-                            ? <p key={index}>{line}</p>
-                            : <div key={index} className="mail-body-spacer" />
-                        ))}
+                    {selectedMessage.body_html?.trim() ? (
+                      <div className="mail-message-body-card">
+                        <EmailHtmlViewer
+                          key={selectedMessage.id}
+                          html={selectedMessage.body_html}
+                          plainTextBody={plainText(selectedMessage)}
+                        />
                       </div>
-                    </div>
+                    ) : (
+                      <div className="mail-message-body-card">
+                        <div className="mail-message-body">
+                          {plainText(selectedMessage).split("\n").map((line, index) => (
+                            line
+                              ? <p key={index}>{line}</p>
+                              : <div key={index} className="mail-body-spacer" />
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     {messageAttachmentsLoading && <p className={styles.attachmentStatus}>Loading attachments…</p>}
                     {!messageAttachmentsLoading && visibleMessageAttachments.length > 0 && (
                       <section className={styles.attachmentPanel} aria-label="Message attachments">
