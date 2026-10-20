@@ -12,6 +12,7 @@ const COMPACT_MESSAGE_LIST_KEY = "abemail:compact-message-list";
 const WORKSPACE_SETTINGS_KEY = "abemail:workspace-settings:";
 type SavedSignature = { id: string; name: string; content: string };
 type MailboxSignaturePreference = { enabled: boolean; defaultSignatureId: string | null; signatures: SavedSignature[] };
+type SavedTemplate = { id: string; name: string; subject: string; body_text: string };
 type MailPreferences = { timezone: string; language: string; font: string; signature: string; mailboxSignatures: Record<string, MailboxSignaturePreference>; replyStyle: string; compactMessageList: boolean };
 const DEFAULT_MAIL_PREFERENCES: MailPreferences = { timezone: "Africa/Lagos", language: "en", font: "sans", signature: "", mailboxSignatures: {}, replyStyle: "reply", compactMessageList: false };
 
@@ -221,6 +222,10 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);
   const [composeSignatureId, setComposeSignatureId] = useState<string | null>(null);
+  const [savedTemplates, setSavedTemplates] = useState<SavedTemplate[]>([]);
+  const [savedTemplatesLoading, setSavedTemplatesLoading] = useState(false);
+  const [savedTemplatesError, setSavedTemplatesError] = useState("");
+  const [composeTemplateId, setComposeTemplateId] = useState("");
   const [to, setTo] = useState("");
   const [contactSuggestions, setContactSuggestions] = useState<Contact[]>([]);
   const [contactSuggestionsOpen, setContactSuggestionsOpen] = useState(false);
@@ -255,10 +260,17 @@ export default function LiveMailbox(props: LiveMailboxProps) {
 
 const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
 
+  function prepareTemplatePicker() {
+    setComposeTemplateId("");
+    setSavedTemplatesLoading(true);
+    setSavedTemplatesError("");
+  }
+
   useEffect(() => {
     if (!initialRecipient || initialRecipientHandledRef.current) return;
     initialRecipientHandledRef.current = true;
     setTo(initialRecipient);
+    prepareTemplatePicker();
     setComposeOpen(true);
     setNotice("");
     const currentUrl = new URL(window.location.href);
@@ -269,6 +281,7 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
   useEffect(() => {
     if (!initialCompose || initialComposeHandledRef.current) return;
     initialComposeHandledRef.current = true;
+    prepareTemplatePicker();
     setComposeOpen(true);
     const currentUrl = new URL(window.location.href);
     currentUrl.searchParams.delete("compose");
@@ -310,6 +323,33 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
       controller.abort();
     };
   }, [composeOpen, organizationId, recipientQuery]);
+
+  useEffect(() => {
+    if (!composeOpen) return;
+
+    let active = true;
+    const controller = new AbortController();
+    void fetch("/api/organizations/" + organizationId + "/templates", {
+      cache: "no-store",
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        const payload = await response.json() as { ok?: boolean; error?: string; templates?: SavedTemplate[] };
+        if (!response.ok || !payload.ok) throw new Error(payload.error || "Templates could not be loaded.");
+        if (active) setSavedTemplates(payload.templates ?? []);
+      })
+      .catch((error: unknown) => {
+        if (!active || (error instanceof Error && error.name === "AbortError")) return;
+        setSavedTemplates([]);
+        setSavedTemplatesError(error instanceof Error ? error.message : "Templates could not be loaded.");
+      })
+      .finally(() => { if (active) setSavedTemplatesLoading(false); });
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [composeOpen, organizationId]);
 
 
 
@@ -543,6 +583,7 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
   }
 
   function resetComposerAfterClose(attachmentsAlreadyLinked = false) {
+    setComposeTemplateId("");
     setComposeOpen(false);
     setComposeSignatureId(null);
     setContactSuggestions([]);
@@ -668,6 +709,7 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
     draftIdRef.current = null;
     draftUpdatedAtRef.current = null;
     setDraftId(null);
+    prepareTemplatePicker();
     setComposeOpen(true);
     setComposeSignatureId(null);
     setNotice("");
@@ -837,6 +879,7 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
     setBody(draft.body_text);
     setRequestKey(null);
     setNotice("");
+    prepareTemplatePicker();
     setComposeOpen(true);
     composeCursorPosition.current = draft.body_text.length;
     const params = new URLSearchParams({ organizationId, mailboxId, draftId: draft.id });
@@ -879,6 +922,7 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
     setScheduleMode(false);
     setScheduledAt("");
     composeCursorPosition.current = mailPreferences.replyStyle === "bottom" ? initialBody.length : 0;
+    prepareTemplatePicker();
     setComposeOpen(true);
   }
 
@@ -899,6 +943,7 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
     setScheduledAt("");
     setNotice("");
     composeCursorPosition.current = 0;
+    prepareTemplatePicker();
     setComposeOpen(true);
     try {
       const response = await fetch("/api/mail/attachments", {
@@ -1275,10 +1320,38 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
                     )}
                   </div>
                 </label>
-                <label className="mail-compose-field"><span>Subject</span><input required maxLength={998} disabled={busy} value={subject} onChange={(event) => { setSubject(event.target.value); setRequestKey(null); }} placeholder="Add a subject" /></label>
+                <label className="mail-compose-field">
+                  <span>Template</span>
+                  <select
+                    value={composeTemplateId}
+                    disabled={busy || savedTemplatesLoading || savedTemplates.length === 0}
+                    onChange={(event) => {
+                      const templateId = event.target.value;
+                      setComposeTemplateId(templateId);
+                      const template = savedTemplates.find((item) => item.id === templateId);
+                      if (!template) return;
+                      setSubject(template.subject);
+                      setBody(template.body_text);
+                      setRequestKey(null);
+                      composeCursorPosition.current = null;
+                    }}
+                    aria-label="Choose a saved email template"
+                  >
+                    <option value="">{savedTemplatesLoading ? "Loading templates…" : savedTemplates.length ? "Choose a template…" : "No saved templates"}</option>
+                    {savedTemplates.map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}
+                  </select>
+                </label>
+                {savedTemplatesError ? (
+                  <p className={styles.contactSuggestionsStatus} role="alert">{savedTemplatesError}</p>
+                ) : !savedTemplatesLoading && savedTemplates.length === 0 ? (
+                  <p className={styles.contactSuggestionsStatus}>No saved templates yet. Create one from Workspace → Templates.</p>
+                ) : savedTemplates.length > 0 ? (
+                  <p className={styles.contactSuggestionsStatus}>Selecting a template replaces the current subject and message.</p>
+                ) : null}
+                <label className="mail-compose-field"><span>Subject</span><input required maxLength={998} disabled={busy} value={subject} onChange={(event) => { setSubject(event.target.value); setRequestKey(null); setComposeTemplateId(""); }} placeholder="Add a subject" /></label>
                 <label className="mail-compose-body-label">
                   <span className="mail-sr-only">Message body</span>
-                  <textarea ref={composeBodyRef} required maxLength={80000} rows={8} disabled={busy} value={body} style={{ fontFamily: mailPreferences.font === "serif" ? "Georgia, serif" : mailPreferences.font === "mono" ? "ui-monospace, SFMono-Regular, Consolas, monospace" : "inherit" }} onChange={(event) => { setBody(event.target.value); setRequestKey(null); composeCursorPosition.current = null; }} placeholder="Write your message…" />
+                  <textarea ref={composeBodyRef} required maxLength={80000} rows={8} disabled={busy} value={body} style={{ fontFamily: mailPreferences.font === "serif" ? "Georgia, serif" : mailPreferences.font === "mono" ? "ui-monospace, SFMono-Regular, Consolas, monospace" : "inherit" }} onChange={(event) => { setBody(event.target.value); setRequestKey(null); composeCursorPosition.current = null; setComposeTemplateId(""); }} placeholder="Write your message…" />
                 </label>
                 {mailPreferences.mailboxSignatures[mailboxId] && (
                   <label className="mail-compose-field">
