@@ -8,7 +8,7 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3
 const ACTIONS = new Set([
   "mark_read", "mark_unread", "star", "unstar",
   "archive", "unarchive", "trash", "restore",
-  "spam", "not_spam", "permanent_delete",
+  "spam", "not_spam", "snooze", "unsnooze", "permanent_delete",
 ]);
 
 function json(body: Record<string, unknown>, status = 200) {
@@ -59,11 +59,27 @@ export async function POST(request: NextRequest) {
     return json({ error: "Select between 1 and 100 unique messages and a supported action." }, 400);
   }
 
+  let snoozedUntil: string | null = null;
+  if (input.action === "snooze") {
+    if (typeof input.snoozedUntil !== "string") {
+      return json({ error: "Choose when the message should return to your Inbox." }, 400);
+    }
+    const snoozeTime = Date.parse(input.snoozedUntil);
+    const now = Date.now();
+    if (!Number.isFinite(snoozeTime) || snoozeTime <= now || snoozeTime > now + 365 * 24 * 60 * 60 * 1000) {
+      return json({ error: "Choose a future time within the next year." }, 400);
+    }
+    snoozedUntil = new Date(snoozeTime).toISOString();
+  } else if (input.snoozedUntil !== undefined && input.snoozedUntil !== null) {
+    return json({ error: "A snooze time is only valid for the snooze action." }, 400);
+  }
+
   const { data: affected, error } = await supabase.rpc("update_email_message_lifecycle", {
     target_organization_id: input.organizationId,
     target_mailbox_id: input.mailboxId,
     target_message_ids: input.messageIds,
     lifecycle_action: input.action,
+    target_snoozed_until: snoozedUntil,
   });
 
   if (error) {
