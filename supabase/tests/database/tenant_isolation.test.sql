@@ -137,7 +137,7 @@ with deleted_reminders as (
 )
 select is((select count(*)::integer from deleted_reminders), 0, 'user cannot delete another members reminder');
 select throws_ok(
-  $insert into public.email_message_reminders (organization_id, mailbox_id, message_id, user_id, reminder_at, note)
+  $reminder_insert$ insert into public.email_message_reminders (organization_id, mailbox_id, message_id, user_id, reminder_at, note)
     values ('20000000-0000-4000-8000-000000000001', '31000000-0000-4000-8000-000000000001',
       '60000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000003',
       now() + interval '1 day', 'Impersonated reminder')$,
