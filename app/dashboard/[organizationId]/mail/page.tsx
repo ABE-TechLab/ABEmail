@@ -110,6 +110,7 @@ export default async function WorkspaceMailPage({ params, searchParams }: MailPa
     archived_at: string | null;
     trashed_at: string | null;
     spam_at: string | null;
+    snoozed_until: string | null;
   })[] = [];
   let messagesError = false;
 
