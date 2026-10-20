@@ -11,14 +11,15 @@ const MAILBOX_VIEWS = ["Inbox", "Sent", "Starred", "Drafts", "Scheduled", "Snooz
 type ActiveMailboxView = (typeof MAILBOX_VIEWS)[number];
 type MailPageProps = {
   params: Promise<{ organizationId: string }>;
-  searchParams?: Promise<{ view?: string; composeTo?: string; compose?: string }>;
+  searchParams?: Promise<{ view?: string; composeTo?: string; compose?: string; messageId?: string }>;
 };
 
 export default async function WorkspaceMailPage({ params, searchParams }: MailPageProps) {
   const { organizationId } = await params;
-  const { view, composeTo, compose } = (await searchParams) ?? {};
+  const { view, composeTo, compose, messageId: requestedMessageId } = (await searchParams) ?? {};
   const initialCompose = compose === "1";
   const initialRecipient = typeof composeTo === "string" && composeTo.length <= 254 && /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/.test(composeTo.trim()) ? composeTo.trim().toLowerCase() : undefined;
+  const initialMessageId = typeof requestedMessageId === "string" && UUID_PATTERN.test(requestedMessageId) ? requestedMessageId : undefined;
   const activeView: ActiveMailboxView = MAILBOX_VIEWS.includes(view as ActiveMailboxView) ? (view as ActiveMailboxView) : "Inbox";
   if (!UUID_PATTERN.test(organizationId)) notFound();
 
@@ -128,6 +129,21 @@ export default async function WorkspaceMailPage({ params, searchParams }: MailPa
     } else {
       let messageRows = (data ?? []) as MailRow[];
 
+      // Reminder links can reference messages outside the normal newest-60 window.
+      // Fetch the source only within this workspace and the user's mailbox scope.
+      if (initialMessageId && !messageRows.some((message) => message.id === initialMessageId)) {
+        const { data: linkedMessage, error: linkedMessageError } = await supabase
+          .from("email_messages")
+          .select("id, mailbox_id, direction, from_address, to_addresses, cc_addresses, reply_to_addresses, subject, body_text, body_html, status, created_at, received_at, sent_at")
+          .eq("organization_id", organizationId)
+          .in("mailbox_id", mailboxes.map((mailbox) => mailbox.id))
+          .eq("id", initialMessageId)
+          .maybeSingle();
+
+        if (linkedMessageError) messagesError = true;
+        if (linkedMessage) messageRows = [linkedMessage as MailRow, ...messageRows];
+      }
+
       // Keep active snoozes and recently expired messages available outside the latest-message window.
       // Inbox loads both recently expired items and the soonest upcoming deadlines so either can return visibly.
       if (activeView === "Inbox" || activeView === "Snoozed") {
@@ -225,6 +241,7 @@ export default async function WorkspaceMailPage({ params, searchParams }: MailPa
       activeView={activeView}
       initialRecipient={initialRecipient}
       initialCompose={initialCompose}
+      initialMessageId={initialMessageId}
     />
   );
 }
