@@ -52,7 +52,7 @@ export function parseCreateReminderInput(value: unknown): ParseResult<CreateRemi
   }
 
   const timestamp = parseReminderTimestamp(input.reminderAt);
-  if (timestamp.error) return { data: null, error: timestamp.error };
+  if (timestamp.data === null) return { data: null, error: timestamp.error ?? "Choose a valid reminder time." };
   const note = parseNote(input.note);
   if (note.error) return { data: null, error: note.error };
 
@@ -85,7 +85,7 @@ export function parseReminderUpdateInput(value: unknown): ParseResult<
   }
 
   const timestamp = parseReminderTimestamp(input.reminderAt);
-  if (timestamp.error) return { data: null, error: timestamp.error };
+  if (timestamp.data === null) return { data: null, error: timestamp.error ?? "Choose a valid reminder time." };
   const parsed: { action: "reschedule"; reminderAt: string; note?: string } = {
     action: "reschedule",
     reminderAt: timestamp.data,
