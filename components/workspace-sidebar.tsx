@@ -212,6 +212,12 @@ export default function WorkspaceSidebar({
                 key={item.view}
                 aria-current={active ? "page" : undefined}
                 title={item.label}
+                onClick={(event) => {
+                  if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                  event.preventDefault();
+                  window.history.pushState(null, "", itemHref);
+                  setMobileOpen(false);
+                }}
               >
                 <span className="mail-nav-icon" aria-hidden="true">{item.icon}</span>
                 <span>{item.label}</span>
