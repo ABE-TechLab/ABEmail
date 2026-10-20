@@ -399,17 +399,37 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
   }, [activeView, mailboxId, organizationId]);
 
   useEffect(() => {
-    const now = Date.now();
-    const nextDue = messages.reduce<number | null>((next, message) => {
-      if (!message.snoozed_until) return next;
-      const deadline = Date.parse(message.snoozed_until);
-      if (!Number.isFinite(deadline) || deadline <= now) return next;
-      return next === null || deadline < next ? deadline : next;
-    }, null);
-    if (nextDue === null) return;
-    const timer = window.setTimeout(() => setSnoozeNow(Date.now()), Math.max(0, nextDue - now + 100));
-    return () => window.clearTimeout(timer);
-  }, [messages, snoozeNow]);
+    let active = true;
+    let timer: number | null = null;
+
+    const scheduleNextDue = () => {
+      if (!active) return;
+      const now = Date.now();
+      const nextDue = messages.reduce<number | null>((next, message) => {
+        if (!message.snoozed_until) return next;
+        const deadline = Date.parse(message.snoozed_until);
+        if (!Number.isFinite(deadline) || deadline <= now) return next;
+        return next === null || deadline < next ? deadline : next;
+      }, null);
+      if (nextDue === null) {
+        timer = null;
+        return;
+      }
+      timer = window.setTimeout(() => {
+        setSnoozeNow(Date.now());
+        scheduleNextDue();
+      }, Math.max(0, nextDue - now + 100));
+    };
+
+    timer = window.setTimeout(() => {
+      setSnoozeNow(Date.now());
+      scheduleNextDue();
+    }, 0);
+    return () => {
+      active = false;
+      if (timer !== null) window.clearTimeout(timer);
+    };
+  }, [messages]);
 
   const visibleMessages = useMemo(() => {
     const term = query.trim().toLowerCase();
