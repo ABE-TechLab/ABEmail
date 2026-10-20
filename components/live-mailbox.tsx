@@ -1086,6 +1086,26 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
                   <strong>{selectedMessageIds.length} selected</strong>
                   <button type="button" className={styles.secondaryButton} disabled={lifecycleBusy} onClick={() => void runLifecycle(selectedMessageIds, "mark_read")}>Mark read</button>
                   <button type="button" className={styles.secondaryButton} disabled={lifecycleBusy} onClick={() => void runLifecycle(selectedMessageIds, "mark_unread")}>Mark unread</button>
+                  {activeView === "Snoozed" && (
+                    <button type="button" className={styles.secondaryButton} disabled={lifecycleBusy} onClick={() => void runLifecycle(selectedMessageIds, "unsnooze")}>Return to Inbox</button>
+                  )}
+                  {activeView !== "Trash" && activeView !== "Spam" && activeView !== "Snoozed" && (
+                    <>
+                      <label className={styles.snoozePicker}>
+                        <span>Snooze until</span>
+                        <input
+                          type="datetime-local"
+                          value={snoozeUntilInput}
+                          min={localDateTimeInput(new Date(Date.now() + 60_000).toISOString())}
+                          max={localDateTimeInput(new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString())}
+                          onChange={(event) => setSnoozeUntilInput(event.target.value)}
+                          aria-label="Snooze selected messages until"
+                          disabled={lifecycleBusy}
+                        />
+                      </label>
+                      <button type="button" className={styles.secondaryButton} disabled={lifecycleBusy || !snoozeUntilInput} onClick={() => void runLifecycle(selectedMessageIds, "snooze", snoozeUntilInput)}>Snooze</button>
+                    </>
+                  )}
                   {activeView === "Trash" ? (
                     <>
                       <button type="button" className={styles.secondaryButton} disabled={lifecycleBusy} onClick={() => void runLifecycle(selectedMessageIds, "restore")}>Restore</button>
@@ -1180,7 +1200,9 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
                       <span className="mail-message-copy">
                         <span className="mail-message-row-top">
                           <strong>{message.direction === "inbound" ? message.from_address : message.to_addresses.join(", ")}</strong>
-                          <time>{messageDate(message, mailPreferences.timezone, mailPreferences.language)}</time>
+                          <time>{activeView === "Snoozed" && message.snoozed_until
+                            ? "Returns " + new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: mailPreferences.timezone || undefined }).format(new Date(message.snoozed_until))
+                            : messageDate(message, mailPreferences.timezone, mailPreferences.language)}</time>
                         </span>
                         <span className="mail-message-subject">{message.subject || "(no subject)"}</span>
                         <span className="mail-message-preview">{messagePreview(message)}</span>
@@ -1233,6 +1255,25 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
                       {selectedMessage.direction === "inbound" && <button type="button" className="mail-reader-reply" onClick={() => replyTo(selectedMessage)}>Reply <span aria-hidden="true">↶</span></button>}
                       {selectedMessage.direction === "inbound" && <button type="button" className="mail-toolbar-button" onClick={() => replyTo(selectedMessage, true)}>Reply all</button>}
                       <button type="button" className="mail-toolbar-button" onClick={() => void forwardMessage(selectedMessage)}>Forward</button>
+                      {activeView === "Snoozed" ? (
+                        <button type="button" className="mail-toolbar-button" disabled={lifecycleBusy} onClick={() => void runLifecycle([selectedMessage.id], "unsnooze")}>Return to Inbox</button>
+                      ) : activeView !== "Trash" && activeView !== "Spam" ? (
+                        <>
+                          <label className={styles.snoozePicker}>
+                            <span>Snooze until</span>
+                            <input
+                              type="datetime-local"
+                              value={snoozeUntilInput}
+                              min={localDateTimeInput(new Date(Date.now() + 60_000).toISOString())}
+                              max={localDateTimeInput(new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString())}
+                              onChange={(event) => setSnoozeUntilInput(event.target.value)}
+                              aria-label="Snooze this message until"
+                              disabled={lifecycleBusy}
+                            />
+                          </label>
+                          <button type="button" className="mail-toolbar-button" disabled={lifecycleBusy || !snoozeUntilInput} onClick={() => void runLifecycle([selectedMessage.id], "snooze", snoozeUntilInput)}>Snooze</button>
+                        </>
+                      ) : null}
                       <button type="button" className="mail-toolbar-button" onClick={() => router.refresh()} aria-label="Refresh message">↻</button>
                     </div>
                   </div>
