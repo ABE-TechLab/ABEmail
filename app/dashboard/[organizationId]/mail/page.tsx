@@ -29,26 +29,17 @@ export default async function WorkspaceMailPage({ params, searchParams }: MailPa
     redirect("/auth/sign-in?next=" + encodeURIComponent("/dashboard/" + organizationId + "/mail"));
   }
 
-  const { data: membership, error: membershipError } = await supabase
-    .from("organization_memberships")
-    .select("organization_id, role")
-    .eq("organization_id", organizationId)
-    .eq("user_id", user.id)
-    .eq("status", "active")
-    .maybeSingle();
+  const [membershipResult, organizationResult] = await Promise.all([
+    supabase.from("organization_memberships").select("organization_id, role").eq("organization_id", organizationId).eq("user_id", user.id).eq("status", "active").maybeSingle(),
+    supabase.from("organizations").select("id, name, slug, status").eq("id", organizationId).eq("status", "active").maybeSingle(),
+  ]);
+  const { data: membership, error: membershipError } = membershipResult;
+  const { data: organization, error: organizationError } = organizationResult;
 
   if (membershipError) {
     return <section className="workspace-route-error"><h1>Mail is not ready</h1><p>Workspace membership could not be checked.</p></section>;
   }
   if (!membership) notFound();
-
-  const { data: organization, error: organizationError } = await supabase
-    .from("organizations")
-    .select("id, name, slug, status")
-    .eq("id", organizationId)
-    .eq("status", "active")
-    .maybeSingle();
-
   if (organizationError || !organization) notFound();
   const { data: mailboxRows, error: mailboxError } = await supabase
     .from("mailboxes")
