@@ -78,6 +78,7 @@ type LiveMailboxProps = {
   activeView?: ActiveMailboxView;
   initialRecipient?: string;
   initialCompose?: boolean;
+  initialMessageId?: string;
 };
 
 function plainText(message: EmailMessage): string {
@@ -127,7 +128,7 @@ function formatFileSize(bytes: number): string {
 }
 
 export default function LiveMailbox(props: LiveMailboxProps) {
-  const { organizationId, organizationName, userEmail, mailboxes, messages, messagesError, activeView = "Inbox", initialRecipient, initialCompose = false } = props;
+  const { organizationId, organizationName, userEmail, mailboxes, messages, messagesError, activeView = "Inbox", initialRecipient, initialCompose = false, initialMessageId } = props;
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [compactMessageList, setCompactMessageList] = useState(false);
@@ -470,6 +471,15 @@ const recipientQuery = to.split(/[;,]/).pop()?.trim() ?? "";
     });
   }, [messages, mailboxId, activeView, query, snoozeNow]);
   const selectedMessage = visibleMessages.find((message) => message.id === selectedMessageId);
+
+  useEffect(() => {
+    if (!initialMessageId) return;
+    const linkedMessage = messages.find((message) => message.id === initialMessageId);
+    if (!linkedMessage) return;
+    setMailboxId(linkedMessage.mailbox_id);
+    setSelectedMessageId(linkedMessage.id);
+    setMobileDetailOpen(true);
+  }, [initialMessageId, messages]);
   const selectedMailbox = mailboxes.find((mailbox) => mailbox.id === mailboxId);
 
   useEffect(() => {
