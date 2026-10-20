@@ -292,6 +292,8 @@ select is(
   null::timestamptz,
   'manual return clears the per-user snooze deadline'
 );
+select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000101', true);
+select set_config('request.jwt.claims', '{"sub":"10000000-0000-4000-8000-000000000101","role":"authenticated","email":"alice@lifecycle-a.invalid"}', true);
 select is(
   (select snoozed_until from public.email_message_user_state
    where user_id = '10000000-0000-4000-8000-000000000101'
@@ -299,6 +301,8 @@ select is(
   null::timestamptz,
   'a member snooze does not mutate the owner personal snooze state'
 );
+select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000103', true);
+select set_config('request.jwt.claims', '{"sub":"10000000-0000-4000-8000-000000000103","role":"authenticated","email":"carol@lifecycle-a.invalid"}', true);
 select is(
   (select count(*)::integer from public.email_message_user_state
    where user_id = '10000000-0000-4000-8000-000000000103'
