@@ -9,6 +9,7 @@ import {
   sendPilotEmail,
 } from "@/lib/email/resend-pilot";
 import { decryptProviderSecret, ResendProviderError, sendResendEmail } from "@/lib/email/resend-provider";
+import { renderEmailDesign, validateEmailDesignContent, type EmailDesignBrandProfile, type EmailDesignContent } from "@/lib/email-design/render.mjs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,7 +32,7 @@ export async function POST(request: NextRequest) {
   }
 
   const contentLength = Number(request.headers.get("content-length") || "0");
-  if (contentLength > 100000) return json({ error: "Message is too large for this workspace." }, 413);
+  if (contentLength > 350000) return json({ error: "Message is too large for this workspace." }, 413);
 
   const supabase = await createClient();
   const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -40,7 +41,7 @@ export async function POST(request: NextRequest) {
   let payload: unknown;
   try {
     const raw = await request.text();
-    if (raw.length > 100000) return json({ error: "Message is too large for this workspace." }, 413);
+    if (raw.length > 350000) return json({ error: "Message is too large for this workspace." }, 413);
     payload = JSON.parse(raw);
   } catch {
     return json({ error: "Enter valid message details." }, 400);
@@ -71,16 +72,26 @@ export async function POST(request: NextRequest) {
   const mailboxId = payload.mailboxId;
   const draftId = "draftId" in payload && typeof payload.draftId === "string" ? payload.draftId : null;
   const subject = payload.subject.trim();
-  const text = payload.text;
+  const submittedText = payload.text;
+  const rawDesignContent = "designContent" in payload ? payload.designContent : null;
+  let designContent: EmailDesignContent | null = null;
+  if (rawDesignContent !== null && rawDesignContent !== undefined) {
+    const parsedDesign = validateEmailDesignContent(rawDesignContent);
+    if (parsedDesign.error || !parsedDesign.data) {
+      return json({ error: parsedDesign.error || "The designed email is invalid." }, 400);
+    }
+    if (parsedDesign.data.blocks.length === 0) {
+      return json({ error: "Add at least one content block before sending a designed email." }, 400);
+    }
+    designContent = parsedDesign.data;
+  }
+  let text = submittedText;
+  let html: string | null = null;
   const recipients = Array.from(new Set(payload.to.split(/[;,]/).map((value) => value.trim().toLowerCase()).filter(Boolean)));
   const attachmentIds = "attachments" in payload && Array.isArray(payload.attachments) ? payload.attachments as string[] : [];
   if (recipients.length < 1 || recipients.length > 10 || recipients.some((address) => !EMAIL_PATTERN.test(address))) {
     return json({ error: "Enter between one and ten valid email recipients, separated by commas." }, 400);
   }
-  const fingerprint = createHash("sha256")
-    .update(JSON.stringify({ organizationId, mailboxId, recipients, subject, text, attachmentIds }), "utf8")
-    .digest("hex");
-
   const admin = createAdminClient();
   if (!admin) return json({ error: "Mail storage is not configured in this environment." }, 503);
 
@@ -167,9 +178,52 @@ export async function POST(request: NextRequest) {
     return json({ error: "Resend has not confirmed sending is enabled for this domain. Refresh domain verification in Settings." }, 409);
   }
 
+  if (designContent) {
+    // Branded designs are rendered on the server from validated blocks. Never
+    // accept HTML from the browser as the source of truth for an outbound email.
+    if (!usesWorkspaceKey) {
+      return json({ error: "Connect a workspace Resend API key before sending designed emails." }, 409);
+    }
+    const { data: brandRow, error: brandError } = await admin
+      .from("organization_brand_profiles")
+      .select("brand_name, logo_url, primary_color, accent_color, background_color, text_color, font_family, website_url, phone, address, default_footer_text, social_links")
+      .eq("organization_id", organizationId)
+      .maybeSingle();
+    if (brandError) return json({ error: "The workspace brand profile could not be loaded." }, 503);
+    const brandProfile: EmailDesignBrandProfile = brandRow ? ({
+      brandName: brandRow.brand_name,
+      logoUrl: brandRow.logo_url,
+      primaryColor: brandRow.primary_color,
+      accentColor: brandRow.accent_color,
+      backgroundColor: brandRow.background_color,
+      textColor: brandRow.text_color,
+      fontFamily: brandRow.font_family,
+      websiteUrl: brandRow.website_url,
+      phone: brandRow.phone,
+      address: brandRow.address,
+      footerText: brandRow.default_footer_text,
+      socialLinks: brandRow.social_links,
+    } as unknown as EmailDesignBrandProfile) : {};
+    const rendered = renderEmailDesign(designContent, brandProfile);
+    if (!rendered.text.trim() || rendered.text.length > 80000) {
+      return json({ error: "The designed email needs a useful plain-text message under 80 KB." }, 400);
+    }
+    if (rendered.html.length > 1000000) {
+      return json({ error: "The generated email design is too large to send. Reduce the amount of text or imagery." }, 413);
+    }
+    text = rendered.text;
+    html = rendered.html;
+  }
+
+  const fingerprint = createHash("sha256")
+    .update(JSON.stringify(designContent
+      ? { organizationId, mailboxId, recipients, subject, designContent, attachmentIds }
+      : { organizationId, mailboxId, recipients, subject, text, attachmentIds }), "utf8")
+    .digest("hex");
+
   const { data: existing, error: existingError } = await admin
     .from("email_messages")
-    .select("id, request_fingerprint, status, provider_message_id")
+    .select("id, request_fingerprint, status, provider_message_id, body_text, body_html")
     .eq("organization_id", organizationId)
     .eq("idempotency_key", idempotencyKey)
     .maybeSingle();
@@ -186,9 +240,14 @@ export async function POST(request: NextRequest) {
     if (existing.status !== "processing") {
       return json({ error: "Resend previously rejected this message. Correct the issue and retry as a new message." }, 409);
     }
-    // Reuse the same provider idempotency key after an ambiguous network failure.
-    // Resend deduplicates the retry, preventing a second delivery.
+    // Reuse both the stored render and the same provider idempotency key after
+    // an ambiguous failure. A later Brand Profile edit must not alter a retry.
     savedMessageId = existing.id;
+    if (existing.body_text !== null && existing.body_text !== undefined) text = existing.body_text;
+    html = existing.body_html ?? null;
+    if (designContent && !html) {
+      return json({ error: "The original designed email could not be restored for a safe retry. Check the message before creating a new send." }, 409);
+    }
   } else {
     const { count, error: quotaError } = await admin
       .from("email_messages")
@@ -213,6 +272,7 @@ export async function POST(request: NextRequest) {
         to_addresses: recipients,
         subject,
         body_text: text,
+        body_html: html,
         status: "processing",
         idempotency_key: idempotencyKey,
         request_fingerprint: fingerprint,
@@ -288,6 +348,7 @@ export async function POST(request: NextRequest) {
           to: recipients,
           subject,
           text,
+          ...(html ? { html } : {}),
           attachments: providerAttachments,
           idempotencyKey: organizationId + "/" + idempotencyKey,
         })

@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { validateEmailDesignContent, type EmailDesignContent } from "@/lib/email-design/render.mjs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -38,7 +39,7 @@ export async function GET(request: NextRequest) {
   const ctx = await context(request, organizationId, mailboxId);
   if ("response" in ctx) return ctx.response;
   const { data, error } = await ctx.admin.from("email_drafts")
-    .select("id, organization_id, mailbox_id, user_id, to_address, subject, body_text, created_at, updated_at")
+    .select("id, organization_id, mailbox_id, user_id, to_address, subject, body_text, design_content_json, created_at, updated_at")
     .eq("organization_id", organizationId).eq("mailbox_id", mailboxId).eq("user_id", ctx.user.id)
     .order("updated_at", { ascending: false }).limit(100);
   if (error) return json({ error: "Drafts could not be loaded. The pending Drafts migration may not be applied in this environment." }, 503);
@@ -48,7 +49,7 @@ export async function POST(request: NextRequest) {
   const origin = request.headers.get("origin");
   if (origin) { try { if (new URL(origin).origin !== new URL(request.url).origin) return json({ error: "Cross-origin request rejected." }, 403); } catch { return json({ error: "Invalid request origin." }, 403); } }
   let payload: unknown;
-  try { const raw = await request.text(); if (raw.length > 100000) return json({ error: "Draft is too large." }, 413); payload = JSON.parse(raw); } catch { return json({ error: "Invalid draft payload." }, 400); }
+  try { const raw = await request.text(); if (raw.length > 350000) return json({ error: "Draft is too large." }, 413); payload = JSON.parse(raw); } catch { return json({ error: "Invalid draft payload." }, 400); }
   if (!payload || typeof payload !== "object") return json({ error: "Invalid draft payload." }, 400);
   const p = payload as Record<string, unknown>;
   const organizationId = typeof p.organizationId === "string" ? p.organizationId : "";
@@ -61,6 +62,17 @@ export async function POST(request: NextRequest) {
   if (draftRecipients.length > 10 || draftRecipients.some((address) => !/^[^\\s@,;]+@[^\\s@,;]+\\.[^\\s@,;]+$/.test(address))) {
     return json({ error: "Enter up to ten valid email recipients, separated by commas." }, 400);
   }
+  let designContent: EmailDesignContent | null = null;
+  if (p.designContent !== null && p.designContent !== undefined) {
+    const parsedDesign = validateEmailDesignContent(p.designContent);
+    if (parsedDesign.error || !parsedDesign.data) {
+      return json({ error: parsedDesign.error || "Designed email content is invalid." }, 400);
+    }
+    if (parsedDesign.data.blocks.length === 0) {
+      return json({ error: "Add a content block before saving a designed-email draft." }, 400);
+    }
+    designContent = parsedDesign.data;
+  }
   const id = typeof p.id === "string" && UUID.test(p.id) ? p.id : null;
   const { data: existing, error: lookupError } = id ? await ctx.admin.from("email_drafts").select("id, updated_at")
     .eq("id", id).eq("organization_id", organizationId).eq("mailbox_id", mailboxId).eq("user_id", ctx.user.id).maybeSingle() : { data: null, error: null };
@@ -69,12 +81,19 @@ export async function POST(request: NextRequest) {
   if (existing && typeof p.expectedUpdatedAt === "string" && existing.updated_at !== p.expectedUpdatedAt) {
     return json({ error: "This draft changed elsewhere. Reload it before saving more edits.", conflict: true }, 409);
   }
-  const values = { organization_id: organizationId, mailbox_id: mailboxId, user_id: ctx.user.id,
-    to_address: p.to, subject: p.subject, body_text: p.text };
+  const values = {
+    organization_id: organizationId,
+    mailbox_id: mailboxId,
+    user_id: ctx.user.id,
+    to_address: p.to,
+    subject: p.subject,
+    body_text: p.text,
+    design_content_json: designContent,
+  };
   const result = existing
     ? await ctx.admin.from("email_drafts").update(values).eq("id", existing.id).eq("updated_at", existing.updated_at)
-      .select("id, to_address, subject, body_text, created_at, updated_at").maybeSingle()
-    : await ctx.admin.from("email_drafts").insert(values).select("id, to_address, subject, body_text, created_at, updated_at").single();
+      .select("id, to_address, subject, body_text, design_content_json, created_at, updated_at").maybeSingle()
+    : await ctx.admin.from("email_drafts").insert(values).select("id, to_address, subject, body_text, design_content_json, created_at, updated_at").single();
   if (result.error) return json({ error: "Draft could not be saved." }, 503);
   if (!result.data) return json({ error: "This draft changed elsewhere. Reload it before saving more edits.", conflict: true }, 409);
   return json({ ok: true, draft: result.data });

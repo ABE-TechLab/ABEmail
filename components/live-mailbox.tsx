@@ -8,6 +8,8 @@ import styles from "./live-mailbox.module.css";
 import type { Contact } from "@/lib/contacts/types";
 import workspaceStyles from "./workspace-home.module.css";
 import EmailHtmlViewer from "@/components/email-html-viewer";
+import DesignedEmailComposer from "@/components/designed-email-composer";
+import type { EmailDesignContent } from "@/lib/email-design/render.mjs";
 
 const COMPACT_MESSAGE_LIST_KEY = "abemail:compact-message-list";
 const WORKSPACE_SETTINGS_KEY = "abemail:workspace-settings:";
@@ -45,7 +47,7 @@ type Mailbox = { id: string; address: string; display_name: string | null; canMa
 type ActiveMailboxView = "Inbox" | "Sent" | "Starred" | "Drafts" | "Scheduled" | "Snoozed" | "Archive" | "Trash" | "Spam";
 const MAILBOX_VIEW_OPTIONS: readonly ActiveMailboxView[] = ["Inbox", "Sent", "Starred", "Drafts", "Scheduled", "Snoozed", "Archive", "Trash", "Spam"];
 type LifecycleAction = "mark_read" | "mark_unread" | "star" | "unstar" | "archive" | "unarchive" | "trash" | "restore" | "spam" | "not_spam" | "snooze" | "unsnooze" | "permanent_delete";
-type EmailDraft = { id: string; to_address: string; subject: string; body_text: string; created_at: string; updated_at: string };
+type EmailDraft = { id: string; to_address: string; subject: string; body_text: string; design_content_json: EmailDesignContent | null; created_at: string; updated_at: string };
 type PendingAttachment = { id: string; filename: string; content_type: string; size_bytes: number };
 type MessageAttachment = PendingAttachment & { created_at: string };
 type ScheduledEmail = { id: string; to_address: string; subject: string; body_text: string; scheduled_at: string; status: "scheduled" | "processing" | "accepted" | "failed" | "cancelled"; attempt_count: number; last_error_code: string | null; created_at: string; updated_at: string };
@@ -276,6 +278,9 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   }));
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);
+  const [composeMode, setComposeMode] = useState<"standard" | "branded">("standard");
+  const [composeDesignContent, setComposeDesignContent] = useState<EmailDesignContent | null>(null);
+  const composeDesignContentRef = useRef<EmailDesignContent | null>(null);
   const [composeSignatureId, setComposeSignatureId] = useState<string | null>(null);
   const [savedTemplates, setSavedTemplates] = useState<SavedTemplate[]>([]);
   const [savedTemplatesLoading, setSavedTemplatesLoading] = useState(false);
@@ -289,6 +294,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   const [activeContactSuggestionIndex, setActiveContactSuggestionIndex] = useState(0);
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
+  useEffect(() => { composeDesignContentRef.current = composeDesignContent; }, [composeDesignContent]);
   const [busy, setBusy] = useState(false);
   const [uploadingAttachments, setUploadingAttachments] = useState(false);
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
@@ -708,7 +714,7 @@ const scheduledLoading = activeView === "Scheduled" && Boolean(mailboxId) && sch
     }
   }
 
-  const persistDraftSnapshot = useCallback(async (toValue: string, subjectValue: string, bodyValue: string, version: number): Promise<boolean> => {
+  const persistDraftSnapshot = useCallback(async (toValue: string, subjectValue: string, bodyValue: string, version: number, designContentValue: EmailDesignContent | null = composeDesignContentRef.current): Promise<boolean> => {
     const payload = {
       organizationId,
       mailboxId,
@@ -717,6 +723,7 @@ const scheduledLoading = activeView === "Scheduled" && Boolean(mailboxId) && sch
       to: toValue,
       subject: subjectValue,
       text: bodyValue,
+      designContent: designContentValue,
     };
     const response = await fetch("/api/mail/drafts", {
       method: "POST",
@@ -759,11 +766,11 @@ const scheduledLoading = activeView === "Scheduled" && Boolean(mailboxId) && sch
     return true;
   }, [organizationId, mailboxId]);
 
-  const queueDraftSnapshot = useCallback((toValue: string, subjectValue: string, bodyValue: string, version: number): Promise<boolean> => {
+  const queueDraftSnapshot = useCallback((toValue: string, subjectValue: string, bodyValue: string, version: number, designContentValue: EmailDesignContent | null = composeDesignContentRef.current): Promise<boolean> => {
     let saved = false;
     draftSaveQueue.current = draftSaveQueue.current
       .then(async () => {
-        saved = await persistDraftSnapshot(toValue, subjectValue, bodyValue, version);
+        saved = await persistDraftSnapshot(toValue, subjectValue, bodyValue, version, designContentValue);
       })
       .catch(() => {
         if (version === draftMutationVersion.current) setNotice("Draft save failed. Keep this window open and try again.");
@@ -773,12 +780,12 @@ const scheduledLoading = activeView === "Scheduled" && Boolean(mailboxId) && sch
   }, [persistDraftSnapshot]);
 
   useEffect(() => {
-    if (!composeOpen || !mailboxId || (!draftIdRef.current && !to.trim() && !subject.trim() && !body.trim() && !pendingAttachments.length)) return;
+    if (!composeOpen || !mailboxId || (!draftIdRef.current && !to.trim() && !subject.trim() && !body.trim() && !pendingAttachments.length && !composeDesignContent?.blocks.length)) return;
     const version = ++draftMutationVersion.current;
     const timer = window.setTimeout(() => {
       draftSaveTimer.current = null;
       setDraftSaving(true);
-      void queueDraftSnapshot(to, subject, body, version).finally(() => {
+      void queueDraftSnapshot(to, subject, body, version, composeDesignContent).finally(() => {
         if (version === draftMutationVersion.current) setDraftSaving(false);
       });
     }, 650);
@@ -787,7 +794,7 @@ const scheduledLoading = activeView === "Scheduled" && Boolean(mailboxId) && sch
       window.clearTimeout(timer);
       if (draftSaveTimer.current === timer) draftSaveTimer.current = null;
     };
-  }, [composeOpen, organizationId, mailboxId, to, subject, body, draftId, pendingAttachments.length, queueDraftSnapshot]);
+  }, [composeOpen, organizationId, mailboxId, to, subject, body, draftId, pendingAttachments.length, composeDesignContent, queueDraftSnapshot]);
 
   
 
@@ -805,6 +812,9 @@ const scheduledLoading = activeView === "Scheduled" && Boolean(mailboxId) && sch
   }, [pendingAttachments, mailboxId, organizationId]);
 
   function resetComposerAfterClose(attachmentsAlreadyLinked = false) {
+    setComposeMode("standard");
+    setComposeDesignContent(null);
+    composeDesignContentRef.current = null;
     setComposeTemplateId("");
     setComposeOpen(false);
     setComposeSignatureId(null);
@@ -925,6 +935,9 @@ const scheduledLoading = activeView === "Scheduled" && Boolean(mailboxId) && sch
   }
 
   const openCompose = useCallback(() => {
+    setComposeMode("standard");
+    setComposeDesignContent(null);
+    composeDesignContentRef.current = null;
     // Open synchronously. Template loading and attachment cleanup happen after
     // the drawer is visible so the click never waits on network work.
     discardPendingAttachments();
@@ -1049,11 +1062,50 @@ const scheduledLoading = activeView === "Scheduled" && Boolean(mailboxId) && sch
     setRequestKey(stableRequestKey);
     try {
       const signature = resolveMailboxSignature(mailPreferences, mailboxId, composeSignatureId);
-      const finalBody = appendSignature(body, signature);
+      let finalBody = appendSignature(body, signature);
+      let finalDesignContent: EmailDesignContent | null = null;
+      if (composeMode === "branded") {
+        if (!composeDesignContent || composeDesignContent.blocks.length === 0) {
+          setNotice("Add at least one designed-email content block before sending.");
+          setRequestKey(null);
+          return;
+        }
+        const blocks = [...composeDesignContent.blocks];
+        if (signature) {
+          const existingFooterIndex = blocks.map((block) => block.type).lastIndexOf("footer");
+          if (existingFooterIndex >= 0) {
+            const existingFooter = blocks[existingFooterIndex];
+            if (existingFooter.type === "footer") {
+              blocks[existingFooterIndex] = { ...existingFooter, text: existingFooter.text ? existingFooter.text + "\n\n" + signature : signature };
+            }
+          } else {
+            if (blocks.length >= 100) {
+              setNotice("This design has 100 blocks. Remove a block to add your mailbox signature.");
+              setRequestKey(null);
+              return;
+            }
+            let signatureId = "abemail-signature-" + crypto.randomUUID().replaceAll("-", "");
+            while (blocks.some((block) => block.id === signatureId)) signatureId += "-1";
+            blocks.push({ id: signatureId, type: "footer", text: signature });
+          }
+        }
+        finalDesignContent = { version: 1, blocks };
+        // The server generates the authoritative HTML and text from the validated design.
+        finalBody = body.trim() || "This message was composed using a designed email.";
+      }
       const response = await fetch("/api/mail/send", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Idempotency-Key": stableRequestKey },
-        body: JSON.stringify({ organizationId, mailboxId, draftId: draftIdRef.current, to: to.trim(), subject: subject.trim(), text: finalBody, attachments: pendingAttachments.map((attachment) => attachment.id) }),
+        body: JSON.stringify({
+          organizationId,
+          mailboxId,
+          draftId: draftIdRef.current,
+          to: to.trim(),
+          subject: subject.trim(),
+          text: finalBody,
+          ...(finalDesignContent ? { designContent: finalDesignContent } : {}),
+          attachments: pendingAttachments.map((attachment) => attachment.id),
+        }),
       });
       const result = await response.json() as { ok?: boolean; error?: string; note?: string };
       if (!response.ok || !result.ok) {
@@ -1107,6 +1159,10 @@ const scheduledLoading = activeView === "Scheduled" && Boolean(mailboxId) && sch
     setComposeSignatureId(null);
     setSubject(draft.subject);
     setBody(draft.body_text);
+    setComposeDesignContent(draft.design_content_json ?? null);
+    composeDesignContentRef.current = draft.design_content_json ?? null;
+    setComposeMode(draft.design_content_json ? "branded" : "standard");
+    setScheduleMode(false);
     setRequestKey(null);
     setNotice("");
     prepareTemplatePicker();
@@ -1658,39 +1714,72 @@ const scheduledLoading = activeView === "Scheduled" && Boolean(mailboxId) && sch
                     )}
                   </div>
                 </label>
-                <label className="mail-compose-field">
-                  <span>Template</span>
-                  <select
-                    value={composeTemplateId}
-                    disabled={busy || savedTemplatesLoading || savedTemplates.length === 0}
-                    onChange={(event) => {
-                      const templateId = event.target.value;
-                      setComposeTemplateId(templateId);
-                      const template = savedTemplates.find((item) => item.id === templateId);
-                      if (!template) return;
-                      setSubject(template.subject);
-                      setBody(template.body_text);
+                <div className={styles.composeModeSwitch} role="tablist" aria-label="Email composition mode">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={composeMode === "standard"}
+                    className={composeMode === "standard" ? styles.composeModeButtonActive : styles.composeModeButton}
+                    disabled={busy}
+                    onClick={() => { setComposeMode("standard"); setScheduleMode(false); }}
+                  >Standard email</button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={composeMode === "branded"}
+                    className={composeMode === "branded" ? styles.composeModeButtonActive : styles.composeModeButton}
+                    disabled={busy}
+                    onClick={() => { setComposeMode("branded"); setScheduleMode(false); setComposeTemplateId(""); setRequestKey(null); }}
+                  >Designed email</button>
+                </div>
+                {composeMode === "standard" ? <>
+                  <label className="mail-compose-field">
+                    <span>Text snippet</span>
+                    <select
+                      value={composeTemplateId}
+                      disabled={busy || savedTemplatesLoading || savedTemplates.length === 0}
+                      onChange={(event) => {
+                        const templateId = event.target.value;
+                        setComposeTemplateId(templateId);
+                        const template = savedTemplates.find((item) => item.id === templateId);
+                        if (!template) return;
+                        setSubject(template.subject);
+                        setBody(template.body_text);
+                        setRequestKey(null);
+                        composeCursorPosition.current = null;
+                      }}
+                      aria-label="Choose a saved text snippet"
+                    >
+                      <option value="">{savedTemplatesLoading ? "Loading snippets…" : savedTemplates.length ? "Choose a snippet…" : "No saved snippets"}</option>
+                      {savedTemplates.map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}
+                    </select>
+                  </label>
+                  {savedTemplatesError ? (
+                    <p className={styles.contactSuggestionsStatus} role="alert">{savedTemplatesError}</p>
+                  ) : !savedTemplatesLoading && savedTemplates.length === 0 ? (
+                    <p className={styles.contactSuggestionsStatus}>No text snippets yet. Create one from Workspace → Templates.</p>
+                  ) : savedTemplates.length > 0 ? (
+                    <p className={styles.contactSuggestionsStatus}>Selecting a snippet replaces the current subject and message.</p>
+                  ) : null}
+                </> : (
+                  <DesignedEmailComposer
+                    organizationId={organizationId}
+                    value={composeDesignContent}
+                    disabled={busy}
+                    onChange={(change) => {
+                      setComposeDesignContent(change.content);
+                      composeDesignContentRef.current = change.content;
+                      if (change.subject !== undefined) setSubject(change.subject);
+                      setBody(change.text);
                       setRequestKey(null);
-                      composeCursorPosition.current = null;
                     }}
-                    aria-label="Choose a saved email template"
-                  >
-                    <option value="">{savedTemplatesLoading ? "Loading templates…" : savedTemplates.length ? "Choose a template…" : "No saved templates"}</option>
-                    {savedTemplates.map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}
-                  </select>
-                </label>
-                {savedTemplatesError ? (
-                  <p className={styles.contactSuggestionsStatus} role="alert">{savedTemplatesError}</p>
-                ) : !savedTemplatesLoading && savedTemplates.length === 0 ? (
-                  <p className={styles.contactSuggestionsStatus}>No saved templates yet. Create one from Workspace → Templates.</p>
-                ) : savedTemplates.length > 0 ? (
-                  <p className={styles.contactSuggestionsStatus}>Selecting a template replaces the current subject and message.</p>
-                ) : null}
-                <label className="mail-compose-field"><span>Subject</span><input required maxLength={998} disabled={busy} value={subject} onChange={(event) => { setSubject(event.target.value); setRequestKey(null); setComposeTemplateId(""); }} placeholder="Add a subject" /></label>
-                <label className="mail-compose-body-label">
+                  />
+                )}
+                <label className="mail-compose-field"><span>Subject</span><input required maxLength={998} disabled={busy} value={subject} onChange={(event) => { setSubject(event.target.value); setRequestKey(null); if (composeMode === "standard") setComposeTemplateId(""); }} placeholder="Add a subject" /></label>
+                {composeMode === "standard" && <label className="mail-compose-body-label">
                   <span className="mail-sr-only">Message body</span>
                   <textarea ref={composeBodyRef} required maxLength={80000} rows={8} disabled={busy} value={body} style={{ fontFamily: mailPreferences.font === "serif" ? "Georgia, serif" : mailPreferences.font === "mono" ? "ui-monospace, SFMono-Regular, Consolas, monospace" : "inherit" }} onChange={(event) => { setBody(event.target.value); setRequestKey(null); composeCursorPosition.current = null; setComposeTemplateId(""); }} placeholder="Write your message…" />
-                </label>
+                </label>}
                 {mailPreferences.mailboxSignatures[mailboxId] && (
                   <label className="mail-compose-field">
                     <span>Signature</span>
@@ -1706,7 +1795,7 @@ const scheduledLoading = activeView === "Scheduled" && Boolean(mailboxId) && sch
                     </select>
                   </label>
                 )}
-                <p className="mail-compose-warning"><span>i</span> Plain-text email · Up to 10 recipients separated by commas · Attachments up to 4 MB each / 20 MB total · {draftSaving ? "Saving draft…" : draftId ? "Draft saved" : "Changes save automatically"}</p>
+                <p className="mail-compose-warning"><span>i</span> {composeMode === "branded" ? "Branded HTML + plain-text alternative" : "Plain-text email"} · Up to 10 recipients separated by commas · Attachments up to 4 MB each / 20 MB total · {draftSaving ? "Saving draft…" : draftId ? "Draft saved" : "Changes save automatically"}</p>
                 {!scheduleMode && (
                   <section className={styles.composeAttachments} aria-label="Compose attachments">
                     <input ref={attachmentInputRef} className={styles.fileInput} type="file" multiple disabled={busy || uploadingAttachments || !mailboxId} onChange={(event) => void uploadSelectedFiles(event.currentTarget.files)} aria-label="Choose attachment files" />
@@ -1728,7 +1817,7 @@ const scheduledLoading = activeView === "Scheduled" && Boolean(mailboxId) && sch
                 )}
                 {scheduleMode && <label className="mail-compose-field"><span>Send at</span><input type="datetime-local" required value={scheduledAt} onChange={(event) => setScheduledAt(event.target.value)} disabled={busy} /></label>}
                 <footer className="mail-compose-footer">
-                  {scheduleMode ? <button type="button" className="mail-primary-action" disabled={busy || uploadingAttachments || !mailboxId || !scheduledAt || pendingAttachments.length > 0 || to.split(/[;,]/).map((value) => value.trim()).filter(Boolean).length !== 1} onClick={() => void scheduleMessage()}>{busy ? "Scheduling…" : "Schedule email"} <span>◷</span></button> : <><button type="submit" className="mail-primary-action" disabled={busy || uploadingAttachments || !mailboxId}>{busy ? "Sending…" : "Send"} <span>↗</span></button><button type="button" className="mail-compose-discard" disabled={busy || uploadingAttachments || pendingAttachments.length > 0 || to.split(/[;,]/).map((value) => value.trim()).filter(Boolean).length !== 1} title={pendingAttachments.length > 0 ? "Remove attachments before scheduling" : "Scheduling currently supports one recipient"} onClick={() => { setScheduleMode(true); const date = new Date(Date.now() + 60 * 60 * 1000); date.setMinutes(date.getMinutes() - date.getTimezoneOffset()); setScheduledAt(date.toISOString().slice(0, 16)); }}>Schedule</button></>}
+                  {scheduleMode ? <button type="button" className="mail-primary-action" disabled={busy || uploadingAttachments || !mailboxId || !scheduledAt || pendingAttachments.length > 0 || to.split(/[;,]/).map((value) => value.trim()).filter(Boolean).length !== 1} onClick={() => void scheduleMessage()}>{busy ? "Scheduling…" : "Schedule email"} <span>◷</span></button> : <><button type="submit" className="mail-primary-action" disabled={busy || uploadingAttachments || !mailboxId}>{busy ? "Sending…" : "Send"} <span>↗</span></button>{composeMode === "standard" && <button type="button" className="mail-compose-discard" disabled={busy || uploadingAttachments || pendingAttachments.length > 0 || to.split(/[;,]/).map((value) => value.trim()).filter(Boolean).length !== 1} title={pendingAttachments.length > 0 ? "Remove attachments before scheduling" : "Scheduling currently supports one recipient"} onClick={() => { setScheduleMode(true); const date = new Date(Date.now() + 60 * 60 * 1000); date.setMinutes(date.getMinutes() - date.getTimezoneOffset()); setScheduledAt(date.toISOString().slice(0, 16)); }}>Schedule</button>}</>}
                   <button type="button" className="mail-compose-discard" onClick={() => void closeComposer()} disabled={busy}>Close</button>
                 </footer>
               </form>
