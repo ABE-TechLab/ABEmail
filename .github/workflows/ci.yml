@@ -33,6 +33,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Check email design renderer
+        run: npm run test:email-design
+
       - name: Verify workspace navigation contract
         run: npm run check:navigation
 

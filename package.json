@@ -12,6 +12,7 @@
     "start": "next start",
     "lint": "eslint .",
     "check:navigation": "node scripts/check-workspace-navigation.mjs",
+    "test:email-design": "node --test lib/email-design/render.test.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
