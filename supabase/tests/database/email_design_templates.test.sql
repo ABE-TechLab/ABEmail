@@ -57,6 +57,15 @@ with updated as (
 )
 select is((select count(*)::integer from updated), 1, 'organization owner can update brand defaults');
 
+select throws_ok(
+  $unsafe_logo$ update public.organization_brand_profiles
+    set logo_url = 'http://assets.example.com/logo.png'
+    where organization_id = '92000000-0000-4000-8000-000000000001'$unsafe_logo$,
+  '23514',
+  null,
+  'brand profile rejects non-HTTPS logo URLs'
+);
+
 select set_config('request.jwt.claim.sub', '91000000-0000-4000-8000-000000000002', true);
 select set_config('request.jwt.claims', '{"sub":"91000000-0000-4000-8000-000000000002","role":"authenticated","email":"design-member@tenant-a.invalid"}', true);
 
@@ -106,15 +115,6 @@ select throws_ok(
   'P0001',
   'Email design tenant is immutable',
   'creator cannot reassign a design to another tenant'
-);
-
-select throws_ok(
-  $unsafe_logo$ update public.organization_brand_profiles
-    set logo_url = 'http://assets.example.com/logo.png'
-    where organization_id = '92000000-0000-4000-8000-000000000001'$unsafe_logo$,
-  '23514',
-  null,
-  'brand profile rejects non-HTTPS logo URLs'
 );
 
 select set_config('request.jwt.claim.sub', '91000000-0000-4000-8000-000000000003', true);
