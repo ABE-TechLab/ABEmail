@@ -9,7 +9,7 @@ insert into auth.users (
 ) values
   ('91000000-0000-4000-8000-000000000001', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'design-owner@tenant-a.invalid', 'test-only', now(), '{}'::jsonb, '{}'::jsonb, now(), now()),
   ('91000000-0000-4000-8000-000000000002', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'design-member@tenant-a.invalid', 'test-only', now(), '{}'::jsonb, '{}'::jsonb, now(), now()),
-  ('91000000-0000-4000-8000-000000000003', '00000000-0000-4000-8000-000000000000', 'authenticated', 'authenticated', 'design-outsider@tenant-b.invalid', 'test-only', now(), '{}'::jsonb, '{}'::jsonb, now(), now())
+  ('91000000-0000-4000-8000-000000000003', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'design-outsider@tenant-b.invalid', 'test-only', now(), '{}'::jsonb, '{}'::jsonb, now(), now())
 on conflict (id) do nothing;
 
 insert into public.organizations (id, name, slug, status, created_by) values
@@ -76,6 +76,14 @@ with changed as (
   returning id
 )
 select is((select count(*)::integer from changed), 0, 'members cannot edit another member design');
+
+select throws_ok(
+  $malformed_design$ insert into public.email_design_templates (organization_id, name, content_json)
+    values ('92000000-0000-4000-8000-000000000001', 'Missing block list', '{"version":1}'::jsonb)$malformed_design$,
+  '23514',
+  null,
+  'database rejects a design without a block list'
+);
 
 select lives_ok(
   $design_insert$ insert into public.email_design_templates (id, organization_id, name, subject, content_json)

@@ -15,7 +15,7 @@ create table public.organization_brand_profiles (
   phone text check (phone is null or char_length(phone) <= 80),
   address text check (address is null or char_length(address) <= 1000),
   social_links jsonb not null default '[]'::jsonb
-    check (jsonb_typeof(social_links) = 'array' and jsonb_array_length(social_links) <= 8),
+    check (case when jsonb_typeof(social_links) = 'array' then jsonb_array_length(social_links) <= 8 else false end),
   updated_by uuid references auth.users(id) on delete set null default auth.uid(),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -35,9 +35,13 @@ create table public.email_design_templates (
   updated_at timestamptz not null default now(),
   check (
     jsonb_typeof(content_json) = 'object'
+    and content_json ? 'version'
+    and content_json ? 'blocks'
     and content_json ->> 'version' = schema_version::text
-    and jsonb_typeof(content_json -> 'blocks') = 'array'
-    and jsonb_array_length(content_json -> 'blocks') <= 100
+    and case when jsonb_typeof(content_json -> 'blocks') = 'array'
+      then jsonb_array_length(content_json -> 'blocks') <= 100
+      else false
+    end
     and pg_column_size(content_json) <= 262144
   )
 );
@@ -79,7 +83,9 @@ language plpgsql
 set search_path = ''
 as $function$
 begin
-  new.updated_at := now();
+  if tg_op = 'UPDATE' then
+    new.updated_at := now();
+  end if;
   if (select auth.uid()) is not null then
     new.updated_by := (select auth.uid());
   end if;
@@ -92,13 +98,13 @@ revoke all on function private.prevent_email_design_creator_reassignment() from 
 revoke all on function private.touch_email_design_updated_at() from public, anon, authenticated;
 
 create trigger organization_brand_profiles_touch_updated_at
-  before update on public.organization_brand_profiles
+  before insert or update on public.organization_brand_profiles
   for each row execute function private.touch_email_design_updated_at();
 create trigger organization_brand_profiles_prevent_tenant_reassignment
   before update of organization_id on public.organization_brand_profiles
   for each row execute function private.prevent_email_design_tenant_reassignment();
 create trigger email_design_templates_touch_updated_at
-  before update on public.email_design_templates
+  before insert or update on public.email_design_templates
   for each row execute function private.touch_email_design_updated_at();
 create trigger email_design_templates_prevent_tenant_reassignment
   before update of organization_id on public.email_design_templates
