@@ -400,7 +400,7 @@ export default function DesignedEmailManager({ organizationId }: { organizationI
         {block.type === "logo" && (
           <>
             {textField("Logo URL (optional)", block.src ?? "", (value) => edit((current) => current.type === "logo" ? { ...current, src: value || null } : current), { placeholder: "https://…" })}
-            {textField("Alternative text", block.alt, (value) => edit((current) => current.type === "logo" ? { ...current, alt: value } : current), { maxLength: 250 })}
+            {textField("Alternative text", block.alt ?? "", (value) => edit((current) => current.type === "logo" ? { ...current, alt: value } : current), { maxLength: 250 })}
             <label className={styles.inlineField}><span>Width (px)</span><input type="number" min={48} max={320} value={block.width} onChange={(event) => edit((current) => current.type === "logo" ? { ...current, width: Number(event.target.value) } : current)} /></label>
           </>
         )}
@@ -408,7 +408,7 @@ export default function DesignedEmailManager({ organizationId }: { organizationI
         {block.type === "image" && (
           <>
             {textField("Image URL", block.src, (value) => edit((current) => current.type === "image" ? { ...current, src: value } : current), { placeholder: "https://…" })}
-            {textField("Alternative text", block.alt, (value) => edit((current) => current.type === "image" ? { ...current, alt: value } : current), { maxLength: 500 })}
+            {textField("Alternative text", block.alt ?? "", (value) => edit((current) => current.type === "image" ? { ...current, alt: value } : current), { maxLength: 500 })}
             <label className={styles.inlineField}><span>Width (px)</span><input type="number" min={80} max={600} value={block.width} onChange={(event) => edit((current) => current.type === "image" ? { ...current, width: Number(event.target.value) } : current)} /></label>
           </>
         )}
