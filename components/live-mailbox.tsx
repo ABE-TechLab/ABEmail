@@ -335,21 +335,25 @@ const scheduledLoading = activeView === "Scheduled" && Boolean(mailboxId) && sch
     // the same Compose link can be selected again after the drawer is closed.
     if (!composeRequested && !requestedComposeTo) return;
 
-    if (requestedComposeTo) {
-      const normalizedRecipient = requestedComposeTo.trim().toLowerCase();
-      const validRecipient = normalizedRecipient.length <= 254 &&
-        /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/.test(normalizedRecipient);
-      if (validRecipient) setTo(normalizedRecipient);
-    }
+    const frame = window.requestAnimationFrame(() => {
+      if (requestedComposeTo) {
+        const normalizedRecipient = requestedComposeTo.trim().toLowerCase();
+        const validRecipient = normalizedRecipient.length <= 254 &&
+          /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/.test(normalizedRecipient);
+        if (validRecipient) setTo(normalizedRecipient);
+      }
 
-    prepareTemplatePicker();
-    setComposeOpen(true);
-    setNotice("");
+      prepareTemplatePicker();
+      setComposeOpen(true);
+      setNotice("");
 
-    const currentUrl = new URL(window.location.href);
-    currentUrl.searchParams.delete("compose");
-    currentUrl.searchParams.delete("composeTo");
-    router.replace(currentUrl.pathname + currentUrl.search, { scroll: false });
+      const currentUrl = new URL(window.location.href);
+      currentUrl.searchParams.delete("compose");
+      currentUrl.searchParams.delete("composeTo");
+      router.replace(currentUrl.pathname + currentUrl.search, { scroll: false });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
   }, [composeRequested, requestedComposeTo, router]);
 
   useEffect(() => {
