@@ -1084,7 +1084,8 @@ const scheduledLoading = activeView === "Scheduled" && Boolean(mailboxId) && sch
               setRequestKey(null);
               return;
             }
-            let signatureId = "abemail-signature-" + crypto.randomUUID().replaceAll("-", "");
+            // Keep this block ID stable when the same idempotency key is retried.
+            let signatureId = "abemail-signature-" + stableRequestKey.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 60);
             while (blocks.some((block) => block.id === signatureId)) signatureId += "-1";
             blocks.push({ id: signatureId, type: "footer", text: signature });
           }
