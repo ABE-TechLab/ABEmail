@@ -5,7 +5,6 @@ import { validateEmailDesignContent, EMAIL_DESIGN_SCHEMA_VERSION } from "@/lib/e
 export const dynamic = "force-dynamic";
 
 type RouteContext = { params: Promise<{ organizationId: string }> };
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const FIELDS = "id, organization_id, created_by, updated_by, name, subject, description, schema_version, content_json, created_at, updated_at";
 const MAX_DESIGNS_PER_ORGANIZATION = 100;
 
