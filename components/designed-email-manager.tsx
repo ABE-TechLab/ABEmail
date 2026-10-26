@@ -435,7 +435,7 @@ export default function DesignedEmailManager({ organizationId }: { organizationI
         {block.type === "contact" && (
           <>
             {textField("Email address", block.email ?? "", (value) => edit((current) => current.type === "contact" ? { ...current, email: value } : current), { type: "email" })}
-            {textField("Phone", block.phone ?? "", (value) => edit((current) => current.type === "contact" ? { ...current, phone: value } : current })}
+            {textField("Phone", block.phone ?? "", (value) => edit((current) => current.type === "contact" ? { ...current, phone: value } : current))}
             {textField("Website URL", block.websiteUrl ?? "", (value) => edit((current) => current.type === "contact" ? { ...current, websiteUrl: value } : current), { placeholder: "https://…" })}
             {textField("Address", block.address ?? "", (value) => edit((current) => current.type === "contact" ? { ...current, address: value } : current), { multiline: true, maxLength: 1000 })}
           </>
