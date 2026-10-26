@@ -24,6 +24,7 @@ export type EmailDesignBrandProfile = {
   websiteUrl?: string | null;
   phone?: string;
   address?: string;
+  footerText?: string;
   socialLinks?: Array<{ label: string; href: string }>;
 };
 

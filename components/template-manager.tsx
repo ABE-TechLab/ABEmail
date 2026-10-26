@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState, type FormEvent } from "react";
 import styles from "./template-manager.module.css";
+import DesignedEmailManager from "@/components/designed-email-manager";
 
 type EmailTemplate = {
   id: string;
@@ -43,6 +44,7 @@ export default function TemplateManager({ organizationId }: { organizationId: st
   const [deleting, setDeleting] = useState(false);
   const [formError, setFormError] = useState("");
   const [notice, setNotice] = useState("");
+  const [activeTab, setActiveTab] = useState<"snippets" | "designed">("snippets");
 
   useEffect(() => {
     let active = true;
@@ -165,11 +167,29 @@ export default function TemplateManager({ organizationId }: { organizationId: st
           <div>
             <p className={styles.kicker}>WORKSPACE · PRODUCTIVITY</p>
             <h1>Email templates</h1>
-            <p className={styles.description}>Create reusable messages for customer replies, quotes, payment follow-ups, and everyday business email.</p>
+            <p className={styles.description}>Save quick text snippets or build polished branded emails with reusable visual blocks.</p>
           </div>
-          <button className={styles.primaryButton} type="button" onClick={startNew}>＋ New template</button>
+          {activeTab === "snippets" && <button className={styles.primaryButton} type="button" onClick={startNew}>＋ New snippet</button>}
         </header>
 
+        <div className={styles.tabs} role="tablist" aria-label="Template types">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "snippets"}
+            className={activeTab === "snippets" ? styles.tabActive : styles.tab}
+            onClick={() => setActiveTab("snippets")}
+          >Text snippets</button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "designed"}
+            className={activeTab === "designed" ? styles.tabActive : styles.tab}
+            onClick={() => setActiveTab("designed")}
+          >Designed emails</button>
+        </div>
+
+        {activeTab === "snippets" ? <>
         <div className={styles.layout}>
           <section className={styles.panel} aria-labelledby="template-library-heading">
             <header className={styles.panelHeader}>
@@ -271,7 +291,8 @@ export default function TemplateManager({ organizationId }: { organizationId: st
           </section>
         </div>
 
-        <p className={styles.footerNote}>Templates are limited to 100 per user and workspace. Branded layouts, saved brand profiles, and visual block editing remain part of the separate branded-email designer work tracked in the roadmap.</p>
+        <p className={styles.footerNote}>Text snippets are private to your account. Designed emails are shared with active workspace members and use the Brand Profile under Settings.</p>
+        </> : <DesignedEmailManager organizationId={organizationId} />}
       </div>
     </div>
   );
