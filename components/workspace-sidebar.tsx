@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import SignOutButton from "@/components/auth/sign-out-button";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 const mailboxLinks = [
@@ -56,12 +56,19 @@ export default function WorkspaceSidebar({
   showWorkspaceLinks = true,
 }: WorkspaceSidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const requestedMailboxView = searchParams.get("view");
   const currentMailboxView = mailboxLinks.find((item) => item.view === requestedMailboxView)?.view ?? "Inbox";
   const [collapsed, setCollapsed] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  useEffect(() => {
+    // Warm the mailbox route while the user is working elsewhere in the
+    // workspace. This helps the sidebar Compose action reach its drawer sooner.
+    router.prefetch(composeHref);
+  }, [router, composeHref]);
 
   useEffect(() => {
     let active = true;
@@ -192,7 +199,21 @@ export default function WorkspaceSidebar({
           <span aria-hidden="true">›</span>
         </button>
       ) : (
-        <Link className="mail-compose-button" href={composeHref} title="Compose">
+        <Link
+          className="mail-compose-button"
+          href={composeHref}
+          title="Compose"
+          onClick={(event) => {
+            if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+            // The mailbox is already mounted in this case: open the drawer directly
+            // instead of navigating and waiting for the URL-driven compose effect.
+            if (pathname === mailboxBaseHref) {
+              event.preventDefault();
+              window.dispatchEvent(new Event("abemail:compose"));
+              setMobileOpen(false);
+            }
+          }}
+        >
           <span className="compose-plus" aria-hidden="true">＋</span><span className="mail-compose-label">Compose</span>
         </Link>
       )}

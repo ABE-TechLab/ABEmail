@@ -11,6 +11,7 @@ import EmailHtmlViewer from "@/components/email-html-viewer";
 
 const COMPACT_MESSAGE_LIST_KEY = "abemail:compact-message-list";
 const WORKSPACE_SETTINGS_KEY = "abemail:workspace-settings:";
+const SAVED_TEMPLATE_CACHE_MS = 60_000;
 type SavedSignature = { id: string; name: string; content: string };
 type MailboxSignaturePreference = { enabled: boolean; defaultSignatureId: string | null; signatures: SavedSignature[] };
 type SavedTemplate = { id: string; name: string; subject: string; body_text: string };
@@ -279,6 +280,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   const [savedTemplates, setSavedTemplates] = useState<SavedTemplate[]>([]);
   const [savedTemplatesLoading, setSavedTemplatesLoading] = useState(false);
   const [savedTemplatesError, setSavedTemplatesError] = useState("");
+  const savedTemplatesLoadedAtRef = useRef<number | null>(null);
   const [composeTemplateId, setComposeTemplateId] = useState("");
   const [to, setTo] = useState("");
   const [contactSuggestions, setContactSuggestions] = useState<Contact[]>([]);
@@ -323,11 +325,13 @@ const visibleScheduledMessages = scheduledLoadedKey === mailboxDataKey ? schedul
 const draftsLoading = activeView === "Drafts" && Boolean(mailboxId) && draftsLoadedKey !== mailboxDataKey;
 const scheduledLoading = activeView === "Scheduled" && Boolean(mailboxId) && scheduledLoadedKey !== mailboxDataKey;
 
-  function prepareTemplatePicker() {
+  const prepareTemplatePicker = useCallback(() => {
     setComposeTemplateId("");
-    setSavedTemplatesLoading(true);
+    const lastLoaded = savedTemplatesLoadedAtRef.current;
+    const cacheIsFresh = lastLoaded !== null && Date.now() - lastLoaded < SAVED_TEMPLATE_CACHE_MS;
+    setSavedTemplatesLoading(!cacheIsFresh);
     setSavedTemplatesError("");
-  }
+  }, []);
 
   useEffect(() => {
     // Treat compose URL parameters as repeatable requests rather than one-time
@@ -354,7 +358,7 @@ const scheduledLoading = activeView === "Scheduled" && Boolean(mailboxId) && sch
     });
 
     return () => window.cancelAnimationFrame(frame);
-  }, [composeRequested, requestedComposeTo, router]);
+  }, [composeRequested, requestedComposeTo, router, prepareTemplatePicker]);
 
   useEffect(() => {
     if (!composeOpen || !recipientQuery) return;
@@ -395,6 +399,12 @@ const scheduledLoading = activeView === "Scheduled" && Boolean(mailboxId) && sch
   useEffect(() => {
     if (!composeOpen) return;
 
+    const lastLoaded = savedTemplatesLoadedAtRef.current;
+    if (lastLoaded !== null && Date.now() - lastLoaded < SAVED_TEMPLATE_CACHE_MS) {
+      setSavedTemplatesLoading(false);
+      return;
+    }
+
     let active = true;
     const controller = new AbortController();
     void fetch("/api/organizations/" + organizationId + "/templates", {
@@ -404,11 +414,15 @@ const scheduledLoading = activeView === "Scheduled" && Boolean(mailboxId) && sch
       .then(async (response) => {
         const payload = await response.json() as { ok?: boolean; error?: string; templates?: SavedTemplate[] };
         if (!response.ok || !payload.ok) throw new Error(payload.error || "Templates could not be loaded.");
-        if (active) setSavedTemplates(payload.templates ?? []);
+        if (active) {
+          setSavedTemplates(payload.templates ?? []);
+          savedTemplatesLoadedAtRef.current = Date.now();
+          setSavedTemplatesError("");
+        }
       })
       .catch((error: unknown) => {
         if (!active || (error instanceof Error && error.name === "AbortError")) return;
-        setSavedTemplates([]);
+        savedTemplatesLoadedAtRef.current = null;
         setSavedTemplatesError(error instanceof Error ? error.message : "Templates could not be loaded.");
       })
       .finally(() => { if (active) setSavedTemplatesLoading(false); });
@@ -777,16 +791,18 @@ const scheduledLoading = activeView === "Scheduled" && Boolean(mailboxId) && sch
 
   
 
-  function discardPendingAttachments() {
+  const discardPendingAttachments = useCallback(() => {
     const pending = [...pendingAttachments];
+    pendingAttachmentsRef.current = [];
     setPendingAttachments([]);
     if (!pending.length || !mailboxId) return;
+    // Cleanup runs in the background; it must not delay opening the composer.
     void Promise.all(pending.map((attachment) => fetch(
       "/api/mail/attachments?organizationId=" + encodeURIComponent(organizationId) +
       "&mailboxId=" + encodeURIComponent(mailboxId) + "&id=" + encodeURIComponent(attachment.id),
       { method: "DELETE" },
     ).catch(() => null)));
-  }
+  }, [pendingAttachments, mailboxId, organizationId]);
 
   function resetComposerAfterClose(attachmentsAlreadyLinked = false) {
     setComposeTemplateId("");
@@ -908,7 +924,9 @@ const scheduledLoading = activeView === "Scheduled" && Boolean(mailboxId) && sch
     }
   }
 
-  function openCompose() {
+  const openCompose = useCallback(() => {
+    // Open synchronously. Template loading and attachment cleanup happen after
+    // the drawer is visible so the click never waits on network work.
     discardPendingAttachments();
     setScheduleMode(false);
     setScheduledAt("");
@@ -924,7 +942,13 @@ const scheduledLoading = activeView === "Scheduled" && Boolean(mailboxId) && sch
     setBody("");
     setRequestKey(null);
     composeCursorPosition.current = 0;
-  }
+  }, [discardPendingAttachments, prepareTemplatePicker]);
+
+  useEffect(() => {
+    const handleComposeRequest = () => openCompose();
+    window.addEventListener("abemail:compose", handleComposeRequest);
+    return () => window.removeEventListener("abemail:compose", handleComposeRequest);
+  }, [openCompose]);
 
   function chooseContactSuggestion(contact: Contact) {
     const delimiterIndex = Math.max(to.lastIndexOf(","), to.lastIndexOf(";"));

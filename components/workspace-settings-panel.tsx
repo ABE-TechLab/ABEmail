@@ -6,6 +6,7 @@ import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { useAppearanceMode, type AppearanceMode } from "@/components/appearance-provider";
 import { useDesignTheme } from "@/components/design-theme-provider";
 import { DESIGN_THEMES, type DesignThemeId } from "@/lib/design-system";
+import BrandProfileEditor from "@/components/brand-profile-editor";
 
 export type WorkspaceSettingsContext = {
   organizationId: string;
@@ -1057,8 +1058,8 @@ export default function WorkspaceSettingsPanel({
               </div>}
 
               {section === "branding" && <div>
-                <div className="settings-section-summary"><div><strong>Organization brand profile</strong><p>Shared branding will be reused across saved and designed email templates.</p></div></div>
-                <div className="settings-empty-state"><strong>Brand profile</strong><p>Company logo, primary/secondary colors, contact details, website, social links, and default footer will be managed with the Templates and Visual Email Designer work.</p><Link href={base + "/templates"} className="mail-secondary-action">Open Templates</Link></div>
+                <BrandProfileEditor organizationId={organizationId} canManage={canManageWorkspace} />
+                <div className="settings-form-footer"><span>Designed email templates use this identity for their preview and generated HTML.</span><Link href={base + "/templates"} className="mail-secondary-action">Open Templates</Link></div>
               </div>}
 
               {section === "integrations" && <div>
