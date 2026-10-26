@@ -21,6 +21,63 @@ insert into public.organization_memberships (organization_id, user_id, role, sta
   ('92000000-0000-4000-8000-000000000001', '91000000-0000-4000-8000-000000000002', 'member', 'active', '91000000-0000-4000-8000-000000000001', now()),
   ('92000000-0000-4000-8000-000000000002', '91000000-0000-4000-8000-000000000003', 'owner', 'active', '91000000-0000-4000-8000-000000000003', now());
 
+insert into public.organization_domains (
+  id, organization_id, domain, status, created_by, verified_at
+) values (
+  '95000000-0000-4000-8000-000000000001',
+  '92000000-0000-4000-8000-000000000001',
+  'design-tenant-a.example.com',
+  'verified',
+  '91000000-0000-4000-8000-000000000001',
+  now()
+);
+
+insert into public.mailboxes (
+  id, organization_id, domain_id, local_part, address, display_name, status, created_by
+) values (
+  '94000000-0000-4000-8000-000000000001',
+  '92000000-0000-4000-8000-000000000001',
+  '95000000-0000-4000-8000-000000000001',
+  'welcome',
+  'welcome@design-tenant-a.example.com',
+  'Design Tenant A',
+  'active',
+  '91000000-0000-4000-8000-000000000001'
+);
+
+select has_column('public', 'email_drafts', 'design_content_json', 'email drafts can persist designed-email block content');
+select lives_ok(
+  $valid_design_draft$ insert into public.email_drafts (
+    id, organization_id, mailbox_id, user_id, to_address, subject, body_text, design_content_json
+  ) values (
+    '96000000-0000-4000-8000-000000000001',
+    '92000000-0000-4000-8000-000000000001',
+    '94000000-0000-4000-8000-000000000001',
+    '91000000-0000-4000-8000-000000000001',
+    'recipient@example.net',
+    'Welcome',
+    'Welcome to the workspace',
+    '{"version":1,"blocks":[{"id":"welcome-heading","type":"heading","level":1,"text":"Welcome"}]}'::jsonb
+  )$valid_design_draft$,
+  'a valid designed-email draft can be persisted'
+);
+select throws_ok(
+  $empty_design_draft$ insert into public.email_drafts (
+    organization_id, mailbox_id, user_id, to_address, subject, body_text, design_content_json
+  ) values (
+    '92000000-0000-4000-8000-000000000001',
+    '94000000-0000-4000-8000-000000000001',
+    '91000000-0000-4000-8000-000000000001',
+    'recipient@example.net',
+    'Empty design',
+    '',
+    '{"version":1,"blocks":[]}'::jsonb
+  )$empty_design_draft$,
+  '23514',
+  null,
+  'database rejects a designed draft without content blocks'
+);
+
 insert into public.email_design_templates (
   id, organization_id, created_by, updated_by, name, subject, content_json
 ) values (

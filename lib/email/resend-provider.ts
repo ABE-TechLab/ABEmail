@@ -209,6 +209,7 @@ export async function sendResendEmail(input: {
   to: string | string[];
   subject: string;
   text: string;
+  html?: string;
   attachments?: ResendAttachmentInput[];
   idempotencyKey: string;
 }): Promise<{ id: string }> {
@@ -227,6 +228,7 @@ export async function sendResendEmail(input: {
         to: Array.isArray(input.to) ? input.to : [input.to],
         subject: input.subject,
         text: input.text,
+        ...(input.html ? { html: input.html } : {}),
         ...(input.attachments?.length ? {
           attachments: input.attachments.map((attachment) => ({
             filename: attachment.filename,

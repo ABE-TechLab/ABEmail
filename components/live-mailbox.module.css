@@ -492,3 +492,39 @@
   .reminderInlineForm { grid-template-columns: minmax(0, 1fr); padding: 12px; }
   .reminderInlineActions { grid-column: auto; }
 }
+
+
+.composeModeSwitch {
+  display: flex;
+  gap: 4px;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 0 10px;
+  padding: 3px;
+  border: 1px solid var(--border, #dfe7df);
+  border-radius: 8px;
+  background: var(--surface-secondary, #f5f7f4);
+}
+.composeModeButton, .composeModeButtonActive {
+  min-height: 29px;
+  padding: 0 11px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted-foreground, #7e8a80);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.composeModeButtonActive {
+  color: var(--foreground, #314035);
+  border-color: var(--border, #dde5dd);
+  background: var(--surface, #fff);
+  box-shadow: 0 1px 2px rgba(30, 45, 30, .05);
+}
+.composeModeButton:disabled, .composeModeButtonActive:disabled { opacity: .5; cursor: not-allowed; }
+@media (max-width: 540px) {
+  .composeModeSwitch { width: 100%; }
+  .composeModeButton, .composeModeButtonActive { flex: 1; }
+}
