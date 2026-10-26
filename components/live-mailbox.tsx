@@ -161,10 +161,12 @@ function formatFileSize(bytes: number): string {
 }
 
 export default function LiveMailbox(props: LiveMailboxProps) {
-  const { organizationId, organizationName, userEmail, mailboxes, messages, messagesError, activeView: initialActiveView = "Inbox", initialRecipient, initialCompose = false, initialMessageId } = props;
+  const { organizationId, organizationName, userEmail, mailboxes, messages, messagesError, activeView: initialActiveView = "Inbox", initialMessageId } = props;
   const router = useRouter();
   const searchParams = useSearchParams();
   const requestedMailboxView = searchParams.get("view");
+  const composeRequested = searchParams.get("compose") === "1";
+  const requestedComposeTo = searchParams.get("composeTo");
   const activeView = MAILBOX_VIEW_OPTIONS.includes(requestedMailboxView as ActiveMailboxView)
     ? requestedMailboxView as ActiveMailboxView
     : initialActiveView;
@@ -176,8 +178,6 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   const composeBodyRef = useRef<HTMLTextAreaElement>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const composeCursorPosition = useRef<number | null>(null);
-  const initialRecipientHandledRef = useRef(false);
-  const initialComposeHandledRef = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -330,26 +330,27 @@ const scheduledLoading = activeView === "Scheduled" && Boolean(mailboxId) && sch
   }
 
   useEffect(() => {
-    if (!initialRecipient || initialRecipientHandledRef.current) return;
-    initialRecipientHandledRef.current = true;
-    setTo(initialRecipient);
+    // Treat compose URL parameters as repeatable requests rather than one-time
+    // mount flags. The persistent workspace shell reuses this component, so
+    // the same Compose link can be selected again after the drawer is closed.
+    if (!composeRequested && !requestedComposeTo) return;
+
+    if (requestedComposeTo) {
+      const normalizedRecipient = requestedComposeTo.trim().toLowerCase();
+      const validRecipient = normalizedRecipient.length <= 254 &&
+        /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/.test(normalizedRecipient);
+      if (validRecipient) setTo(normalizedRecipient);
+    }
+
     prepareTemplatePicker();
     setComposeOpen(true);
     setNotice("");
-    const currentUrl = new URL(window.location.href);
-    currentUrl.searchParams.delete("composeTo");
-    router.replace(currentUrl.pathname + currentUrl.search, { scroll: false });
-  }, [initialRecipient, router]);
 
-  useEffect(() => {
-    if (!initialCompose || initialComposeHandledRef.current) return;
-    initialComposeHandledRef.current = true;
-    prepareTemplatePicker();
-    setComposeOpen(true);
     const currentUrl = new URL(window.location.href);
     currentUrl.searchParams.delete("compose");
+    currentUrl.searchParams.delete("composeTo");
     router.replace(currentUrl.pathname + currentUrl.search, { scroll: false });
-  }, [initialCompose, router]);
+  }, [composeRequested, requestedComposeTo, router]);
 
   useEffect(() => {
     if (!composeOpen || !recipientQuery) return;
