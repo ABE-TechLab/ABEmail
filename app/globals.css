@@ -567,7 +567,7 @@ h1 {
 .mail-toast > button, .mail-notice-dismiss { display: inline-grid; width: 23px; height: 23px; flex: 0 0 auto; place-items: center; margin-left: auto; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--muted-foreground, #879287); font-size: 18px; line-height: 1; cursor: pointer; }
 .mail-toast > button:hover, .mail-notice-dismiss:hover { background: var(--accent, #edf5ee); color: var(--accent-foreground, #1d603b); }
 @keyframes mail-toast-enter { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
-@media (prefers-reduced-motion: reduce) { .mail-toast, .mail-app .mail-main > .mailbox-live-page .mail-mobile-compose-fab { animation: none; transition: none; } }
+@media (prefers-reduced-motion: reduce) { .mail-toast, .settings-profile-success, .mail-app .mail-main > .mailbox-live-page .mail-mobile-compose-fab { animation: none; transition: none; } }
 
 @media (max-width: 1120px) {
   .mail-sidebar { width: 205px; min-width: 190px; flex-basis: 205px; }
