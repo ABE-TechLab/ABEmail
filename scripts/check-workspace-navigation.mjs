@@ -72,6 +72,13 @@ for (const label of requiredSidebarLabels) {
 assert(!/\bSoon\b|Coming soon|mail-feature-pill/.test(sidebar), "The global sidebar must not bring back disabled/Soon placeholder labels.");
 assert(sidebar.includes("const currentMailboxView = mailboxLinks.find"), "Mailbox active state must derive from the current route query.");
 assert(sidebar.includes("href={composeHref}"), "Compose must remain a route-driven control in the shared sidebar.");
+assert(sidebar.includes("router.push(itemHref, { scroll: false })"),
+  "Mailbox navigation must use the App Router so workspace pages transition to the mounted mailbox route.");
+assert(!sidebar.includes("window.history.pushState("),
+  "Mailbox navigation must not update only the browser URL while leaving the current workspace page mounted.");
+assert(sidebar.includes('if (pathname === mailboxBaseHref)') &&
+  sidebar.includes('window.dispatchEvent(new Event("abemail:compose"))'),
+  "Compose may use the direct drawer event only while the mailbox route is already mounted; workspace clicks must navigate to Mail.");
 assert(!/mailboxCounts|onMailboxNavigate|disabledMailFeatures|enabledMailboxViews|activeMailboxView/.test(sidebar), "The global sidebar must not accept page-specific props that alter its appearance or behavior.");
 
 for (const [relativePath, source] of [
