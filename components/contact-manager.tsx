@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { Contact } from "@/lib/contacts/types";
+import { useTransientNotice } from "@/lib/use-transient-notice";
 import styles from "./contact-manager.module.css";
 
 type ContactForm = {
@@ -68,7 +69,7 @@ export default function ContactManager({ organizationId, organizationName, userE
   const [saving, setSaving] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [notice, setNotice] = useState("");
+  const [notice, setNotice] = useTransientNotice();
 
   useEffect(() => {
     let active = true;
