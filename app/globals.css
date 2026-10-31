@@ -440,7 +440,24 @@ h1 {
 .tone-slate { background: #e8ece8; color: #617062; }
 .mail-message-copy { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 5px; }
 .mail-message-row-top { display: flex; min-width: 0; align-items: baseline; justify-content: space-between; gap: 8px; }
-.mail-message-row-top strong { overflow: hidden; color: #4a584b; font-size: 10px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.mail-message-sender {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+}
+.mail-message-row-top strong {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  color: #4a584b;
+  font-size: 10px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .mail-message-row-top time { flex: 0 0 auto; color: #9aa49a; font-size: 9px; white-space: nowrap; }
 .mail-message-subject { overflow: hidden; color: #48564a; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .mail-message-preview { overflow: hidden; color: #96a095; font-size: 9px; line-height: 1.45; text-overflow: ellipsis; white-space: nowrap; }
@@ -452,9 +469,8 @@ h1 {
   display: inline-block;
   width: 7px;
   height: 7px;
-  flex: 0 0 auto;
-  margin-right: 2px;
-  transform: translateY(-1px);
+  flex: 0 0 7px;
+  margin: 0;
   border: 1px solid #fff;
   border-radius: 50%;
   background: #2f9857;
