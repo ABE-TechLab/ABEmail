@@ -72,7 +72,7 @@ export default function WorkspaceSidebar({
   const [collapsed, setCollapsed] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [mailboxCounts, setMailboxCounts] = useState<MailboxSidebarCounts>({
+  const [navigationCounts, setMailboxCounts] = useState<MailboxSidebarCounts>({
     inboxUnread: 0,
     spamUnread: 0,
     drafts: 0,
@@ -283,13 +283,13 @@ export default function WorkspaceSidebar({
               ? `${mailboxBaseHref}?view=${encodeURIComponent(item.view)}`
               : item.href;
             const badgeCount = item.view === "Inbox"
-              ? mailboxCounts.inboxUnread
+              ? navigationCounts.inboxUnread
               : item.view === "Spam"
-                ? mailboxCounts.spamUnread
+                ? navigationCounts.spamUnread
                 : item.view === "Drafts"
-                  ? mailboxCounts.drafts
+                  ? navigationCounts.drafts
                   : item.view === "Scheduled"
-                    ? mailboxCounts.scheduled
+                    ? navigationCounts.scheduled
                     : 0;
             const badgeText = badgeCount > 99 ? "99+" : String(badgeCount);
             const badgeDescription = item.view === "Inbox" || item.view === "Spam"
