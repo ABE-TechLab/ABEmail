@@ -81,3 +81,5 @@
   .editorHeading { flex-direction: column; }
   .editorActions { width: 100%; justify-content: flex-start; }
 }
+
+@media (prefers-reduced-motion: reduce) { .notice { animation: none; } }
