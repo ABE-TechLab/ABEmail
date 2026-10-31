@@ -39,6 +39,9 @@ const liveMailbox = read("components/live-mailbox.tsx");
 const settings = read("components/workspace-settings-panel.tsx");
 const settingsRoute = read("app/dashboard/[organizationId]/settings/[[...section]]/page.tsx");
 const contactManager = read("components/contact-manager.tsx");
+const templateManager = read("components/template-manager.tsx");
+const reminderManager = read("components/reminder-manager.tsx");
+const transientNotice = read("lib/use-transient-notice.ts");
 const inboxStyles = read("components/workspace-home.module.css");
 const globalStyles = read("app/globals.css");
 const navigationContract = read("docs/workspace-navigation.md");
@@ -134,6 +137,24 @@ assert(mailboxCountsRoute.includes('from("email_message_user_state")') &&
 assert(mailboxCountsRoute.includes('inboxUnread:') && mailboxCountsRoute.includes('spamUnread:') &&
   mailboxCountsRoute.includes('drafts:') && mailboxCountsRoute.includes('scheduled:'),
   "The mailbox count response must include the supported folder counters.");
+
+assert(transientNotice.includes("DEFAULT_NOTICE_DURATION_MS = 15_000") &&
+  transientNotice.includes("setTimeout(") && transientNotice.includes("clearTimeout("),
+  "Workspace notices must automatically dismiss after fifteen seconds and clean up their timer.");
+for (const [relativePath, source] of [
+  ["components/live-mailbox.tsx", liveMailbox],
+  ["components/contact-manager.tsx", contactManager],
+  ["components/workspace-settings-panel.tsx", settings],
+  ["components/template-manager.tsx", templateManager],
+  ["components/reminder-manager.tsx", reminderManager],
+]) {
+  assert(source.includes("useTransientNotice"), relativePath + " must use the shared fifteen-second notice lifecycle.");
+  assert(source.includes('aria-label="Dismiss notice"'), relativePath + " must provide a manual notice dismissal control.");
+}
+assert(globalStyles.includes("background: var(--primary, var(--mail-green, #28774c));") &&
+  globalStyles.includes("color: var(--primary-foreground, #fff);") &&
+  globalStyles.includes("var(--ring, var(--primary, #28774c))"),
+  "The mobile Compose button must use the active theme primary, foreground, and focus-ring tokens.");
 
 if (errors.length) {
   console.error("Workspace navigation regression check failed:");
