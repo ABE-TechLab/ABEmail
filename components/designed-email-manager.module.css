@@ -57,7 +57,9 @@
 .stateMessage { padding: 12px; color: var(--muted-foreground, #7f8c82); font-size: 11px; }
 .error, .notice { margin: 10px 12px; padding: 9px 10px; border-radius: 8px; font-size: 11px; line-height: 1.5; }
 .error { background: #fff2f0; color: #a12622; }
-.notice { background: #eef8ee; color: #246b3a; }
+.notice { display: flex; align-items: flex-start; gap: 9px; background: var(--accent, #eef8ee); color: var(--accent-foreground, #246b3a); animation: notice-enter .2s ease-out both; }
+.notice > span { min-width: 0; flex: 1 1 auto; }
+@keyframes notice-enter { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
 .previewHeader { border-bottom: 1px solid var(--border, #e8ede8); }
 .previewControls button { min-width: 28px; height: 28px; border: 1px solid var(--border, #dde5dd); border-radius: 6px; background: transparent; color: var(--foreground, #47584b); cursor: pointer; font-size: 11px; }
 .previewControls .previewSelected { background: var(--accent, #edf5ee); color: var(--primary, #28774c); border-color: var(--primary, #b1d5bc); }
@@ -79,3 +81,5 @@
   .editorHeading { flex-direction: column; }
   .editorActions { width: 100%; justify-content: flex-start; }
 }
+
+@media (prefers-reduced-motion: reduce) { .notice { animation: none; } }

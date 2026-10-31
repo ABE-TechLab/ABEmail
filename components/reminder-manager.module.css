@@ -155,13 +155,18 @@
 }
 .stateError p { margin: 4px 0 10px; }
 .notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
   margin: 14px 14px 0;
   padding: 10px 12px;
   border: 1px solid var(--border, #dfe7dd);
   border-radius: 7px;
   color: var(--foreground, #465447);
   font-size: 10px;
+  animation: notice-enter .2s ease-out both;
 }
+.notice > span { min-width: 0; flex: 1 1 auto; }
 .list { display: flex; flex-direction: column; }
 .reminder {
   display: grid;
@@ -360,3 +365,7 @@
   .tabs { padding: 9px; }
   .tab, .tabActive { padding: 6px 8px; font-size: 9px; }
 }
+
+@keyframes notice-enter { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+
+@media (prefers-reduced-motion: reduce) { .notice { animation: none; } }

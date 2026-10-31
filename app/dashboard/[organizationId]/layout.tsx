@@ -60,6 +60,7 @@ export default async function WorkspaceLayout({ children, params }: WorkspaceLay
   return (
     <div className="mail-app workspace-app-shell">
       <WorkspaceSidebar
+        organizationId={organizationId}
         composeHref={mailboxHref + "?compose=1"}
         homeHref={mailboxHref}
         mailboxBaseHref={mailboxHref}

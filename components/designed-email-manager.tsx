@@ -9,6 +9,7 @@ import {
   type EmailDesignBrandProfile,
 } from "@/lib/email-design/render.mjs";
 import styles from "./designed-email-manager.module.css";
+import { useTransientNotice } from "@/lib/use-transient-notice";
 
 type DesignTemplate = {
   id: string;
@@ -134,7 +135,7 @@ export default function DesignedEmailManager({ organizationId }: { organizationI
   const [brandLoading, setBrandLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [notice, setNotice] = useState("");
+  const [notice, setNotice] = useTransientNotice();
   const [error, setError] = useState("");
   const [blockToAdd, setBlockToAdd] = useState<BlockType>("heading");
   const [starter, setStarter] = useState("welcome");
@@ -522,7 +523,7 @@ export default function DesignedEmailManager({ organizationId }: { organizationI
           )}
 
           {error && <p className={styles.error} role="alert">{error}</p>}
-          {notice && <p className={styles.notice} role="status">{notice}</p>}
+          {notice && <div className={styles.notice} role="status"><span>{notice}</span><button type="button" className="mail-notice-dismiss" aria-label="Dismiss notice" onClick={() => setNotice("")}>×</button></div>}
           <p className={styles.helper}>Brand defaults {brandLoading ? "are loading." : "are applied to the preview."} Save and send will validate every block on the server.</p>
         </form>
 

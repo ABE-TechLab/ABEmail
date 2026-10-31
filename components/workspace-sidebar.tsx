@@ -32,7 +32,15 @@ const workspaceLinks = [
 
 const SIDEBAR_COLLAPSED_KEY = "abemail:sidebar-collapsed";
 
+type MailboxSidebarCounts = {
+  inboxUnread: number;
+  spamUnread: number;
+  drafts: number;
+  scheduled: number;
+};
+
 type WorkspaceSidebarProps = {
+  organizationId?: string;
   composeHref: string;
   homeHref: string;
   mailboxBaseHref: string;
@@ -45,6 +53,7 @@ type WorkspaceSidebarProps = {
 };
 
 export default function WorkspaceSidebar({
+  organizationId,
   composeHref,
   homeHref,
   mailboxBaseHref,
@@ -63,6 +72,53 @@ export default function WorkspaceSidebar({
   const [collapsed, setCollapsed] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [navigationCounts, setMailboxCounts] = useState<MailboxSidebarCounts>({
+    inboxUnread: 0,
+    spamUnread: 0,
+    drafts: 0,
+    scheduled: 0,
+  });
+
+  useEffect(() => {
+    if (!organizationId) return;
+    let active = true;
+    let requestVersion = 0;
+    const loadCounts = () => {
+      const version = ++requestVersion;
+      void fetch("/api/mail/sidebar-counts?organizationId=" + encodeURIComponent(organizationId), { cache: "no-store" })
+        .then(async (response) => {
+          if (!response.ok) return null;
+          return await response.json() as { counts?: Partial<MailboxSidebarCounts> };
+        })
+        .then((result) => {
+          if (!active || !result?.counts || version !== requestVersion) return;
+          setMailboxCounts({
+            inboxUnread: Math.max(0, Number(result.counts.inboxUnread) || 0),
+            spamUnread: Math.max(0, Number(result.counts.spamUnread) || 0),
+            drafts: Math.max(0, Number(result.counts.drafts) || 0),
+            scheduled: Math.max(0, Number(result.counts.scheduled) || 0),
+          });
+        })
+        .catch(() => {
+          // Keep the most recent counts visible if the network is temporarily unavailable.
+        });
+    };
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") loadCounts();
+    };
+    loadCounts();
+    const interval = window.setInterval(loadCounts, 30_000);
+    window.addEventListener("focus", loadCounts);
+    window.addEventListener("abemail:mailbox-counts-refresh", loadCounts);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      window.removeEventListener("focus", loadCounts);
+      window.removeEventListener("abemail:mailbox-counts-refresh", loadCounts);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, [organizationId, pathname, requestedMailboxView]);
 
   useEffect(() => {
     // Warm the mailbox route while the user is working elsewhere in the
@@ -226,13 +282,28 @@ export default function WorkspaceSidebar({
             const itemHref = mailboxBaseHref
               ? `${mailboxBaseHref}?view=${encodeURIComponent(item.view)}`
               : item.href;
+            const badgeCount = item.view === "Inbox"
+              ? navigationCounts.inboxUnread
+              : item.view === "Spam"
+                ? navigationCounts.spamUnread
+                : item.view === "Drafts"
+                  ? navigationCounts.drafts
+                  : item.view === "Scheduled"
+                    ? navigationCounts.scheduled
+                    : 0;
+            const badgeText = badgeCount > 99 ? "99+" : String(badgeCount);
+            const badgeDescription = item.view === "Inbox" || item.view === "Spam"
+              ? "unread"
+              : item.view === "Drafts"
+                ? "drafts"
+                : "scheduled messages";
             return (
               <Link
                 className={active ? "mail-nav-item active" : "mail-nav-item"}
                 href={itemHref}
                 key={item.view}
                 aria-current={active ? "page" : undefined}
-                title={item.label}
+                title={badgeCount > 0 ? item.label + " · " + badgeCount + " " + badgeDescription : item.label}
                 onClick={(event) => {
                   if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
                   event.preventDefault();
@@ -242,6 +313,7 @@ export default function WorkspaceSidebar({
               >
                 <span className="mail-nav-icon" aria-hidden="true">{item.icon}</span>
                 <span>{item.label}</span>
+                {badgeCount > 0 && <span className="mail-nav-count" aria-label={badgeCount + " " + badgeDescription}>{badgeText}</span>}
               </Link>
             );
           })}
