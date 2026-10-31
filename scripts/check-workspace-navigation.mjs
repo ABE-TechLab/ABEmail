@@ -42,6 +42,7 @@ const contactManager = read("components/contact-manager.tsx");
 const inboxStyles = read("components/workspace-home.module.css");
 const globalStyles = read("app/globals.css");
 const navigationContract = read("docs/workspace-navigation.md");
+const mailboxCountsRoute = read("app/api/mail/sidebar-counts/route.ts");
 
 const sidebarSourceFiles = walk("app").concat(walk("components")).filter((relativePath) => {
   const source = readFileSync(path.join(root, relativePath), "utf8");
@@ -108,6 +109,24 @@ for (const section of ["rules", "out-of-office", "branding", "integrations"]) {
 }
 assert(mailRoute.includes('"Snoozed"') && liveMailbox.includes('activeView === "Snoozed"'), "Snoozed must remain a known mailbox destination, even while its lifecycle is unimplemented.");
 assert(navigationContract.includes("Non-negotiable shell rule"), "The workspace navigation contract document is missing or incomplete.");
+assert(liveMailbox.includes('+ (!message.is_read ? " unread" : "")') &&
+  liveMailbox.includes('className="mail-unread-dot"'),
+  "Unread messages must be visually distinguished in the message list.");
+assert(liveMailbox.includes('aria-label={"Open " + (message.subject || "message") + (message.is_read ? "" : ", unread")}'),
+  "Unread status must also be announced when a message is opened with assistive technology.");
+assert(sidebar.includes("/api/mail/sidebar-counts?organizationId=") && sidebar.includes("mail-nav-count"),
+  "The shared mailbox navigation must display live unread and folder-count badges.");
+assert(mailboxCountsRoute.includes('auth.getUser()') &&
+  mailboxCountsRoute.includes('from("organization_memberships")') &&
+  mailboxCountsRoute.includes('from("mailbox_memberships")'),
+  "Mailbox count endpoints must authenticate the user and enforce workspace/mailbox access.");
+assert(mailboxCountsRoute.includes('from("email_message_user_state")') &&
+  mailboxCountsRoute.includes('from("email_drafts")') &&
+  mailboxCountsRoute.includes('from("scheduled_email_messages")'),
+  "Inbox, spam, draft, and scheduled navigation counts must come from their persisted records.");
+assert(mailboxCountsRoute.includes('inboxUnread:') && mailboxCountsRoute.includes('spamUnread:') &&
+  mailboxCountsRoute.includes('drafts:') && mailboxCountsRoute.includes('scheduled:'),
+  "The mailbox count response must include the supported folder counters.");
 
 if (errors.length) {
   console.error("Workspace navigation regression check failed:");
