@@ -1139,6 +1139,7 @@ const scheduledLoading = activeView === "Scheduled" && Boolean(mailboxId) && sch
           const deleteResult = await deleteResponse.json() as { ok?: boolean; error?: string };
           if (deleteResponse.ok && deleteResult.ok) {
             setDrafts((current) => current.filter((item) => item.id !== savedDraftId));
+            window.dispatchEvent(new Event("abemail:mailbox-counts-refresh"));
           } else {
             finalNotice += " The message was sent, but its saved draft could not be removed; delete it from Drafts.";
           }
