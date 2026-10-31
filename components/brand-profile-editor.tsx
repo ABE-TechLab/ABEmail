@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
+import { useTransientNotice } from "@/lib/use-transient-notice";
 
 type BrandProfile = {
   brandName: string;
@@ -43,7 +44,7 @@ export default function BrandProfileEditor({ organizationId, canManage }: { orga
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const [notice, setNotice] = useTransientNotice();
 
   useEffect(() => {
     let active = true;
@@ -143,7 +144,7 @@ export default function BrandProfileEditor({ organizationId, canManage }: { orga
             {canManage && <button className="mail-primary-action" type="submit" disabled={saving}>{saving ? "Saving…" : "Save brand profile"}</button>}
           </div>
           {error && <p className="settings-profile-alert" role="alert">{error}</p>}
-          {notice && <p className="settings-profile-success" role="status">{notice}</p>}
+          {notice && <div className="settings-profile-success" role="status"><span>{notice}</span><button type="button" className="mail-notice-dismiss" aria-label="Dismiss notice" onClick={() => setNotice("")}>×</button></div>}
         </form>
       )}
     </div>

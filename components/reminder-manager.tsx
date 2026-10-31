@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState, type FormEvent } from "react";
 import styles from "./reminder-manager.module.css";
+import { useTransientNotice } from "@/lib/use-transient-notice";
 
 type ReminderStatus = "pending" | "completed" | "dismissed";
 type ReminderMessage = {
@@ -79,7 +80,7 @@ export default function ReminderManager({ organizationId }: { organizationId: st
     max: localDateTimeInput(new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()),
   }));
   const [formError, setFormError] = useState("");
-  const [notice, setNotice] = useState("");
+  const [notice, setNotice] = useTransientNotice();
   const [now, setNow] = useState<number>(() => Date.now());
 
   useEffect(() => {
@@ -220,7 +221,7 @@ export default function ReminderManager({ organizationId }: { organizationId: st
             ))}
           </nav>
 
-          {notice && <p className={styles.notice} role="status">{notice}</p>}
+          {notice && <div className={styles.notice} role="status"><span>{notice}</span><button type="button" className="mail-notice-dismiss" aria-label="Dismiss notice" onClick={() => setNotice("")}>×</button></div>}
           {loadError && <div className={styles.stateError} role="alert"><strong>Reminders could not load.</strong><p>{loadError}</p><button className={styles.secondaryButton} type="button" onClick={() => setRefreshVersion((current) => current + 1)}>Try again</button></div>}
           {formError && <p className={styles.error} role="alert">{formError}</p>}
 
