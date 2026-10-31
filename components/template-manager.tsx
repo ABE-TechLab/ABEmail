@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState, type FormEvent } from "react";
 import styles from "./template-manager.module.css";
 import DesignedEmailManager from "@/components/designed-email-manager";
+import { useTransientNotice } from "@/lib/use-transient-notice";
 
 type EmailTemplate = {
   id: string;
@@ -43,7 +44,7 @@ export default function TemplateManager({ organizationId }: { organizationId: st
   const [deletePrompt, setDeletePrompt] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [formError, setFormError] = useState("");
-  const [notice, setNotice] = useState("");
+  const [notice, setNotice] = useTransientNotice();
   const [activeTab, setActiveTab] = useState<"snippets" | "designed">("snippets");
 
   useEffect(() => {
@@ -285,7 +286,7 @@ export default function TemplateManager({ organizationId }: { organizationId: st
               )}
 
               {formError && <p className={styles.error} role="alert">{formError}</p>}
-              {notice && <p className={styles.notice} role="status">{notice}</p>}
+              {notice && <div className={styles.notice} role="status"><span>{notice}</span><button type="button" className="mail-notice-dismiss" aria-label="Dismiss notice" onClick={() => setNotice("")}>×</button></div>}
               <p className={styles.helper}>After saving, open Compose and choose the template from the Template field to use it in a message.</p>
             </form>
           </section>
