@@ -10,6 +10,7 @@ import workspaceStyles from "./workspace-home.module.css";
 import EmailHtmlViewer from "@/components/email-html-viewer";
 import DesignedEmailComposer from "@/components/designed-email-composer";
 import type { EmailDesignContent } from "@/lib/email-design/render.mjs";
+import { useTransientNotice } from "@/lib/use-transient-notice";
 
 const COMPACT_MESSAGE_LIST_KEY = "abemail:compact-message-list";
 const WORKSPACE_SETTINGS_KEY = "abemail:workspace-settings:";
@@ -304,7 +305,7 @@ export default function LiveMailbox(props: LiveMailboxProps) {
   }, [pendingAttachments]);
   const [messageAttachments, setMessageAttachments] = useState<MessageAttachment[]>([]);
   const [messageAttachmentsMessageId, setMessageAttachmentsMessageId] = useState<string | null>(null);
-  const [notice, setNotice] = useState("");
+  const [notice, setNotice] = useTransientNotice();
   const [requestKey, setRequestKey] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<EmailDraft[]>([]);
   const [draftsLoadedKey, setDraftsLoadedKey] = useState<string | null>(null);
@@ -1296,7 +1297,7 @@ const scheduledLoading = activeView === "Scheduled" && Boolean(mailboxId) && sch
         ) : (
           <div className={"mail-content-layout" + (selectedMessage ? " message-selected" : "") + (mobileDetailOpen ? " mobile-detail-open" : "")}>
             <section className="mail-list-pane" aria-label={activeView + " messages"}>
-              {notice && <p className={styles.notice} role="status">{notice}</p>}
+              {notice && <div className={styles.notice} role="status"><span>{notice}</span><button type="button" className="mail-notice-dismiss" aria-label="Dismiss notice" onClick={() => setNotice("")}>×</button></div>}
               {messagesError && <div className={styles.warning} role="alert">The mail database could not be read in this deployment. Refresh the page or contact an administrator.</div>}
               <div className="mail-list-heading">
                 <div>
