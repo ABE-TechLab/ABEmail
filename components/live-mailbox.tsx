@@ -697,6 +697,7 @@ const scheduledLoading = activeView === "Scheduled" && Boolean(mailboxId) && sch
         return;
       }
       setSelectedMessageIds((current) => current.filter((id) => !ids.includes(id)));
+      window.dispatchEvent(new Event("abemail:mailbox-counts-refresh"));
       const affected = Number.isFinite(result.affected) ? Number(result.affected) : ids.length;
       if (action === "snooze" && snoozedUntil) {
         const formatted = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: mailPreferences.timezone || undefined }).format(new Date(snoozedUntil));
@@ -735,8 +736,10 @@ const scheduledLoading = activeView === "Scheduled" && Boolean(mailboxId) && sch
       if (version === draftMutationVersion.current) setNotice(result.error || "Draft could not be saved.");
       return false;
     }
+    const createdNewDraft = !draftIdRef.current;
     draftIdRef.current = result.draft.id;
     draftUpdatedAtRef.current = result.draft.updated_at;
+    if (createdNewDraft) window.dispatchEvent(new Event("abemail:mailbox-counts-refresh"));
     if (version === draftMutationVersion.current) {
       setDraftId(result.draft.id);
       setDrafts((current) => [result.draft!, ...current.filter((item) => item.id !== result.draft!.id)]);
@@ -997,6 +1000,7 @@ const scheduledLoading = activeView === "Scheduled" && Boolean(mailboxId) && sch
         if (!deleted?.ok) setNotice("Message scheduled, but its old draft could not be removed.");
       }
       setScheduledMessages((current) => [result.scheduled!, ...current.filter((item) => item.id !== result.scheduled!.id)]);
+      window.dispatchEvent(new Event("abemail:mailbox-counts-refresh"));
       resetComposerAfterClose(); setScheduleMode(false); setScheduledAt(""); setDraftSaving(false);
       setNotice("Email scheduled for " + new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: mailPreferences.timezone || undefined }).format(new Date(result.scheduled.scheduled_at)) + ".");
       router.refresh();
@@ -1028,6 +1032,7 @@ const scheduledLoading = activeView === "Scheduled" && Boolean(mailboxId) && sch
       const completed = await fetch("/api/mail/scheduled", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ organizationId, mailboxId, id: item.id, action: "complete_send_now", messageId: result.messageId }) });
       if (!completed.ok) { setNotice("The email was accepted by the provider. Refresh Scheduled to confirm its final status."); router.refresh(); return; }
       setScheduledMessages((current) => current.filter((message) => message.id !== item.id));
+      window.dispatchEvent(new Event("abemail:mailbox-counts-refresh"));
       setNotice("Email accepted by the provider and removed from Scheduled.");
       router.refresh();
     } catch {
@@ -1047,6 +1052,7 @@ const scheduledLoading = activeView === "Scheduled" && Boolean(mailboxId) && sch
       if (!response.ok || !result.ok) { setNotice(result.error || "Scheduled message could not be updated."); return; }
       if (action === "cancel" || action === "delete") setScheduledMessages((current) => current.filter((message) => message.id !== item.id));
       else if (result.scheduled) setScheduledMessages((current) => current.map((message) => message.id === item.id ? { ...message, scheduled_at: result.scheduled!.scheduled_at, status: "scheduled", last_error_code: null } : message));
+      window.dispatchEvent(new Event("abemail:mailbox-counts-refresh"));
       setNotice(action === "cancel" ? "Scheduled email cancelled." : action === "delete" ? "Failed scheduled email deleted." : "Scheduled email updated.");
     } catch { setNotice("The connection was interrupted. Refresh Scheduled to confirm the change."); }
     finally { setScheduledBusyId(""); }
@@ -1186,6 +1192,7 @@ const scheduledLoading = activeView === "Scheduled" && Boolean(mailboxId) && sch
     const result = await response.json() as { ok?: boolean; error?: string };
     if (!response.ok || !result.ok) { setNotice(result.error || "Draft could not be deleted."); return; }
     setDrafts((current) => current.filter((item) => item.id !== draft.id));
+    window.dispatchEvent(new Event("abemail:mailbox-counts-refresh"));
   }
 
     function replyTo(message: EmailMessage, replyAll = false) {
@@ -1422,7 +1429,11 @@ const scheduledLoading = activeView === "Scheduled" && Boolean(mailboxId) && sch
                   </article>
                 ))}
                 {visibleMessages.map((message) => (
-                  <article className={selectedMessage?.id === message.id ? "mail-message-row selected" : "mail-message-row"} key={message.id}>
+                  <article
+                    className={"mail-message-row" + (selectedMessage?.id === message.id ? " selected" : "") + (!message.is_read ? " unread" : "")}
+                    key={message.id}
+                  >
+                    {!message.is_read && <span className="mail-unread-dot" aria-label="Unread message" title="Unread message" />}
                     <input
                       className={styles.messageSelect}
                       type="checkbox"
@@ -1438,7 +1449,7 @@ const scheduledLoading = activeView === "Scheduled" && Boolean(mailboxId) && sch
                         if (!message.is_read) void runLifecycle([message.id], "mark_read");
                       }}
                       type="button"
-                      aria-label={"Open " + (message.subject || "message")}
+                      aria-label={"Open " + (message.subject || "message") + (message.is_read ? "" : ", unread")}
                     >
                       <span className="mail-avatar tone-slate">{initials(message.direction === "inbound" ? message.from_address : organizationName)}</span>
                       <span className="mail-message-copy">
