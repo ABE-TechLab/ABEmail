@@ -7,6 +7,7 @@ import { useAppearanceMode, type AppearanceMode } from "@/components/appearance-
 import { useDesignTheme } from "@/components/design-theme-provider";
 import { DESIGN_THEMES, type DesignThemeId } from "@/lib/design-system";
 import BrandProfileEditor from "@/components/brand-profile-editor";
+import { useTransientNotice } from "@/lib/use-transient-notice";
 
 export type WorkspaceSettingsContext = {
   organizationId: string;
@@ -209,7 +210,7 @@ export default function WorkspaceSettingsPanel({
   const [displayName, setDisplayName] = useState(organizationName);
   const [preferences, setPreferences] = useState<WorkspacePreferenceValues>(DEFAULT_PREFERENCES);
   const [compactMessageList, setCompactMessageList] = useState(false);
-  const [toast, setToast] = useState("");
+  const [toast, setToast] = useTransientNotice();
   const [saving, setSaving] = useState(false);
   const [providerStatus, setProviderStatus] = useState<ProviderStatus | null>(null);
   const [providerKey, setProviderKey] = useState("");
