@@ -38,7 +38,7 @@
 .setupCard h2 { margin: 0 0 8px; font-size: 18px; }
 .setupCard p { color: var(--muted-foreground, #60716a); font-size: 13px; line-height: 1.6; }
 .notice, .warning { max-width: 1440px; margin: 0 auto 18px; padding: 12px 15px; border-radius: 12px; background: var(--card, #fff); border: 1px solid var(--border, #dbe3df); color: var(--muted-foreground, #52615a); line-height: 1.5; font-size: 13px; overflow-wrap: anywhere; }
-.notice { display: flex; align-items: flex-start; gap: 12px; animation: mail-toast-enter .2s ease-out both; }
+.notice { display: flex; align-items: flex-start; gap: 12px; animation: notice-enter .2s ease-out both; }
 .notice > span { min-width: 0; flex: 1 1 auto; }
 .warning { border-color: #e7c995; background: #fff9ea; color: #7b551b; }
 .emptyState { max-width: 1440px; padding: 28px; margin: auto; }
@@ -530,3 +530,5 @@
   .composeModeSwitch { width: 100%; }
   .composeModeButton, .composeModeButtonActive { flex: 1; }
 }
+
+@keyframes notice-enter { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
