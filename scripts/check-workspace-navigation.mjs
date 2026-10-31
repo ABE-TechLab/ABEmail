@@ -114,6 +114,13 @@ assert(liveMailbox.includes('+ (!message.is_read ? " unread" : "")') &&
   "Unread messages must be visually distinguished in the message list.");
 assert(liveMailbox.includes('aria-label={"Open " + (message.subject || "message") + (message.is_read ? "" : ", unread")}'),
   "Unread status must also be announced when a message is opened with assistive technology.");
+assert(liveMailbox.includes('<span className="mail-message-sender">') &&
+  liveMailbox.includes('<strong>{message.direction === "inbound" ? message.from_address : message.to_addresses.join(", ")}</strong>'),
+  "The unread marker and sender must be grouped together so the indicator cannot push the sender away.");
+assert(globalStyles.includes(".mail-message-sender {") &&
+  globalStyles.includes("flex: 1 1 auto;") &&
+  globalStyles.includes("gap: 6px;"),
+  "The sender group must keep a small fixed gap between the unread dot and sender text.");
 assert(sidebar.includes("/api/mail/sidebar-counts?organizationId=") && sidebar.includes("mail-nav-count"),
   "The shared mailbox navigation must display live unread and folder-count badges.");
 assert(mailboxCountsRoute.includes('auth.getUser()') &&
