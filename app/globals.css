@@ -449,12 +449,12 @@ h1 {
 .mail-star-button:hover { color: #c38a29; }
 .mail-star-button.starred { color: #c38a29; }
 .mail-unread-dot {
-  position: absolute;
-  z-index: 1;
-  bottom: 18px;
-  left: 27px;
+  display: inline-block;
   width: 7px;
   height: 7px;
+  flex: 0 0 auto;
+  margin-right: 2px;
+  transform: translateY(-1px);
   border: 1px solid #fff;
   border-radius: 50%;
   background: #2f9857;
