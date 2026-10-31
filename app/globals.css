@@ -2797,5 +2797,6 @@ html.dark .mail-appearance-toggle {
 .settings-color-field > input:not([type="color"]) { min-width: 0; width: 100%; min-height: 37px; padding: 9px 10px; border: 1px solid #dfe7de; border-radius: 7px; background: #fff; color: #435144; font-size: 11px; }
 .settings-field-wide { grid-column: 1 / -1; }
 .settings-profile-alert { margin: 12px 0; font-size: 11px; line-height: 1.5; color: #a12622; }
-.settings-profile-success { margin: 12px 0; font-size: 11px; line-height: 1.5; color: #246b3a; }
+.settings-profile-success { display: flex; align-items: flex-start; gap: 9px; margin: 12px 0; font-size: 11px; line-height: 1.5; color: var(--accent-foreground, #246b3a); animation: mail-toast-enter .2s ease-out both; }
+.settings-profile-success > span { min-width: 0; flex: 1 1 auto; }
 @media (max-width: 760px) { .settings-field-wide { grid-column: auto; } }
