@@ -41,6 +41,8 @@ const settingsRoute = read("app/dashboard/[organizationId]/settings/[[...section
 const contactManager = read("components/contact-manager.tsx");
 const templateManager = read("components/template-manager.tsx");
 const reminderManager = read("components/reminder-manager.tsx");
+const brandProfileEditor = read("components/brand-profile-editor.tsx");
+const designedEmailManager = read("components/designed-email-manager.tsx");
 const transientNotice = read("lib/use-transient-notice.ts");
 const inboxStyles = read("components/workspace-home.module.css");
 const globalStyles = read("app/globals.css");
@@ -147,6 +149,8 @@ for (const [relativePath, source] of [
   ["components/workspace-settings-panel.tsx", settings],
   ["components/template-manager.tsx", templateManager],
   ["components/reminder-manager.tsx", reminderManager],
+  ["components/brand-profile-editor.tsx", brandProfileEditor],
+  ["components/designed-email-manager.tsx", designedEmailManager],
 ]) {
   assert(source.includes("useTransientNotice"), relativePath + " must use the shared fifteen-second notice lifecycle.");
   assert(source.includes('aria-label="Dismiss notice"'), relativePath + " must provide a manual notice dismissal control.");
