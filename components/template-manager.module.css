@@ -199,7 +199,8 @@
 .textButton { min-height: 29px; padding: 6px 9px; border-color: var(--border, #e1e9df); background: transparent; color: var(--muted-foreground, #6d7a6e); }
 .deletePrompt { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 13px; border: 1px solid #edcfcb; border-radius: 8px; background: #fff8f6; }
 .deletePrompt p { margin: 0; color: #8d4942; font-size: 10px; line-height: 1.5; }
-.notice { margin: 0; color: var(--primary, #28774c); font-size: 10px; line-height: 1.6; }
+.notice { display: flex; align-items: flex-start; gap: 9px; margin: 0; color: var(--primary, #28774c); font-size: 10px; line-height: 1.6; animation: mail-toast-enter .2s ease-out both; }
+.notice > span { min-width: 0; flex: 1 1 auto; }
 .helper, .footerNote { margin: 0; color: var(--muted-foreground, #899589); font-size: 10px; line-height: 1.7; }
 .helper { padding-top: 1px; }
 @media (max-width: 900px) {
