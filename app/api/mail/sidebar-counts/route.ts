@@ -86,7 +86,7 @@ export async function GET(request: NextRequest) {
       : Promise.resolve(emptyCount),
     readableMailboxIds.length
       ? admin.from("email_messages")
-          .select("id, email_message_user_state!" + MESSAGE_STATE_RELATION + "!left(message_id,user_id)", { count: "exact", head: true })
+          .select("id, email_message_user_state!" + MESSAGE_STATE_RELATION + "(message_id,user_id)", { count: "exact", head: true })
           .eq("organization_id", organizationId)
           .in("mailbox_id", readableMailboxIds)
           .eq("direction", "inbound")
