@@ -1454,8 +1454,10 @@ const scheduledLoading = activeView === "Scheduled" && Boolean(mailboxId) && sch
                       <span className="mail-avatar tone-slate">{initials(message.direction === "inbound" ? message.from_address : organizationName)}</span>
                       <span className="mail-message-copy">
                         <span className="mail-message-row-top">
-                          {!message.is_read && <span className="mail-unread-dot" aria-hidden="true" title="Unread message" />}
-                          <strong>{message.direction === "inbound" ? message.from_address : message.to_addresses.join(", ")}</strong>
+                          <span className="mail-message-sender">
+                            {!message.is_read && <span className="mail-unread-dot" aria-hidden="true" title="Unread message" />}
+                            <strong>{message.direction === "inbound" ? message.from_address : message.to_addresses.join(", ")}</strong>
+                          </span>
                           <time>{activeView === "Snoozed" && message.snoozed_until
                             ? "Returns " + new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: mailPreferences.timezone || undefined }).format(new Date(message.snoozed_until))
                             : messageDate(message, mailPreferences.timezone, mailPreferences.language)}</time>
