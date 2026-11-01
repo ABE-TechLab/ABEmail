@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { renderEmailDesign, validateEmailDesignContent, type EmailDesignBrandProfile, type EmailDesignContent } from "@/lib/email-design/render.mjs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -43,16 +44,16 @@ export async function GET(request: NextRequest) {
   const ctx = await context(organizationId, mailboxId);
   if ("response" in ctx) return ctx.response;
   const { data, error } = await ctx.admin.from("scheduled_email_messages")
-    .select("id, organization_id, mailbox_id, user_id, to_address, subject, body_text, scheduled_at, status, attempt_count, last_error_code, created_at, updated_at")
+    .select("id, organization_id, mailbox_id, user_id, to_address, subject, body_text, design_content_json, scheduled_at, status, attempt_count, last_error_code, created_at, updated_at")
     .eq("organization_id", organizationId).eq("mailbox_id", mailboxId).eq("user_id", ctx.user.id)
     .in("status", ["scheduled", "processing", "failed"]).order("scheduled_at", { ascending: true }).limit(100);
   if (error) return json({ error: "Scheduled messages could not be loaded. The Scheduled migration may not be applied in this environment." }, 503);
-  return json({ scheduled: data ?? [] });
+  return json({ scheduled: (data ?? []).map(({ design_content_json, ...item }) => ({ ...item, is_designed: Boolean(design_content_json) })) });
 }
 export async function POST(request: NextRequest) {
   if (!originAllowed(request)) return json({ error: "Cross-origin request rejected." }, 403);
   let p: unknown;
-  try { const raw = await request.text(); if (raw.length > 100000) return json({ error: "Message is too large." }, 413); p = JSON.parse(raw); }
+  try { const raw = await request.text(); if (raw.length > 350000) return json({ error: "Message is too large." }, 413); p = JSON.parse(raw); }
   catch { return json({ error: "Invalid scheduled message payload." }, 400); }
   if (!p || typeof p !== "object") return json({ error: "Invalid scheduled message payload." }, 400);
   const body = p as Record<string, unknown>;
@@ -60,9 +61,17 @@ export async function POST(request: NextRequest) {
   const mailboxId = typeof body.mailboxId === "string" ? body.mailboxId : "";
   const ctx = await context(organizationId, mailboxId);
   if ("response" in ctx) return ctx.response;
+  let designContent: EmailDesignContent | null = null;
+  if (body.designContent !== undefined && body.designContent !== null) {
+    const parsed = validateEmailDesignContent(body.designContent);
+    if (parsed.error || !parsed.data || parsed.data.blocks.length === 0) {
+      return json({ error: parsed.error || "Add at least one content block before scheduling a designed email." }, 400);
+    }
+    designContent = parsed.data;
+  }
   if (typeof body.to !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.to.trim()) || body.to.length > 320 ||
       typeof body.subject !== "string" || !body.subject.trim() || body.subject.length > 998 ||
-      typeof body.text !== "string" || !body.text.trim() || body.text.length > 80000 ||
+      typeof body.text !== "string" || body.text.length > 80000 || (!body.text.trim() && !designContent) ||
       typeof body.scheduledAt !== "string" || !Number.isFinite(Date.parse(body.scheduledAt))) {
     return json({ error: "Enter a valid recipient, subject, message, and scheduled time." }, 400);
   }
@@ -86,13 +95,50 @@ export async function POST(request: NextRequest) {
   if (!provider && ctx.mailbox.address !== "info@ottawasnowmatch.waste2light.com") {
     return json({ error: "Connect Resend in workspace Settings before scheduling." }, 503);
   }
+
+  let designBrandProfile: EmailDesignBrandProfile | null = null;
+  let scheduledText = body.text as string;
+  if (designContent) {
+    if (!provider || provider.status !== "connected" || !domain.sending_enabled || !domain.provider_domain_id) {
+      return json({ error: "Designed emails require a connected workspace Resend account and a verified sending-enabled domain." }, 409);
+    }
+    const { data: brandRow, error: brandError } = await ctx.admin.from("organization_brand_profiles")
+      .select("brand_name, logo_url, primary_color, accent_color, background_color, text_color, font_family, website_url, phone, address, default_footer_text, social_links")
+      .eq("organization_id", organizationId).maybeSingle();
+    if (brandError) return json({ error: "The workspace brand profile could not be loaded." }, 503);
+    designBrandProfile = brandRow ? {
+      brandName: brandRow.brand_name,
+      logoUrl: brandRow.logo_url,
+      primaryColor: brandRow.primary_color,
+      accentColor: brandRow.accent_color,
+      backgroundColor: brandRow.background_color,
+      textColor: brandRow.text_color,
+      fontFamily: brandRow.font_family,
+      websiteUrl: brandRow.website_url,
+      phone: brandRow.phone,
+      address: brandRow.address,
+      footerText: brandRow.default_footer_text,
+      socialLinks: brandRow.social_links,
+    } as EmailDesignBrandProfile : {};
+    const rendered = renderEmailDesign(designContent, designBrandProfile);
+    if (!rendered.text.trim() || rendered.text.length > 80000) {
+      return json({ error: "The designed email needs a useful plain-text alternative under 80 KB." }, 400);
+    }
+    if (rendered.html.length > 1000000) {
+      return json({ error: "The generated designed email is too large. Reduce its text or imagery before scheduling." }, 413);
+    }
+    scheduledText = rendered.text;
+  }
+
   const { data, error } = await ctx.admin.from("scheduled_email_messages").insert({
     organization_id: organizationId, mailbox_id: mailboxId, user_id: ctx.user.id,
-    to_address: body.to.trim().toLowerCase(), subject: body.subject.trim(), body_text: body.text,
+    to_address: body.to.trim().toLowerCase(), subject: body.subject.trim(), body_text: scheduledText,
+    design_content_json: designContent, design_brand_profile_json: designBrandProfile,
     scheduled_at: scheduledAt.toISOString(), status: "scheduled",
-  }).select("id, to_address, subject, body_text, scheduled_at, status, created_at, updated_at").single();
+  }).select("id, to_address, subject, body_text, design_content_json, scheduled_at, status, created_at, updated_at").single();
   if (error || !data) return json({ error: "The message could not be scheduled. Confirm the Scheduled migration is available." }, 503);
-  return json({ ok: true, scheduled: data }, 201);
+  const { design_content_json, ...scheduled } = data;
+  return json({ ok: true, scheduled: { ...scheduled, is_designed: Boolean(design_content_json) } }, 201);
 }
 export async function PATCH(request: NextRequest) {
   if (!originAllowed(request)) return json({ error: "Cross-origin request rejected." }, 403);
@@ -106,6 +152,16 @@ export async function PATCH(request: NextRequest) {
   const ctx = await context(organizationId, mailboxId);
   if ("response" in ctx) return ctx.response;
   if (!UUID.test(id)) return json({ error: "Invalid scheduled message ID." }, 400);
+  if (body.action === "send_now") {
+    const { data, error } = await ctx.admin.from("scheduled_email_messages")
+      .update({ scheduled_at: new Date().toISOString(), last_error_code: null })
+      .eq("id", id).eq("organization_id", organizationId).eq("mailbox_id", mailboxId)
+      .eq("user_id", ctx.user.id).eq("status", "scheduled")
+      .select("id, scheduled_at, status").maybeSingle();
+    if (error) return json({ error: "The scheduled email could not be queued for immediate delivery." }, 503);
+    if (!data) return json({ error: "This message is no longer pending; refresh Scheduled." }, 409);
+    return json({ ok: true, scheduled: data });
+  }
   if (body.action === "claim_send_now") {
     const { data, error } = await ctx.admin.from("scheduled_email_messages").update({ status: "processing", locked_at: new Date().toISOString(), last_error_code: null })
       .eq("id", id).eq("organization_id", organizationId).eq("mailbox_id", mailboxId).eq("user_id", ctx.user.id).eq("status", "scheduled")
