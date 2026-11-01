@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { createHash } from "node:crypto";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { renderEmailDesign, validateEmailDesignContent, type EmailDesignBrandProfile, type EmailDesignContent } from "@/lib/email-design/render.mjs";
@@ -57,6 +58,9 @@ export async function POST(request: NextRequest) {
   catch { return json({ error: "Invalid scheduled message payload." }, 400); }
   if (!p || typeof p !== "object") return json({ error: "Invalid scheduled message payload." }, 400);
   const body = p as Record<string, unknown>;
+  const rawRequestId = request.headers.get("Idempotency-Key");
+  const clientRequestId = rawRequestId ? rawRequestId.trim() : null;
+  if (clientRequestId && !UUID.test(clientRequestId)) return json({ error: "Invalid scheduled-message request key." }, 400);
   const organizationId = typeof body.organizationId === "string" ? body.organizationId : "";
   const mailboxId = typeof body.mailboxId === "string" ? body.mailboxId : "";
   const ctx = await context(organizationId, mailboxId);
@@ -94,6 +98,28 @@ export async function POST(request: NextRequest) {
   if (provider && (!domain.sending_enabled || !domain.provider_domain_id)) return json({ error: "Resend has not confirmed sending is enabled for this domain. Refresh domain verification before scheduling." }, 409);
   if (!provider && ctx.mailbox.address !== "info@ottawasnowmatch.waste2light.com") {
     return json({ error: "Connect Resend in workspace Settings before scheduling." }, 503);
+  }
+
+  const requestFingerprint = createHash("sha256").update(JSON.stringify({
+    organizationId,
+    mailboxId,
+    to: body.to.trim().toLowerCase(),
+    subject: body.subject.trim(),
+    text: body.text,
+    scheduledAt: scheduledAt.toISOString(),
+    designContent,
+  }), "utf8").digest("hex");
+  if (clientRequestId) {
+    const { data: existing, error: existingError } = await ctx.admin.from("scheduled_email_messages")
+      .select("id, to_address, subject, body_text, design_content_json, scheduled_at, status, created_at, updated_at, request_fingerprint")
+      .eq("organization_id", organizationId).eq("mailbox_id", mailboxId).eq("user_id", ctx.user.id)
+      .eq("client_request_id", clientRequestId).maybeSingle();
+    if (existingError) return json({ error: "The previous schedule request could not be checked safely." }, 503);
+    if (existing) {
+      if (existing.request_fingerprint !== requestFingerprint) return json({ error: "This request key was already used for different scheduled email content." }, 409);
+      const { design_content_json, request_fingerprint: _requestFingerprint, ...scheduled } = existing;
+      return json({ ok: true, duplicate: true, scheduled: { ...scheduled, is_designed: Boolean(design_content_json) } });
+    }
   }
 
   let designBrandProfile: EmailDesignBrandProfile | null = null;
@@ -134,9 +160,23 @@ export async function POST(request: NextRequest) {
     organization_id: organizationId, mailbox_id: mailboxId, user_id: ctx.user.id,
     to_address: body.to.trim().toLowerCase(), subject: body.subject.trim(), body_text: scheduledText,
     design_content_json: designContent, design_brand_profile_json: designBrandProfile,
+    client_request_id: clientRequestId, request_fingerprint: clientRequestId ? requestFingerprint : null,
     scheduled_at: scheduledAt.toISOString(), status: "scheduled",
   }).select("id, to_address, subject, body_text, design_content_json, scheduled_at, status, created_at, updated_at").single();
-  if (error || !data) return json({ error: "The message could not be scheduled. Confirm the Scheduled migration is available." }, 503);
+  if (error || !data) {
+    if (error?.code === "23505" && clientRequestId) {
+      const { data: existing } = await ctx.admin.from("scheduled_email_messages")
+        .select("id, to_address, subject, body_text, design_content_json, scheduled_at, status, created_at, updated_at, request_fingerprint")
+        .eq("organization_id", organizationId).eq("mailbox_id", mailboxId).eq("user_id", ctx.user.id)
+        .eq("client_request_id", clientRequestId).maybeSingle();
+      if (existing?.request_fingerprint === requestFingerprint) {
+        const { design_content_json, request_fingerprint: _requestFingerprint, ...scheduled } = existing;
+        return json({ ok: true, duplicate: true, scheduled: { ...scheduled, is_designed: Boolean(design_content_json) } });
+      }
+      if (existing) return json({ error: "This request key was already used for different scheduled email content." }, 409);
+    }
+    return json({ error: "The message could not be scheduled. Confirm the Scheduled migration is available." }, 503);
+  }
   const { design_content_json, ...scheduled } = data;
   return json({ ok: true, scheduled: { ...scheduled, is_designed: Boolean(design_content_json) } }, 201);
 }
