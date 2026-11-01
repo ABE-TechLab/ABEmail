@@ -13,6 +13,7 @@
     "lint": "eslint .",
     "check:navigation": "node scripts/check-workspace-navigation.mjs",
     "test:email-design": "node --test lib/email-design/render.test.mjs",
+    "test:email-webhooks": "node --test lib/email/resend-webhook-state.test.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
