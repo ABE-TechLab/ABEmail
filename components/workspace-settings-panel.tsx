@@ -116,7 +116,7 @@ const DEFAULT_PREFERENCES: WorkspacePreferenceValues = {
 };
 
 const SECTION_INFO: Record<string, { title: string; description: string }> = {
-  general: { title: "General", description: "Workspace identity and regional preferences." },
+  general: { title: "Workspace profile", description: "Manage your business identity and workspace-wide regional preferences." },
   appearance: { title: "Appearance", description: "Personalize the workspace shell and message list." },
   mail: { title: "Mail & compose", description: "Connect your mail provider and configure writing preferences." },
   notifications: { title: "Notifications", description: "Save your notification preferences for this workspace." },
@@ -126,7 +126,7 @@ const SECTION_INFO: Record<string, { title: string; description: string }> = {
   security: { title: "Security", description: "Review your current access and account-session controls." },
   rules: { title: "Rules & filters", description: "Define deterministic actions for incoming messages." },
   "out-of-office": { title: "Out-of-office", description: "Configure automatic replies while you are away." },
-  branding: { title: "Brand profile", description: "Set up the organization identity shared by branded email templates." },
+  branding: { title: "Workspace profile", description: "Manage your business identity and workspace-wide regional preferences." },
   integrations: { title: "Integrations", description: "Manage external services connected to this workspace." },
 };
 
@@ -134,7 +134,7 @@ const SETTINGS_NAV_GROUPS = [
   {
     heading: "WORKSPACE",
     items: [
-      { id: "general", label: "General", icon: "⚙" },
+      { id: "general", label: "Workspace profile", icon: "◎" },
       { id: "appearance", label: "Appearance", icon: "◐" },
       { id: "notifications", label: "Notifications", icon: "♧" },
       { id: "team", label: "Team & access", icon: "♙" },
@@ -157,9 +157,8 @@ const SETTINGS_NAV_GROUPS = [
     ],
   },
   {
-    heading: "BRAND & CONNECTIONS",
+    heading: "CONNECTIONS",
     items: [
-      { id: "branding", label: "Brand profile", icon: "✧" },
       { id: "integrations", label: "Integrations", icon: "⛭" },
     ],
   },
@@ -820,15 +819,26 @@ export default function WorkspaceSettingsPanel({
             <section className="settings-panel" aria-labelledby="settings-heading">
               <header className="settings-panel-heading"><div><h2 id="settings-heading">{info.title}</h2><p>{info.description}</p></div></header>
 
-              {section === "general" && <form onSubmit={saveGeneral}>
-                <div className="settings-form-grid">
-                  <Field label="Workspace name" hint="Saved to the organization when your role permits it."><input value={displayName} onChange={(event) => setDisplayName(event.target.value)} minLength={2} maxLength={80} required /></Field>
-                  <Field label="Language"><select value={preferences.language} onChange={(event) => setPreferences((current) => ({ ...current, language: event.target.value }))}><option value="en">English</option><option value="fr">French</option><option value="pt">Portuguese</option></select></Field>
-                  <Field label="Time zone" hint="Used for message timestamps in this workspace."><select value={preferences.timezone} onChange={(event) => setPreferences((current) => ({ ...current, timezone: event.target.value }))}><option value="Africa/Lagos">Africa/Lagos (WAT)</option><option value="UTC">UTC</option><option value="Europe/London">Europe/London</option><option value="America/New_York">America/New York</option><option value="America/Toronto">America/Toronto</option></select></Field>
-                </div>
-                <div className="settings-info-banner"><span>i</span><p>Regional preferences sync to this workspace. Workspace name changes are saved to the organization when authorized by your role.</p></div>
-                <div className="settings-form-footer"><span>Workspace: {organizationSlug}</span><button className="mail-primary-action" type="submit" disabled={saving}>{saving ? "Saving…" : "Save changes"}</button></div>
-              </form>}
+              {section === "general" && <div className="workspace-profile-settings">
+                <section aria-labelledby="workspace-profile-details-heading">
+                  <div className="settings-section-summary"><div><strong id="workspace-profile-details-heading">Workspace details</strong><p>The name and regional preferences shared across this business workspace.</p></div></div>
+                  <form onSubmit={saveGeneral}>
+                    <div className="settings-form-grid">
+                      <Field label="Workspace name" hint="This is the company name used by the workspace and its branded emails."><input value={displayName} onChange={(event) => setDisplayName(event.target.value)} minLength={2} maxLength={80} required disabled={!canManageWorkspace} /></Field>
+                      <Field label="Language"><select value={preferences.language} onChange={(event) => setPreferences((current) => ({ ...current, language: event.target.value }))}><option value="en">English</option><option value="fr">French</option><option value="pt">Portuguese</option></select></Field>
+                      <Field label="Time zone" hint="Used for message timestamps and scheduled-mail displays in this workspace."><select value={preferences.timezone} onChange={(event) => setPreferences((current) => ({ ...current, timezone: event.target.value }))}><option value="Africa/Lagos">Africa/Lagos (WAT)</option><option value="UTC">UTC</option><option value="Europe/London">Europe/London</option><option value="America/New_York">America/New York</option><option value="America/Toronto">America/Toronto</option></select></Field>
+                    </div>
+                    <div className="settings-info-banner"><span>i</span><p>Regional preferences sync to this workspace. Workspace name changes are available to owners and admins.</p></div>
+                    <div className="settings-form-footer"><span>Workspace: {organizationSlug}</span><button className="mail-primary-action" type="submit" disabled={saving}>{saving ? "Saving…" : "Save workspace details"}</button></div>
+                  </form>
+                </section>
+                <div className="settings-divider" />
+                <section aria-labelledby="workspace-profile-identity-heading">
+                  <div className="settings-section-summary"><div><strong id="workspace-profile-identity-heading">Business identity</strong><p>One company logo and brand profile shared by every mailbox in this workspace.</p></div></div>
+                  <BrandProfileEditor organizationId={organizationId} organizationName={displayName} canManage={canManageWorkspace} />
+                  <div className="settings-form-footer"><span>The workspace logo and brand defaults are reused by designed email templates.</span><Link href={base + "/templates"} className="mail-secondary-action">Open Templates</Link></div>
+                </section>
+              </div>}
 
               {section === "appearance" && <div>
                 <div className="settings-choice-group"><p className="settings-subheading">Light and dark mode</p><p className="settings-muted">Choose whether ABEmail follows your preference or your device setting.</p><div className="settings-theme-options">{APPEARANCE_MODES.map((item) => <button key={item.id} type="button" aria-pressed={mode === item.id} className={mode === item.id ? "settings-theme-choice selected" : "settings-theme-choice"} onClick={() => { setMode(item.id); notify(item.label + " mode applied."); }}><span className="settings-theme-preview">{item.glyph}</span><span>{item.label}</span>{mode === item.id && <b>✓</b>}</button>)}</div></div>
@@ -1058,10 +1068,7 @@ export default function WorkspaceSettingsPanel({
                 <div className="settings-empty-state"><strong>Automatic replies are not active</strong><p>Start/end scheduling, repeated-reply protection, and loop prevention must be implemented before this setting can send responses. Nothing is automatically replied to from this screen.</p></div>
               </div>}
 
-              {section === "branding" && <div>
-                <BrandProfileEditor organizationId={organizationId} canManage={canManageWorkspace} />
-                <div className="settings-form-footer"><span>Designed email templates use this identity for their preview and generated HTML.</span><Link href={base + "/templates"} className="mail-secondary-action">Open Templates</Link></div>
-              </div>}
+              {section === "branding" && <div className="workspace-profile-settings"><p className="settings-muted">Workspace identity now lives in Workspace Profile.</p><Link href={settingsBase} className="mail-secondary-action">Open Workspace Profile</Link></div>}
 
               {section === "integrations" && <div>
                 <div className="settings-section-summary"><div><strong>Connected services</strong><p>Provider setup and future calendar/CRM integrations for this workspace.</p></div></div>
