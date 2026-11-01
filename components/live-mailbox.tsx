@@ -51,7 +51,7 @@ type LifecycleAction = "mark_read" | "mark_unread" | "star" | "unstar" | "archiv
 type EmailDraft = { id: string; to_address: string; subject: string; body_text: string; design_content_json: EmailDesignContent | null; created_at: string; updated_at: string };
 type PendingAttachment = { id: string; filename: string; content_type: string; size_bytes: number };
 type MessageAttachment = PendingAttachment & { created_at: string };
-type ScheduledEmail = { id: string; to_address: string; subject: string; body_text: string; scheduled_at: string; status: "scheduled" | "processing" | "accepted" | "failed" | "cancelled"; attempt_count: number; last_error_code: string | null; created_at: string; updated_at: string };
+type ScheduledEmail = { id: string; to_address: string; subject: string; body_text: string; is_designed: boolean; scheduled_at: string; status: "scheduled" | "processing" | "accepted" | "failed" | "cancelled"; attempt_count: number; last_error_code: string | null; created_at: string; updated_at: string };
 type EmailMessage = {
   id: string;
   mailbox_id: string;
@@ -983,13 +983,35 @@ const scheduledLoading = activeView === "Scheduled" && Boolean(mailboxId) && sch
     if (pendingAttachments.length) { setNotice("Remove attachments before scheduling. Scheduled attachments are not supported yet."); return; }
     const scheduleRecipients = to.split(/[;,]/).map((value) => value.trim()).filter(Boolean);
     if (scheduleRecipients.length !== 1) { setNotice("Scheduled messages currently support one recipient at a time."); return; }
-    if (!to.trim() || !subject.trim() || !body.trim()) { setNotice("Enter a recipient, subject, and message before scheduling."); return; }
+    if (!to.trim() || !subject.trim() || (!body.trim() && composeMode !== "branded")) { setNotice("Enter a recipient, subject, and message before scheduling."); return; }
+    if (!scheduledAt || !Number.isFinite(Date.parse(scheduledAt))) { setNotice("Choose a date and time for delivery."); return; }
+    let finalDesignContent: EmailDesignContent | null = null;
+    let finalBody = "";
+    const signature = resolveMailboxSignature(mailPreferences, mailboxId, composeSignatureId);
+    if (composeMode === "branded") {
+      const source = composeDesignContentRef.current ?? composeDesignContent;
+      if (!source || source.blocks.length === 0) { setNotice("Add at least one designed-email content block before scheduling."); return; }
+      const blocks = [...source.blocks];
+      if (signature) {
+        const footerIndex = blocks.map((block) => block.type).lastIndexOf("footer");
+        if (footerIndex >= 0 && blocks[footerIndex].type === "footer") {
+          const footer = blocks[footerIndex];
+          if (footer.type === "footer") blocks[footerIndex] = { ...footer, text: footer.text ? footer.text + "\n\n" + signature : signature };
+        } else {
+          if (blocks.length >= 100) { setNotice("This design has 100 blocks. Remove a block to add your mailbox signature."); return; }
+          blocks.push({ id: "abemail-scheduled-signature-" + crypto.randomUUID().replaceAll("-", ""), type: "footer", text: signature });
+        }
+      }
+      finalDesignContent = { version: 1, blocks };
+      finalBody = body.trim() || "This message was composed using a designed email.";
+    } else {
+      finalBody = appendSignature(body, signature);
+    }
+    if (!finalBody.trim()) { setNotice("Add message content before scheduling."); return; }
     if (!scheduledAt || !Number.isFinite(Date.parse(scheduledAt))) { setNotice("Choose a date and time for delivery."); return; }
     setBusy(true); setNotice("");
     try {
-      const signature = resolveMailboxSignature(mailPreferences, mailboxId, composeSignatureId);
-      const finalBody = appendSignature(body, signature);
-      const response = await fetch("/api/mail/scheduled", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ organizationId, mailboxId, to: to.trim(), subject: subject.trim(), text: finalBody, scheduledAt: new Date(scheduledAt).toISOString() }) });
+      const response = await fetch("/api/mail/scheduled", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ organizationId, mailboxId, to: to.trim(), subject: subject.trim(), text: finalBody, ...(finalDesignContent ? { designContent: finalDesignContent } : {}), scheduledAt: new Date(scheduledAt).toISOString() }) });
       const result = await response.json() as { ok?: boolean; error?: string; scheduled?: ScheduledEmail };
       if (!response.ok || !result.ok || !result.scheduled) { setNotice(result.error || "The message could not be scheduled."); return; }
       draftMutationVersion.current += 1;
@@ -1012,6 +1034,19 @@ const scheduledLoading = activeView === "Scheduled" && Boolean(mailboxId) && sch
   async function sendScheduledNow(item: ScheduledEmail) {
     if (scheduledBusyId) return;
     setScheduledBusyId(item.id); setNotice("");
+    if (item.is_designed) {
+      try {
+        const response = await fetch("/api/mail/scheduled", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ organizationId, mailboxId, id: item.id, action: "send_now" }) });
+        const result = await response.json() as { ok?: boolean; error?: string; scheduled?: { scheduled_at: string } };
+        if (!response.ok || !result.ok || !result.scheduled) { setNotice(result.error || "The designed email could not be queued for immediate delivery."); return; }
+        setScheduledMessages((current) => current.map((message) => message.id === item.id ? { ...message, scheduled_at: result.scheduled!.scheduled_at, status: "scheduled", last_error_code: null } : message));
+        setNotice("Designed email queued for the next scheduled-mail worker run.");
+        router.refresh();
+      } catch {
+        setNotice("The connection was interrupted. Refresh Scheduled to confirm the queue time.");
+      } finally { setScheduledBusyId(""); }
+      return;
+    }
     let claimed = false;
     try {
       const claim = await fetch("/api/mail/scheduled", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ organizationId, mailboxId, id: item.id, action: "claim_send_now" }) });
@@ -1414,7 +1449,7 @@ const scheduledLoading = activeView === "Scheduled" && Boolean(mailboxId) && sch
                     <span className="mail-avatar tone-slate">◷</span>
                     <div className="mail-message-copy">
                       <span className="mail-message-row-top"><strong>{item.to_address}</strong><time>{new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: mailPreferences.timezone || undefined }).format(new Date(item.scheduled_at))}</time></span>
-                      <span className="mail-message-subject">{item.subject}</span>
+                      <span className="mail-message-subject">{item.subject}{item.is_designed ? " · Designed" : ""}</span>
                       <span className="mail-message-preview">{item.status === "failed" ? "Delivery failed: " + (item.last_error_code || "unknown error") : item.status === "processing" ? "Sending now…" : item.body_text.replace(/\s+/g, " ").slice(0, 120)}</span>
                       <div className={styles.rowActions}>
                         {item.status === "scheduled" && <button type="button" className="mail-toolbar-button" disabled={Boolean(scheduledBusyId)} onClick={() => void sendScheduledNow(item)}>Send now</button>}{item.status === "scheduled" && <><input aria-label={"New send time for " + item.subject} type="datetime-local" value={scheduledTimeEdits[item.id] ?? localDateTimeInput(item.scheduled_at)} onChange={(event) => setScheduledTimeEdits((current) => ({ ...current, [item.id]: event.target.value }))} disabled={Boolean(scheduledBusyId)} /><button type="button" className="mail-toolbar-button" disabled={Boolean(scheduledBusyId) || !(scheduledTimeEdits[item.id] ?? localDateTimeInput(item.scheduled_at))} onClick={() => void updateScheduled(item, "reschedule", scheduledTimeEdits[item.id] ?? localDateTimeInput(item.scheduled_at))} title="Reschedule">Reschedule</button></>}
@@ -1833,7 +1868,7 @@ const scheduledLoading = activeView === "Scheduled" && Boolean(mailboxId) && sch
                 )}
                 {scheduleMode && <label className="mail-compose-field"><span>Send at</span><input type="datetime-local" required value={scheduledAt} onChange={(event) => setScheduledAt(event.target.value)} disabled={busy} /></label>}
                 <footer className="mail-compose-footer">
-                  {scheduleMode ? <button type="button" className="mail-primary-action" disabled={busy || uploadingAttachments || !mailboxId || !scheduledAt || pendingAttachments.length > 0 || to.split(/[;,]/).map((value) => value.trim()).filter(Boolean).length !== 1} onClick={() => void scheduleMessage()}>{busy ? "Scheduling…" : "Schedule email"} <span>◷</span></button> : <><button type="submit" className="mail-primary-action" disabled={busy || uploadingAttachments || !mailboxId}>{busy ? "Sending…" : "Send"} <span>↗</span></button>{composeMode === "standard" && <button type="button" className="mail-compose-discard" disabled={busy || uploadingAttachments || pendingAttachments.length > 0 || to.split(/[;,]/).map((value) => value.trim()).filter(Boolean).length !== 1} title={pendingAttachments.length > 0 ? "Remove attachments before scheduling" : "Scheduling currently supports one recipient"} onClick={() => { setScheduleMode(true); const date = new Date(Date.now() + 60 * 60 * 1000); date.setMinutes(date.getMinutes() - date.getTimezoneOffset()); setScheduledAt(date.toISOString().slice(0, 16)); }}>Schedule</button>}</>}
+                  {scheduleMode ? <button type="button" className="mail-primary-action" disabled={busy || uploadingAttachments || !mailboxId || !scheduledAt || pendingAttachments.length > 0 || to.split(/[;,]/).map((value) => value.trim()).filter(Boolean).length !== 1} onClick={() => void scheduleMessage()}>{busy ? "Scheduling…" : "Schedule email"} <span>◷</span></button> : <><button type="submit" className="mail-primary-action" disabled={busy || uploadingAttachments || !mailboxId}>{busy ? "Sending…" : "Send"} <span>↗</span></button><button type="button" className="mail-compose-discard" disabled={busy || uploadingAttachments || pendingAttachments.length > 0 || to.split(/[;,]/).map((value) => value.trim()).filter(Boolean).length !== 1} title={pendingAttachments.length > 0 ? "Remove attachments before scheduling" : "Scheduling currently supports one recipient"} onClick={() => { setScheduleMode(true); const date = new Date(Date.now() + 60 * 60 * 1000); date.setMinutes(date.getMinutes() - date.getTimezoneOffset()); setScheduledAt(date.toISOString().slice(0, 16)); }}>Schedule</button></>}
                   <button type="button" className="mail-compose-discard" onClick={() => void closeComposer()} disabled={busy}>Close</button>
                 </footer>
               </form>
