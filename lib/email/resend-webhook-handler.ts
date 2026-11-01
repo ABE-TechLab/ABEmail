@@ -12,6 +12,7 @@ import {
   verifyResendWebhookSignature,
 } from "@/lib/email/resend-pilot";
 import { decryptProviderSecret, ResendProviderError } from "@/lib/email/resend-provider";
+import { classifyProviderEventDuplicate } from "@/lib/email/resend-webhook-state.mjs";
 
 
 type ProviderEvent = {
@@ -171,12 +172,14 @@ export async function handleResendWebhook(request: NextRequest, tenantOrganizati
 
     if (lookupError) return json({ error: "Webhook deduplication could not be checked." }, 503);
     if (!existing) return json({ error: "Webhook event could not be loaded." }, 503);
-    if (existing.status === "processed") {
+    const duplicateDisposition = classifyProviderEventDuplicate(existing.status, existing.received_at);
+    if (duplicateDisposition === "acknowledge") {
       return json({ ok: true, duplicate: true });
     }
-    if (existing.status === "processing") {
+
+    if (duplicateDisposition === "recover") {
       const cutoff = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-      const { data: stale, error: staleError } = await admin
+      const { error: staleError } = await admin
         .from("provider_events")
         .update({ status: "failed", last_error_code: "STALE_PROCESSING_RETRY" })
         .eq("id", existing.id)
@@ -185,8 +188,17 @@ export async function handleResendWebhook(request: NextRequest, tenantOrganizati
         .select("id")
         .maybeSingle();
       if (staleError) return json({ error: "Stalled webhook status could not be checked." }, 503);
-      if (stale) return json({ error: "A prior processing attempt stalled. Resend should retry this event." }, 500);
-      return json({ ok: true, duplicate: true });
+      // Even when another request wins the state transition, do not acknowledge
+      // an event that has not been confirmed as processed. Ask Resend to retry.
+      return json({ error: "A prior webhook attempt stalled or is changing state. Resend should retry this event." }, 503);
+    }
+
+    if (duplicateDisposition !== "claim") {
+      // A concurrent delivery may see the unique event row while the first
+      // request is still processing. Returning 200 here can lose the event if
+      // the first attempt later fails. A retry is safe because event IDs are
+      // deduplicated and only a failed row can be atomically reclaimed.
+      return json({ error: "This webhook event is still processing. Resend should retry it." }, 503);
     }
 
     const { data: claimed, error: claimError } = await admin
@@ -197,7 +209,7 @@ export async function handleResendWebhook(request: NextRequest, tenantOrganizati
       .select("id")
       .maybeSingle();
     if (claimError) return json({ error: "Webhook retry could not be claimed." }, 503);
-    if (!claimed) return json({ ok: true, duplicate: true });
+    if (!claimed) return json({ error: "Webhook retry is already being claimed. Resend should retry it." }, 503);
     providerEventRowId = claimed.id;
   } else if (insertError || !insertedEvent) {
     return json({ error: "Webhook event could not be recorded." }, 503);
