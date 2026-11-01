@@ -9,10 +9,7 @@ alter table public.scheduled_email_messages
 
 alter table public.scheduled_email_messages
   add constraint scheduled_email_design_payload_check check (
-    (
-      design_content_json is null
-      and design_brand_profile_json is null
-    )
+    (design_content_json is null and design_brand_profile_json is null)
     or
     (
       design_content_json is not null
@@ -36,40 +33,9 @@ alter table public.scheduled_email_messages
     or
     (
       client_request_id is not null
-      and request_fingerprint ~ '^[0-9a-f]{64}
-returns trigger
-language plpgsql
-set search_path = ''
-as $function$
-begin
-  if new.organization_id is distinct from old.organization_id
-    or new.mailbox_id is distinct from old.mailbox_id
-    or new.user_id is distinct from old.user_id
-    or new.to_address is distinct from old.to_address
-    or new.subject is distinct from old.subject
-    or new.body_text is distinct from old.body_text
-    or new.design_content_json is distinct from old.design_content_json
-    or new.design_brand_profile_json is distinct from old.design_brand_profile_json
-    or new.client_request_id is distinct from old.client_request_id
-    or new.request_fingerprint is distinct from old.request_fingerprint
-  then
-    raise exception 'Scheduled email payload is immutable';
-  end if;
-  return new;
-end;
-$function$;
-
-revoke all on function private.prevent_scheduled_email_payload_mutation() from public, anon, authenticated;
-
-create trigger scheduled_email_payload_immutable
-  before update on public.scheduled_email_messages
-  for each row execute function private.prevent_scheduled_email_payload_mutation();
-
-comment on column public.scheduled_email_messages.design_content_json is
-  'Validated, immutable versioned block content for a designed scheduled email.';
-comment on column public.scheduled_email_messages.design_brand_profile_json is
-  'Safe organization brand-profile snapshot captured when the designed email is scheduled; never reread from mutable profile at send time.';
-
+      and request_fingerprint is not null
+      and length(request_fingerprint) = 64
+      and request_fingerprint !~ '[^0-9a-f]'
     )
   );
 
@@ -91,6 +57,8 @@ begin
     or new.body_text is distinct from old.body_text
     or new.design_content_json is distinct from old.design_content_json
     or new.design_brand_profile_json is distinct from old.design_brand_profile_json
+    or new.client_request_id is distinct from old.client_request_id
+    or new.request_fingerprint is distinct from old.request_fingerprint
   then
     raise exception 'Scheduled email payload is immutable';
   end if;
