@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import { useTransientNotice } from "@/lib/use-transient-notice";
 
@@ -39,6 +40,7 @@ const DEFAULT_PROFILE: BrandProfile = {
 const FONTS = ["Arial", "Helvetica", "Georgia", "Tahoma", "Verdana", "Trebuchet MS"];
 
 export default function BrandProfileEditor({ organizationId, organizationName, canManage }: { organizationId: string; organizationName: string; canManage: boolean }) {
+  const router = useRouter();
   const endpoint = "/api/organizations/" + organizationId + "/brand-profile";
   const [profile, setProfile] = useState<BrandProfile>(DEFAULT_PROFILE);
   const [socialLinksText, setSocialLinksText] = useState("");
@@ -66,7 +68,7 @@ export default function BrandProfileEditor({ organizationId, organizationName, c
       })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; controller.abort(); };
-  }, [endpoint, organizationName]);
+  }, [endpoint]);
 
   function update<K extends keyof BrandProfile>(field: K, value: BrandProfile[K]) {
     setProfile((current) => ({ ...current, [field]: value }));
@@ -97,6 +99,7 @@ export default function BrandProfileEditor({ organizationId, organizationName, c
       const result = await response.json() as { ok?: boolean; error?: string; logoUrl?: string };
       if (!response.ok || !result.ok || !result.logoUrl) throw new Error(result.error || "The workspace logo could not be uploaded.");
       setProfile((current) => ({ ...current, logoUrl: result.logoUrl ?? null }));
+      router.refresh();
       setNotice("Workspace logo uploaded and saved. It is shared by every mailbox in this workspace.");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "The workspace logo could not be uploaded.");
@@ -115,6 +118,7 @@ export default function BrandProfileEditor({ organizationId, organizationName, c
       const result = await response.json() as { ok?: boolean; error?: string };
       if (!response.ok || !result.ok) throw new Error(result.error || "The workspace logo could not be removed.");
       setProfile((current) => ({ ...current, logoUrl: null }));
+      router.refresh();
       setNotice("Workspace logo removed from every mailbox in this workspace.");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "The workspace logo could not be removed.");
