@@ -27,10 +27,14 @@ Redeploy Production after creating/changing the environment variable so the work
 
 ## Verify without sending test mail
 
-Use cron-job.org's **Test run** only after both the base scheduled-mail migration (`20261019034340_scheduled_email_messages.sql`) and the designed-scheduling migration (`20261101090000_designed_email_scheduling.sql`) have been applied to the intended production database and the required environment variables are present. Before then, the authenticated request may return a storage/configuration error, and no real delivery test should be attempted.
+The base scheduled-mail migration (`20261019034340_scheduled_email_messages.sql`) and designed-scheduling migration (`20261101104700_designed_email_scheduling.sql`) are applied to the commercial Production database. The latter version matches Supabase's recorded migration history. Vercel has the dedicated cron secret variable registered for Production only. A scheduled test message was processed and reached provider delivery status; the user-facing Scheduled workflow and the worker were included in the passing post-merge CI run.
 
 A healthy idle run should return HTTP 200 with JSON similar to `{"ok":true,"processed":0,"results":[]}`. A 401 means the Authorization header and Vercel secret do not match. A 503 indicates storage, database, or queue-claim configuration needs attention.
 
-## Release prerequisites
+## Operational safeguards
 
-The scheduled-email migration remains un-applied until the coordinated release window. Do not enable this cron job or test a live scheduled send before that migration and the required production configuration have been verified.
+- Keep `ABEMAIL_SCHEDULED_MAIL_CRON_SECRET` scoped to Vercel Production only.
+- Do not paste the secret into a URL, repository, issue, or support message.
+- The worker rechecks organization, mailbox, domain, and provider status at execution time. It claims due jobs through the database RPC, enforces provider idempotency, and reuses the stored HTML/plain-text render on retries.
+- If the worker returns 401, compare the cron-job.org Authorization header against the Production-only Vercel variable without disclosing either value. A 503 indicates the queue, database, or provider setup needs investigation.
+- Do not assume that Vercel log absence proves the cron job ran; on the Hobby plan, retained runtime logs are limited. Confirm runs through cron-job.org response history and scheduled-message/provider records.
