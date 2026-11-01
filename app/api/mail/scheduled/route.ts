@@ -80,26 +80,6 @@ export async function POST(request: NextRequest) {
     return json({ error: "Enter a valid recipient, subject, message, and scheduled time." }, 400);
   }
   const scheduledAt = new Date(body.scheduledAt);
-  const now = Date.now();
-  if (scheduledAt.getTime() < now + 60_000) return json({ error: "Choose a time at least one minute in the future." }, 400);
-  if (scheduledAt.getTime() > now + 366 * 24 * 60 * 60 * 1000) return json({ error: "Scheduled messages must be within the next year." }, 400);
-  const { data: domain, error: domainError } = await ctx.admin.from("organization_domains")
-    .select("status, verified_at, sending_enabled, provider_domain_id, domain")
-    .eq("id", ctx.mailbox.domain_id).eq("organization_id", organizationId).maybeSingle();
-  if (domainError) return json({ error: "Sender domain status could not be checked." }, 503);
-  if (!domain || domain.status !== "verified" || !domain.verified_at ||
-      ctx.mailbox.address !== ctx.mailbox.local_part + "@" + domain.domain) {
-    return json({ error: "The selected sender domain must be verified before scheduling." }, 403);
-  }
-  const { data: provider, error: providerError } = await ctx.admin.from("organization_provider_connections")
-    .select("status").eq("organization_id", organizationId).maybeSingle();
-  if (providerError) return json({ error: "The workspace email provider could not be checked." }, 503);
-  if (provider && provider.status !== "connected") return json({ error: "Reconnect the workspace Resend connection before scheduling." }, 409);
-  if (provider && (!domain.sending_enabled || !domain.provider_domain_id)) return json({ error: "Resend has not confirmed sending is enabled for this domain. Refresh domain verification before scheduling." }, 409);
-  if (!provider && ctx.mailbox.address !== "info@ottawasnowmatch.waste2light.com") {
-    return json({ error: "Connect Resend in workspace Settings before scheduling." }, 503);
-  }
-
   const requestFingerprint = createHash("sha256").update(JSON.stringify({
     organizationId,
     mailboxId,
@@ -128,6 +108,25 @@ export async function POST(request: NextRequest) {
         },
       });
     }
+  }
+  const now = Date.now();
+  if (scheduledAt.getTime() < now + 60_000) return json({ error: "Choose a time at least one minute in the future." }, 400);
+  if (scheduledAt.getTime() > now + 366 * 24 * 60 * 60 * 1000) return json({ error: "Scheduled messages must be within the next year." }, 400);
+  const { data: domain, error: domainError } = await ctx.admin.from("organization_domains")
+    .select("status, verified_at, sending_enabled, provider_domain_id, domain")
+    .eq("id", ctx.mailbox.domain_id).eq("organization_id", organizationId).maybeSingle();
+  if (domainError) return json({ error: "Sender domain status could not be checked." }, 503);
+  if (!domain || domain.status !== "verified" || !domain.verified_at ||
+      ctx.mailbox.address !== ctx.mailbox.local_part + "@" + domain.domain) {
+    return json({ error: "The selected sender domain must be verified before scheduling." }, 403);
+  }
+  const { data: provider, error: providerError } = await ctx.admin.from("organization_provider_connections")
+    .select("status").eq("organization_id", organizationId).maybeSingle();
+  if (providerError) return json({ error: "The workspace email provider could not be checked." }, 503);
+  if (provider && provider.status !== "connected") return json({ error: "Reconnect the workspace Resend connection before scheduling." }, 409);
+  if (provider && (!domain.sending_enabled || !domain.provider_domain_id)) return json({ error: "Resend has not confirmed sending is enabled for this domain. Refresh domain verification before scheduling." }, 409);
+  if (!provider && ctx.mailbox.address !== "info@ottawasnowmatch.waste2light.com") {
+    return json({ error: "Connect Resend in workspace Settings before scheduling." }, 503);
   }
 
   let designBrandProfile: EmailDesignBrandProfile | null = null;
