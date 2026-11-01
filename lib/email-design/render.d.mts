@@ -1,15 +1,16 @@
+export type EmailDesignLayout = { align?: "left" | "center" | "right"; spacingAfter?: number };
 export type EmailDesignBlock =
-  | { id: string; type: "logo"; src?: string | null; alt?: string; width?: number }
-  | { id: string; type: "heading"; text: string; level?: 1 | 2 | 3 }
-  | { id: string; type: "paragraph"; text: string }
-  | { id: string; type: "image"; src: string; alt?: string; width?: number }
-  | { id: string; type: "button"; label: string; href: string }
-  | { id: string; type: "divider" }
-  | { id: string; type: "spacer"; height?: number }
-  | { id: string; type: "row"; columns: Array<{ id: string; blocks: EmailDesignBlock[] }> }
-  | { id: string; type: "social"; links: Array<{ label: string; href: string }> }
-  | { id: string; type: "footer"; text: string }
-  | { id: string; type: "contact"; email?: string; phone?: string; websiteUrl?: string; address?: string };
+  | ({ id: string; type: "logo"; src?: string | null; alt?: string; width?: number } & EmailDesignLayout)
+  | ({ id: string; type: "heading"; text: string; level?: 1 | 2 | 3 } & EmailDesignLayout)
+  | ({ id: string; type: "paragraph"; text: string } & EmailDesignLayout)
+  | ({ id: string; type: "image"; src: string; alt?: string; width?: number } & EmailDesignLayout)
+  | ({ id: string; type: "button"; label: string; href: string } & EmailDesignLayout)
+  | ({ id: string; type: "divider" } & EmailDesignLayout)
+  | ({ id: string; type: "spacer"; height?: number } & EmailDesignLayout)
+  | ({ id: string; type: "row"; columns: Array<{ id: string; blocks: EmailDesignBlock[] }> } & EmailDesignLayout)
+  | ({ id: string; type: "social"; links: Array<{ label: string; href: string }> } & EmailDesignLayout)
+  | ({ id: string; type: "footer"; text: string } & EmailDesignLayout)
+  | ({ id: string; type: "contact"; email?: string; phone?: string; websiteUrl?: string; address?: string } & EmailDesignLayout);
 
 export type EmailDesignContent = { version: 1; blocks: EmailDesignBlock[] };
 
