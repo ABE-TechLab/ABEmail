@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type DragEvent, type FormEvent, type KeyboardEvent } from "react";
 import {
   renderEmailDesign,
   validateEmailDesignContent,
@@ -114,6 +114,10 @@ export default function DesignedEmailManager({ organizationId }: { organizationI
   const [starter, setStarter] = useState("welcome");
   const [previewDevice, setPreviewDevice] = useState<"desktop" | "mobile">("desktop");
   const [previewOpen, setPreviewOpen] = useState(true);
+  const [draggingBlockId, setDraggingBlockId] = useState<string | null>(null);
+  const [blockDropTarget, setBlockDropTarget] = useState<{ id: string; position: "before" | "after" } | null>(null);
+  const [draggingColumn, setDraggingColumn] = useState<{ rowId: string; columnId: string } | null>(null);
+  const [columnDropTarget, setColumnDropTarget] = useState<{ rowId: string; columnId: string; position: "before" | "after" } | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -214,13 +218,66 @@ export default function DesignedEmailManager({ organizationId }: { organizationI
     setError("");
   }
 
-  function moveBlock(index: number, direction: -1 | 1) {
-    const nextIndex = index + direction;
-    if (nextIndex < 0 || nextIndex >= form.contentJson.blocks.length) return;
+  function moveBlockTo(sourceId: string, targetId: string, position: "before" | "after") {
+    if (sourceId === targetId) return;
     setForm((current) => {
       const blocks = [...current.contentJson.blocks];
-      [blocks[index], blocks[nextIndex]] = [blocks[nextIndex], blocks[index]];
+      const sourceIndex = blocks.findIndex((item) => item.id === sourceId);
+      if (sourceIndex < 0) return current;
+      const [moving] = blocks.splice(sourceIndex, 1);
+      const targetIndex = blocks.findIndex((item) => item.id === targetId);
+      if (targetIndex < 0) return current;
+      blocks.splice(targetIndex + (position === "after" ? 1 : 0), 0, moving);
       return { ...current, contentJson: { ...current.contentJson, blocks } };
+    });
+  }
+
+  function handleBlockDragStart(event: DragEvent<HTMLButtonElement>, blockId: string) {
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", "block:" + blockId);
+    setDraggingBlockId(blockId);
+  }
+
+  function handleBlockDragOver(event: DragEvent<HTMLElement>, blockId: string) {
+    if (!draggingBlockId || draggingBlockId === blockId) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    const bounds = event.currentTarget.getBoundingClientRect();
+    setBlockDropTarget({ id: blockId, position: event.clientY < bounds.top + bounds.height / 2 ? "before" : "after" });
+  }
+
+  function handleBlockDrop(event: DragEvent<HTMLElement>, targetId: string) {
+    event.preventDefault();
+    const payload = event.dataTransfer.getData("text/plain");
+    const sourceId = payload.startsWith("block:") ? payload.slice(6) : draggingBlockId;
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const position = event.clientY < bounds.top + bounds.height / 2 ? "before" : "after";
+    if (sourceId) moveBlockTo(sourceId, targetId, position);
+    setDraggingBlockId(null);
+    setBlockDropTarget(null);
+  }
+
+  function handleBlockKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number) {
+    if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+    const source = form.contentJson.blocks[index];
+    const target = form.contentJson.blocks[index + (event.key === "ArrowUp" ? -1 : 1)];
+    if (!source || !target) return;
+    event.preventDefault();
+    moveBlockTo(source.id, target.id, event.key === "ArrowUp" ? "before" : "after");
+  }
+
+  function reorderColumns(blockIndex: number, sourceId: string, targetId: string, position: "before" | "after") {
+    if (sourceId === targetId) return;
+    updateBlock(blockIndex, (current) => {
+      if (current.type !== "row") return current;
+      const columns = [...current.columns];
+      const sourceIndex = columns.findIndex((column) => column.id === sourceId);
+      if (sourceIndex < 0) return current;
+      const [moving] = columns.splice(sourceIndex, 1);
+      const targetIndex = columns.findIndex((column) => column.id === targetId);
+      if (targetIndex < 0) return current;
+      columns.splice(targetIndex + (position === "after" ? 1 : 0), 0, moving);
+      return { ...current, columns };
     });
   }
 
@@ -352,13 +409,24 @@ export default function DesignedEmailManager({ organizationId }: { organizationI
       else updateNestedRow(index, nestedContext.columnId, nestedContext.nestedIndex, update);
     };
     return (
-      <article key={block.id} className={nested ? styles.nestedBlock : styles.blockCard}>
+      <article
+        key={block.id}
+        className={[
+          nested ? styles.nestedBlock : styles.blockCard,
+          !nested && draggingBlockId === block.id ? styles.dragging : "",
+          !nested && blockDropTarget?.id === block.id ? (blockDropTarget.position === "before" ? styles.dropBefore : styles.dropAfter) : "",
+        ].filter(Boolean).join(" ")}
+        onDragOver={!nested ? (event) => handleBlockDragOver(event, block.id) : undefined}
+        onDrop={!nested ? (event) => handleBlockDrop(event, block.id) : undefined}
+      >
         {!nested && (
           <header className={styles.blockHeader}>
             <strong>{index + 1}. {blockLabel(block)}</strong>
             <div className={styles.blockActions}>
-              <button type="button" aria-label="Move block up" title="Move up" disabled={index === 0} onClick={() => moveBlock(index, -1)}>↑</button>
-              <button type="button" aria-label="Move block down" title="Move down" disabled={index === form.contentJson.blocks.length - 1} onClick={() => moveBlock(index, 1)}>↓</button>
+              <button type="button" className={styles.dragHandle} draggable aria-label={`Move ${blockLabel(block)}. Drag to reposition, or focus and use the up and down arrow keys.`} title="Drag to move · Use ↑/↓ when focused"
+                onDragStart={(event) => handleBlockDragStart(event, block.id)}
+                onDragEnd={() => { setDraggingBlockId(null); setBlockDropTarget(null); }}
+                onKeyDown={(event) => handleBlockKeyDown(event, index)}>⠿</button>
               <button type="button" aria-label="Remove block" title="Remove block" onClick={() => removeBlock(index)}>×</button>
             </div>
           </header>
@@ -422,8 +490,53 @@ export default function DesignedEmailManager({ organizationId }: { organizationI
               <button type="button" disabled={block.columns.length <= 2} onClick={() => edit((current) => current.type === "row" && current.columns.length > 2 ? { ...current, columns: current.columns.slice(0, -1) } : current)}>Remove last column</button>
             </div>
             {block.columns.map((column, columnIndex) => (
-              <div className={styles.rowColumn} key={column.id}>
-                <strong>Column {columnIndex + 1}</strong>
+              <div
+                className={[
+                  styles.rowColumn,
+                  draggingColumn?.rowId === block.id && draggingColumn.columnId === column.id ? styles.dragging : "",
+                  columnDropTarget?.rowId === block.id && columnDropTarget.columnId === column.id
+                    ? (columnDropTarget.position === "before" ? styles.columnDropBefore : styles.columnDropAfter) : "",
+                ].filter(Boolean).join(" ")}
+                key={column.id}
+                onDragOver={(event) => {
+                  if (draggingColumn?.rowId !== block.id || draggingColumn.columnId === column.id) return;
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = "move";
+                  const bounds = event.currentTarget.getBoundingClientRect();
+                  setColumnDropTarget({ rowId: block.id, columnId: column.id, position: event.clientX < bounds.left + bounds.width / 2 ? "before" : "after" });
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  const payload = event.dataTransfer.getData("text/plain");
+                  const sourceId = payload.startsWith("column:") ? payload.slice(7) : draggingColumn?.columnId;
+                  if (sourceId && draggingColumn?.rowId === block.id) {
+                    const bounds = event.currentTarget.getBoundingClientRect();
+                    reorderColumns(index, sourceId, column.id, event.clientX < bounds.left + bounds.width / 2 ? "before" : "after");
+                  }
+                  setDraggingColumn(null);
+                  setColumnDropTarget(null);
+                }}
+              >
+                <div className={styles.rowColumnHeader}>
+                  <button type="button" className={styles.columnDragHandle} draggable
+                    aria-label={`Move column ${columnIndex + 1}. Drag to reorder, or focus and use the left and right arrow keys.`}
+                    title="Drag to reorder column · Use ←/→ when focused"
+                    onDragStart={(event) => {
+                      event.dataTransfer.effectAllowed = "move";
+                      event.dataTransfer.setData("text/plain", "column:" + column.id);
+                      setDraggingColumn({ rowId: block.id, columnId: column.id });
+                    }}
+                    onDragEnd={() => { setDraggingColumn(null); setColumnDropTarget(null); }}
+                    onKeyDown={(event) => {
+                      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+                      const nextIndex = columnIndex + (event.key === "ArrowLeft" ? -1 : 1);
+                      const target = block.columns[nextIndex];
+                      if (!target) return;
+                      event.preventDefault();
+                      reorderColumns(index, column.id, target.id, event.key === "ArrowLeft" ? "before" : "after");
+                    }}>⠿</button>
+                  <strong>Column {columnIndex + 1}</strong>
+                </div>
                 {column.blocks.map((child, nestedIndex) => (
                   <div key={child.id} className={styles.rowChild}>
                     <small>{blockLabel(child)}</small>
@@ -501,7 +614,7 @@ export default function DesignedEmailManager({ organizationId }: { organizationI
             </div>
           </div>
 
-          {form.contentJson.blocks.length === 0 ? <div className={styles.emptyBlocks}><strong>Start with your message</strong><p>Add a heading, paragraph, logo, button, or other email block. You can reorder blocks with the arrows.</p></div> : (
+          {form.contentJson.blocks.length === 0 ? <div className={styles.emptyBlocks}><strong>Start with your message</strong><p>Add a heading, paragraph, logo, button, or other email block. Drag the grip to move any block or column; use arrow keys when a grip is focused.</p></div> : (
             <div className={styles.blocksList}>{form.contentJson.blocks.map((block, index) => renderBlockEditor(block, index))}</div>
           )}
 

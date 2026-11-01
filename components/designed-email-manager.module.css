@@ -41,6 +41,17 @@
 .blockHeader strong { font-size: 11px; color: var(--foreground, #314035); }
 .blockActions button { width: 25px; height: 25px; border: 1px solid var(--border, #dfe7df); border-radius: 6px; background: var(--surface, #fff); color: var(--foreground, #314035); cursor: pointer; }
 .blockActions button:disabled { opacity: .4; cursor: not-allowed; }
+.dragHandle, .columnDragHandle { cursor: grab !important; touch-action: none; user-select: none; }
+.dragHandle:active, .columnDragHandle:active { cursor: grabbing !important; }
+.dragging { opacity: .55; }
+.dropBefore { border-top: 3px solid var(--primary, #4c8a5a) !important; }
+.dropAfter { border-bottom: 3px solid var(--primary, #4c8a5a) !important; }
+.columnDropBefore { box-shadow: inset 3px 0 0 var(--primary, #4c8a5a); }
+.columnDropAfter { box-shadow: inset -3px 0 0 var(--primary, #4c8a5a); }
+.rowColumnHeader { display: flex; align-items: center; gap: 7px; padding: 0 8px 8px; }
+.rowColumnHeader > strong { padding: 0 !important; }
+.columnDragHandle { width: 24px; height: 23px; border: 1px solid var(--border, #dfe7df); border-radius: 5px; background: var(--surface-secondary, #f8faf8); color: var(--muted-foreground, #748276); font: inherit; font-size: 15px; line-height: 1; }
+.columnDragHandle:focus-visible, .dragHandle:focus-visible { outline: 2px solid var(--primary, #4c8a5a); outline-offset: 2px; }
 .inlineField { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 12px 10px; font-size: 10px; color: var(--muted-foreground, #748276); }
 .inlineField input, .inlineField select { width: 100px; }
 .blockHint, .helper, .previewNote { margin: 8px 12px 10px; color: var(--muted-foreground, #7f8c82); font-size: 10px; line-height: 1.55; }
