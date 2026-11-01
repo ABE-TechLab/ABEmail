@@ -9,17 +9,20 @@ import {
   OTTAWA_PILOT_ADDRESS,
   OTTAWA_PILOT_DOMAIN,
   ResendPilotError,
-  verifyResendWebhookSignature,
 } from "@/lib/email/resend-pilot";
 import { decryptProviderSecret, ResendProviderError } from "@/lib/email/resend-provider";
 import { classifyProviderEventDuplicate } from "@/lib/email/resend-webhook-state.mjs";
+import { verifyAndParseResendWebhook } from "@/lib/email/resend-webhook-security.mjs";
+import { processResendRecipientDeliveryEvent } from "@/lib/email/resend-delivery-state.mjs";
 
 
 type ProviderEvent = {
   type?: string;
+  created_at?: string;
   data?: {
     email_id?: string;
     id?: string;
+    created_at?: string;
     from?: string;
     to?: string[] | string;
     subject?: string;
@@ -129,26 +132,17 @@ export async function handleResendWebhook(request: NextRequest, tenantOrganizati
   }
   if (!secret) return json({ error: "Webhook is not configured." }, 503);
 
-  const verified = verifyResendWebhookSignature({
+  const verification = verifyAndParseResendWebhook({
     rawBody,
     id: request.headers.get("svix-id"),
     timestamp: request.headers.get("svix-timestamp"),
     signature: request.headers.get("svix-signature"),
     secret,
   });
-  if (!verified) return json({ error: "Invalid webhook signature." }, 401);
+  if (!verification.ok) return json({ error: verification.error }, verification.status);
 
-  let event: ProviderEvent;
-  try {
-    event = JSON.parse(rawBody) as ProviderEvent;
-  } catch {
-    return json({ error: "Invalid webhook payload." }, 400);
-  }
-
-  const eventId = request.headers.get("svix-id");
-  if (!eventId || eventId.length > 255 || !event.type || event.type.length > 120) {
-    return json({ error: "Webhook event identity is invalid." }, 400);
-  }
+  const event = verification.event as ProviderEvent;
+  const eventId = verification.eventId;
 
   const { data: insertedEvent, error: insertError } = await admin
     .from("provider_events")
@@ -219,6 +213,7 @@ export async function handleResendWebhook(request: NextRequest, tenantOrganizati
 
   let resolvedOrganizationId: string | null = null;
   let resolvedMailboxId: string | null = null;
+  let resolvedWarningCode: string | null = null;
 
   try {
     if (event.type === "email.received") {
@@ -331,35 +326,83 @@ export async function handleResendWebhook(request: NextRequest, tenantOrganizati
     ) {
       const providerMessageId = event.data?.email_id ?? event.data?.id;
       if (providerMessageId) {
-        const statusByType: Record<string, string> = {
-          "email.sent": "accepted",
-          "email.delivered": "delivered",
-          "email.delivery_delayed": "delayed",
-          "email.bounced": "bounced",
-          "email.complained": "complained",
-          "email.failed": "failed",
-          "email.suppressed": "suppressed",
-        };
-        const deliveryUpdate: { status: string; delivered_at?: string } = {
-          status: statusByType[event.type],
-        };
-        if (event.type === "email.delivered") deliveryUpdate.delivered_at = new Date().toISOString();
+        let deliveryMessageMatched = false;
+        let invitationMatched = false;
+        const result = await processResendRecipientDeliveryEvent({
+          event,
+          eventId,
+          tenantOrganizationId: tenantOrganizationId ?? null,
+          pilotFromAddress: OTTAWA_PILOT_ADDRESS,
+          repository: {
+            async findOutboundMessage(input: { providerMessageId: string; organizationId: string | null; fromAddress: string | null }) {
+              let query = admin.from("email_messages")
+                .select("id, organization_id, mailbox_id, to_addresses")
+                .eq("provider", "resend")
+                .eq("provider_message_id", input.providerMessageId)
+                .eq("direction", "outbound");
+              query = input.organizationId
+                ? query.eq("organization_id", input.organizationId)
+                : query.eq("from_address", input.fromAddress);
+              const { data, error } = await query.maybeSingle();
+              if (error) throw new ResendPilotError("DELIVERY_MESSAGE_LOOKUP_FAILED");
+              if (!data) return null;
+              return {
+                id: data.id,
+                organizationId: data.organization_id,
+                mailboxId: data.mailbox_id,
+                toAddresses: data.to_addresses,
+              };
+            },
+            async ensureRecipient(input: { organizationId: string; mailboxId: string; messageId: string; recipientEmail: string }) {
+              const { error } = await admin.from("email_message_recipients").upsert({
+                organization_id: input.organizationId,
+                mailbox_id: input.mailboxId,
+                message_id: input.messageId,
+                recipient_email: input.recipientEmail,
+                status: "processing",
+              }, {
+                onConflict: "organization_id,message_id,recipient_email",
+                ignoreDuplicates: true,
+              });
+              if (error) throw new ResendPilotError("DELIVERY_RECIPIENT_SEED_FAILED");
+            },
+            async applyRecipientEvent(input: {
+              organizationId: string;
+              mailboxId: string;
+              messageId: string;
+              recipientEmail: string;
+              status: string;
+              eventAt: string;
+              eventId: string;
+              deliveredAt: string | null;
+            }) {
+              const { data, error } = await admin.from("email_message_recipients")
+                .update({
+                  status: input.status,
+                  last_event_at: input.eventAt,
+                  last_provider_event_id: input.eventId,
+                  ...(input.deliveredAt ? { delivered_at: input.deliveredAt } : {}),
+                })
+                .eq("organization_id", input.organizationId)
+                .eq("mailbox_id", input.mailboxId)
+                .eq("message_id", input.messageId)
+                .eq("recipient_email", input.recipientEmail)
+                .or("last_event_at.is.null,last_event_at.lt." + input.eventAt)
+                .select("id")
+                .maybeSingle();
+              if (error) throw new ResendPilotError("DELIVERY_RECIPIENT_UPDATE_FAILED");
+              return Boolean(data?.id);
+            },
+          },
+        });
 
-        const deliveryQuery = tenantOrganizationId
-          ? admin.from("email_messages").update(deliveryUpdate)
-              .eq("provider", "resend").eq("provider_message_id", providerMessageId)
-              .eq("organization_id", tenantOrganizationId).eq("direction", "outbound")
-              .select("organization_id, mailbox_id").limit(1)
-          : admin.from("email_messages").update(deliveryUpdate)
-              .eq("provider", "resend").eq("provider_message_id", providerMessageId)
-              .eq("from_address", OTTAWA_PILOT_ADDRESS).eq("direction", "outbound")
-              .select("organization_id, mailbox_id").limit(1);
-        const { data: affected, error: updateError } = await deliveryQuery;
-
-        if (updateError) throw new ResendPilotError("DELIVERY_STATUS_UPDATE_FAILED");
-        if (affected?.[0]) {
-          resolvedOrganizationId = affected[0].organization_id;
-          resolvedMailboxId = affected[0].mailbox_id;
+        if (result.matched && result.organizationId) {
+          deliveryMessageMatched = true;
+          resolvedOrganizationId = result.organizationId;
+          resolvedMailboxId = result.mailboxId ?? null;
+        }
+        if (result.reason === "recipient_unresolved") {
+          resolvedWarningCode = "DELIVERY_RECIPIENT_UNRESOLVED";
         }
 
         if (tenantOrganizationId) {
@@ -387,8 +430,18 @@ export async function handleResendWebhook(request: NextRequest, tenantOrganizati
               .select("id")
               .limit(1);
             if (invitationUpdateError) throw new ResendPilotError("INVITATION_DELIVERY_STATUS_UPDATE_FAILED");
-            if (affectedInvitations?.[0]) resolvedOrganizationId = tenantOrganizationId;
+            if (affectedInvitations?.[0]) {
+              invitationMatched = true;
+              resolvedOrganizationId = tenantOrganizationId;
+            }
           }
+        }
+
+        // A provider webhook can race the send response that persists
+        // provider_message_id. Keep this event retryable instead of marking it
+        // processed when neither an outbound message nor invitation is linked.
+        if (!deliveryMessageMatched && !invitationMatched) {
+          throw new ResendPilotError("DELIVERY_MESSAGE_UNRESOLVED");
         }
       }
     }
@@ -400,7 +453,7 @@ export async function handleResendWebhook(request: NextRequest, tenantOrganizati
         processed_at: new Date().toISOString(),
         organization_id: tenantOrganizationId ? (resolvedOrganizationId ?? tenantOrganizationId) : null,
         mailbox_id: resolvedMailboxId,
-        last_error_code: null,
+        last_error_code: resolvedWarningCode,
       })
       .eq("id", providerEventRowId);
     if (completeError) throw new ResendPilotError("WEBHOOK_COMPLETION_FAILED");

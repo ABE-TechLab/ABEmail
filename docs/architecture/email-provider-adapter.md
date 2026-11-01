@@ -27,8 +27,11 @@ Use discriminated result types for transient, rejected, rate-limited, invalid-co
 Normalize provider-specific details to a stable internal vocabulary:
 - inbound accepted / processing / stored / rejected;
 - outbound queued / accepted / delivered;
-- delayed / bounced / complained / suppressed / failed;
+- recipient-level accepted / delayed / delivered / bounced / complained / suppressed / failed;
+- message-level aggregate states including partially delivered outcomes;
 - provider event received / verified / duplicate / processed / failed.
+
+Resend delivery events may describe one `to` recipient even when the original send had multiple recipients. Persist one `email_message_recipients` row per outbound recipient and apply only the event's addressed recipient. Never apply an ambiguous multi-address bounce/delivery result to every recipient. Derive the parent `email_messages.status` from all recipient rows: mixed terminal success/failure becomes `partially_delivered`. Older events are ignored when their event timestamp predates the recipient's last applied event.
 
 Preserve the raw provider identifier and a minimized copy of operational metadata for support. Avoid dumping raw message bodies, attachments, signing secrets, or API credentials into logs.
 
@@ -36,9 +39,11 @@ Preserve the raw provider identifier and a minimized copy of operational metadat
 
 - The provider callback route validates the provider signature before trusting the event.
 - Resolve inbound recipients to an active mailbox and domain in the commercial database. Tenant context comes from that trusted mapping, not an event-supplied organization ID.
-- Enforce unique provider event identifiers so retries are idempotent.
+- Enforce unique provider event identifiers so retries are idempotent. A duplicate whose ledger row is still processing must receive a retryable response; acknowledge only a row already marked processed.
+- Store each outbound recipient separately, enforce organization/message/mailbox foreign keys, and expose recipient state only under the same mailbox-read RLS boundary as its parent message. Provider writes stay server-only.
 - Sending code resolves the authorized mailbox using verified identity and organization/mailbox membership before calling the provider.
 - Domain verification and tenant sending limits are checked server-side for every sending path, including scheduled jobs and retry flows.
+- Scheduled jobs re-check the creating user's current active organization membership and mailbox send grant immediately before provider submission. A revoked creator is marked failed with `SCHEDULED_CREATOR_ACCESS_REVOKED`; the schedule is not treated as a permanent send capability.
 - All async jobs carry an internal organization/mailbox reference created by the application; do not treat queue payload fields alone as authorization.
 - Keep provider keys and webhook secrets outside the repository, browser bundle, client-visible settings, and ordinary application logs.
 

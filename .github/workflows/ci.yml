@@ -39,6 +39,12 @@ jobs:
       - name: Test webhook retry state handling
         run: npm run test:email-webhooks
 
+      - name: Test recipient delivery webhook processing
+        run: npm run test:email-webhook-integration
+
+      - name: Test scheduled sender authorization
+        run: npm run test:scheduled-mail-auth
+
       - name: Verify workspace navigation contract
         run: npm run check:navigation
 

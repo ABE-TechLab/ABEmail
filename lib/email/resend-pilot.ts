@@ -1,6 +1,5 @@
 import "server-only";
 
-import { createHmac, timingSafeEqual } from "node:crypto";
 
 export const OTTAWA_PILOT_DOMAIN = "ottawasnowmatch.waste2light.com";
 export const OTTAWA_PILOT_ADDRESS = "info@" + OTTAWA_PILOT_DOMAIN;
@@ -75,42 +74,7 @@ export async function assertPilotDomainReady(apiKey: string): Promise<void> {
   if (domain.capabilities?.sending !== "enabled") throw new ResendPilotError("RESEND_PILOT_SENDING_DISABLED");
 }
 
-export function verifyResendWebhookSignature(input: {
-  rawBody: string;
-  id: string | null;
-  timestamp: string | null;
-  signature: string | null;
-  secret: string;
-  now?: number;
-}): boolean {
-  const { rawBody, id, timestamp, signature, secret } = input;
-  if (!id || !timestamp || !signature || !secret.startsWith("whsec_")) return false;
-
-  const timestampNumber = Number(timestamp);
-  if (!Number.isSafeInteger(timestampNumber)) return false;
-  const nowSeconds = Math.floor((input.now ?? Date.now()) / 1000);
-  if (Math.abs(nowSeconds - timestampNumber) > 300) return false;
-
-  let signingKey: Buffer;
-  try {
-    signingKey = Buffer.from(secret.slice("whsec_".length), "base64");
-  } catch {
-    return false;
-  }
-  if (!signingKey.length) return false;
-
-  const expected = createHmac("sha256", signingKey)
-    .update(id + "." + timestamp + "." + rawBody, "utf8")
-    .digest("base64");
-
-  return signature.split(" ").some((versionedSignature) => {
-    const parts = versionedSignature.split(",");
-    if (parts.length !== 2 || parts[0] !== "v1") return false;
-    const candidate = Buffer.from(parts[1], "base64");
-    const expectedBuffer = Buffer.from(expected, "base64");
-    return candidate.length === expectedBuffer.length && timingSafeEqual(candidate, expectedBuffer);
-  });
-}
+export { verifyResendWebhookSignature } from "./resend-webhook-security.mjs";
 
 export async function sendPilotEmail(input: {
   apiKey: string;
