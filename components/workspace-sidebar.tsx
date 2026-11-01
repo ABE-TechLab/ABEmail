@@ -37,7 +37,7 @@ const workspaceLinks = [
   { href: "/reminders", label: "Reminders", icon: "◴" },
   { href: "/labels", label: "Labels", icon: "◇" },
   { href: "/analytics", label: "Analytics", icon: "↗" },
-  { href: "/settings", label: "Workspace profile", icon: "◎" },
+  { href: "/settings", label: "Settings", icon: "⚙" },
 ] as const;
 
 
