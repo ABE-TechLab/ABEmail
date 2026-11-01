@@ -2,9 +2,17 @@
 
 This runbook applies only to the commercial ABEmail app. Do not copy credentials, database details, or configuration from gODtECH-Ctl-Create/ABEmail-Mail.
 
+## Current production status — 2026-11-01
+
+The Ottawa tenant is active in the commercial Production database. Its domain is verified with sending/receiving enabled; two mailboxes are active; the Resend provider is connected and has a webhook identifier recorded. The message ledger contains 9 received inbound messages, 11 delivered outbound messages, one accepted outbound message, and 33 provider events.
+
+Vercel's Production environment has the required Ottawa send/receive keys, webhook secret, pilot operator allow-list, and scheduled-worker secret registered. The values remain secret and are not included here. Preview and Development do not receive the live Resend API keys.
+
+**Important unresolved boundary:** Preview and Development still use the same Supabase project as Production. Do not use non-production deployments for customer mail-data testing until environment isolation is completed.
+
 ## Production configuration
 
-After reviewing and merging the pilot transport pull request, apply the new migration `20261017140000_tenant_mail_transport.sql` to the commercial Supabase project through the project's approved migration workflow. Vercel does not apply database migrations on deploy. Confirm the four existing foundation migrations are present before applying it.
+The pilot transport migration `20261017140000_tenant_mail_transport.sql` and the subsequent provider-onboarding migrations are already applied to the commercial Supabase Production project. The live schema is tracked in the Supabase migration history; do not reapply these migrations manually. Vercel does not apply database migrations on deploy. For future schema changes, keep the repository migration file and the recorded production version aligned, and use the normal isolated CI plus approved production migration process.
 
 In **Vercel Production only**, configure these server-side variables and redeploy:
 

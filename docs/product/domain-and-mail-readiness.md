@@ -1,14 +1,16 @@
 # Domain and Mail Readiness
 
-## Current state
-- Application URL: [https://abemail.vercel.app](https://abemail.vercel.app).
-- Commercial Supabase project: `jwtfrmzykevfwmjvratb`; four foundation migrations are applied.
-- Vercel Production, Preview, and Development have the public Supabase URL/key, but currently share the same Supabase project.
-- Email/password auth and organization/invitation code exist, and tenant isolation is tested in CI.
-- Hosted Auth URL and confirmation/reset email are not verified end-to-end. Custom SMTP is not configured.
-- The operator reports Resend domain verification completed for the Ottawa Snow Match subdomain `ottawasnowmatch.waste2light.com`. Commercial ABEmail has not yet been configured to use that domain; no commercial-app mailbox has been provisioned, and live send/receive is not proven.
-- `/demo` shows static sample mail.
-- The transport branch adds a text-only sender, signed Resend inbound webhook, tenant-filtered message storage, and an Ottawa pilot inbox. This is code under review, not a live release: the mail migration, Production-only keys, webhook registration, and end-to-end send/receive test remain outstanding.
+## Current state — verified 2026-11-01
+
+- Production application: [https://abemail.vercel.app](https://abemail.vercel.app). The deployment for merge commit `2b8d437` is READY.
+- Commercial Supabase project: `jwtfrmzykevfwmjvratb`. All 22 migration files in `supabase/migrations` match the connected production project's recorded migration history; there are no repository-only or database-only migrations.
+- Post-merge Application CI #991 passed lint, renderer tests, navigation contract, TypeScript, production build, isolated migration replay, and tenant/authorization tests.
+- The Ottawa Snow Match tenant is active. Its `ottawasnowmatch.waste2light.com` domain is verified with sending and receiving enabled; two mailboxes are active; the workspace Resend connection is connected and has a webhook ID recorded.
+- Production data for that tenant contains 9 inbound messages with status `received`, 11 outbound messages with status `delivered`, one outbound message with status `accepted`, and 33 provider events. This confirms the commercial app has processed real inbound and outbound pilot traffic; it is not merely a DNS verification.
+- Vercel has the Ottawa send/receive keys, webhook signing secret, pilot operator allow-list, and scheduled-worker secret registered for Production. Their secret values were not read or copied. The Ottawa Resend credentials are not targeted to Preview or Development.
+- **Environment isolation is still incomplete:** `NEXT_PUBLIC_SUPABASE_URL` and the publishable key target Production, Preview, and Development, and those environments currently use the same Supabase project. Preview/Development therefore share the Production data plane even though live Resend credentials are Production-only.
+- Hosted Supabase Auth redirect/confirmation/reset email and custom SMTP are not yet verified end-to-end.
+- `/demo` remains static sample mail; the authenticated workspace mailbox is served separately from production tenant data.
 
 ## Controlled Ottawa Snow Match pilot
 
@@ -39,12 +41,13 @@ Request current DNS values from the selected provider; do not guess or reuse Was
 
 **Never overwrite existing customer MX records without an approved migration plan.** Review [Resend domain authentication](https://resend.com/docs/dashboard/domains/introduction) and [Resend inbound](https://resend.com/features/inbound); take actual DNS records from the real provider dashboard.
 
-## Remaining implementation before live mail
-- [ ] Choose an ABE TechLab-owned sender domain and provider.
-- [ ] Configure hosted Supabase Auth redirects/custom SMTP and test live email.
-- [x] Add pilot-only server-side Resend domain readiness checks and guarded organization/mailbox provisioning in the transport branch (release and live verification still pending).
-- [ ] Provision actual mailboxes only after provider verification.
-- [x] Add pilot-only server sending, signed inbound webhook processing, idempotency, delivery status events, and a conservative send cap in the transport branch; verify under CI and release review.
-- [ ] Store messages/attachments privately with tenant-bound authorization.
-- [ ] Isolate Preview/Development from Production.
-- [ ] Test sending and receiving in an isolated tenant before external launch.
+## Remaining release and platform work
+
+- [ ] Choose an ABE TechLab-owned sender domain and provider for platform-level/authentication mail; the Ottawa customer subdomain is not a substitute for an ABE TechLab sender identity.
+- [ ] Configure hosted Supabase Auth redirects/custom SMTP and test confirmation, password reset, invitation acceptance, expiry, and revocation.
+- [x] Provision the Ottawa Snow Match organization, verified domain, and two active mailboxes through the guarded pilot setup flow.
+- [x] Deploy tenant-scoped Resend sending, signed inbound/delivery webhooks, idempotency, provider event storage, and verified sender-domain checks.
+- [x] Store inbound/outbound messages and attachments through tenant-scoped application storage and authorization paths.
+- [ ] Isolate Preview and Development from Production. Create dedicated non-production Supabase targets, migrate schema without copying customer mail, then point Preview/Development at those projects and keep live provider credentials Production-only.
+- [ ] Add reusable organization/platform audit events and durable per-organization usage/quotas before broad customer onboarding.
+- [ ] Complete authenticated desktop/tablet/mobile smoke tests and periodic production provider/webhook health checks.

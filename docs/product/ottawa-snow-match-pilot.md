@@ -15,17 +15,19 @@ Tracking issue: [#21 — Tenant-scoped Resend transport and Ottawa Snow Match pi
 - Provider: Resend
 - DNS operator: Cloudflare, under the existing `waste2light.com` zone
 
-The operator reports that Resend has verified `ottawasnowmatch.waste2light.com` after the provider-issued records were added in Cloudflare. This is provider-dashboard evidence reported by the operator, not evidence that commercial ABEmail currently verifies or uses the domain.
+The commercial ABEmail production project records the domain as `verified` with both `sending_enabled` and `receiving_enabled` set to true. The application also has an active connected Resend workspace connection and a webhook identifier recorded. The root `waste2light.com` MX records must remain unchanged.
 
 The records supplied by Resend were for the subdomain only: DKIM TXT, two sending CNAME records, and an MX record for inbound delivery. Do not change the root `waste2light.com` MX records or copy the subdomain's DNS records into another tenant.
 
-## Important status distinction
+## Production status — verified 2026-11-01
 
-**Provider domain verification is complete; ABEmail email transport is not.**
+**The Ottawa pilot is provisioned and has processed live inbound and outbound mail in commercial ABEmail.**
 
-The commercial repository currently has the multi-organization identity, organization-domain, mailbox, and mailbox-grant foundation. Its real email provider adapter and live send/receive flow are not yet end-to-end implemented. A verified provider domain does not automatically create an application mailbox, enable sending from the ABEmail UI, or connect incoming messages to the ABEmail database.
+Production records show an active `ottawa-snow-match` organization, the verified domain with sending and receiving enabled, two active mailboxes, a connected Resend provider, and a registered webhook identifier. The message ledger contains 9 inbound messages recorded as received, 11 outbound messages delivered, one outbound message accepted, and 33 provider events.
 
-Do not describe the pilot mailbox as live until a test message has been sent and its delivery event has been recorded by the commercial application.
+The application routes the inbox through the authenticated organization workspace. The production-only Resend credentials and webhook secret are present in Vercel's environment inventory; their values are never copied into documentation or source control.
+
+This production evidence does not close the remaining platform-readiness work: Preview and Development still share the Production Supabase database, the hosted Auth SMTP flow is not verified, and reusable platform audit/usage controls need attention. Keep external pilot use controlled until those boundaries are resolved.
 
 ## Architecture and safety rules
 
@@ -39,9 +41,9 @@ Do not describe the pilot mailbox as live until a test message has been sent and
 8. Current Vercel Production, Preview, and Development environments share the commercial Supabase project. Do not put the pilot's live sending key into Preview or Development. Environment isolation and the intended production release path must be reviewed before activating external sends.
 9. Apply database migrations intentionally through the existing review workflow; do not run a new hosted migration as part of DNS setup.
 
-## Pilot implementation added in the transport branch
+## Pilot implementation deployed in commercial ABEmail
 
-The pilot implementation adds a signed-in setup endpoint, a text-only send API, tenant-filtered message storage, a basic pilot inbox/compose view, and a signed Resend webhook at:
+The production application includes a guarded operator setup endpoint, authenticated tenant-scoped send API, the shared live mailbox workspace, tenant-filtered message storage, and signed Resend webhook routes at:
 
 - Setup: POST /api/pilot/ottawa-snow-match/setup
 - Send: POST /api/mail/send (requires an authenticated browser session and a valid Idempotency-Key header)
@@ -56,9 +58,11 @@ Required server-only Production environment variables:
 - ABEMAIL_PILOT_OPERATOR_EMAILS: comma-separated exact email addresses of verified ABEmail accounts allowed to provision the pilot.
 - SUPABASE_SECRET_KEY: required for server-only provisioning and provider writes.
 
-The app route and migration code are not the same as a live release. Vercel does not apply database migrations automatically. Merge/release review, intentional application of the new mail migration, Production-only environment configuration, webhook registration, and a real send/receive test remain required. Preview and Development must not receive the live Resend key while they share the Production database.
+Vercel does not apply database migrations automatically. The transport migration `20261017140000_tenant_mail_transport` and subsequent provider-onboarding migrations are already recorded in the Production Supabase history. The required Ottawa provider variables are registered for Production only; do not copy their values into Preview or Development.
 
-This first slice supports one text-only recipient per send and a constrained pilot inbox. Attachments, full mailbox management, scheduling, and MCP tools remain later milestones.
+The shared platform also supports persisted drafts, attachments, mailbox lifecycle controls, scheduled sends, branded HTML designs, and delivery-state updates. The Ottawa pilot has production inbound/outbound records. MCP tools remain a future integration milestone, not a prerequisite for the current web-mail pilot.
+
+Preview and Development still point at the same Supabase project as Production. That is a data-isolation gap, even though the Resend send/receive credentials are Production-only; do not use Preview/Development for customer mail data until dedicated Supabase environments are configured.
 
 ## Delivery sequence
 
