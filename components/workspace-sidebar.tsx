@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import SignOutButton from "@/components/auth/sign-out-button";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const mailboxLinks = [
   { view: "Inbox", href: "/", label: "Inbox", icon: "▤" },
@@ -18,7 +19,17 @@ const mailboxLinks = [
 ] as const;
 
 export type MailboxView = (typeof mailboxLinks)[number]["view"];
-export type WorkspaceChoice = { id: string; name: string; slug: string; role: string };
+export type WorkspaceChoice = { id: string; name: string; slug: string; role: string; logoUrl?: string | null };
+
+function WorkspaceAvatar({ name, logoUrl }: { name: string; logoUrl?: string | null }) {
+  return (
+    <span className="mail-workspace-avatar" aria-hidden="true">
+      {logoUrl
+        ? <Image src={logoUrl} alt="" width={31} height={31} unoptimized />
+        : name.trim().slice(0, 1).toUpperCase()}
+    </span>
+  );
+}
 
 const workspaceLinks = [
   { href: "/contacts", label: "Contacts", icon: "♙" },
@@ -26,7 +37,7 @@ const workspaceLinks = [
   { href: "/reminders", label: "Reminders", icon: "◴" },
   { href: "/labels", label: "Labels", icon: "◇" },
   { href: "/analytics", label: "Analytics", icon: "↗" },
-  { href: "/settings", label: "Settings", icon: "⚙" },
+  { href: "/settings", label: "Workspace profile", icon: "◎" },
 ] as const;
 
 
@@ -71,6 +82,7 @@ export default function WorkspaceSidebar({
   const currentMailboxView = mailboxLinks.find((item) => item.view === requestedMailboxView)?.view ?? "Inbox";
   const [collapsed, setCollapsed] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
+  const switcherRef = useRef<HTMLDivElement>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [navigationCounts, setMailboxCounts] = useState<MailboxSidebarCounts>({
     inboxUnread: 0,
@@ -170,7 +182,10 @@ export default function WorkspaceSidebar({
       }
     };
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setMobileOpen(false);
+      if (event.key === "Escape") {
+        setMobileOpen(false);
+        setSwitcherOpen(false);
+      }
     };
     const initialViewportTimer = window.setTimeout(closeForViewport, 0);
     media.addEventListener("change", closeForViewport);
@@ -181,6 +196,16 @@ export default function WorkspaceSidebar({
       window.removeEventListener("keydown", closeOnEscape);
     };
   }, []);
+
+  useEffect(() => {
+    if (!switcherOpen) return;
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      const root = switcherRef.current;
+      if (root && event.target instanceof Node && !root.contains(event.target)) setSwitcherOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOnOutsidePointer, true);
+    return () => document.removeEventListener("pointerdown", closeOnOutsidePointer, true);
+  }, [switcherOpen]);
 
   const isSwitcherOpen = switcherOpen;
 
@@ -349,47 +374,50 @@ export default function WorkspaceSidebar({
 
       <div className="mail-sidebar-bottom">
         <div className="mail-sidebar-divider" />
-        <button
-          className="mail-workspace-switcher"
-          type="button"
-          onClick={() => setSwitcherOpen((current) => !current)}
-          aria-expanded={isSwitcherOpen}
-          aria-label={"Current workspace: " + workspaceName + ". Switch workspace"}
-          title="Switch workspace"
-        >
-          <span className="mail-workspace-avatar">{workspaceName.slice(0, 1).toUpperCase()}</span>
-          <span className="mail-workspace-copy"><strong>{workspaceName}</strong><small>{workspaceDescription}</small></span>
-          <span className="mail-chevron">⌄</span>
-        </button>
+        <div className="mail-workspace-switcher-wrap" ref={switcherRef}>
+          <button
+            className="mail-workspace-switcher"
+            type="button"
+            onClick={() => setSwitcherOpen((current) => !current)}
+            aria-expanded={isSwitcherOpen}
+            aria-label={"Current workspace: " + workspaceName + ". Switch workspace"}
+            aria-haspopup="menu"
+            title="Switch workspace"
+          >
+            <WorkspaceAvatar name={workspaceName} logoUrl={workspaces.find((workspace) => workspace.id === activeWorkspaceId)?.logoUrl} />
+            <span className="mail-workspace-copy"><strong>{workspaceName}</strong><small>{workspaceDescription}</small></span>
+            <span className="mail-chevron">⌄</span>
+          </button>
 
-        {isSwitcherOpen && workspaces.length > 0 && (
-          <div className="mail-profile-menu mail-workspace-menu" role="menu" aria-label="Switch workspace">
-            <strong>Switch workspace</strong>
-            <p>You stay signed in when you switch.</p>
-            {workspaces.map((workspace) => {
-              const active = workspace.id === activeWorkspaceId;
-              return (
-                <Link
-                  key={workspace.id}
-                  href={"/dashboard/" + workspace.id}
-                  className={active ? "mail-workspace-option active" : "mail-workspace-option"}
-                  role="menuitem"
-                  aria-current={active ? "page" : undefined}
-                  onClick={() => setSwitcherOpen(false)}
-                >
-                  <span className="mail-workspace-avatar">{workspace.name.slice(0, 1).toUpperCase()}</span>
-                  <span className="mail-workspace-copy"><strong>{workspace.name}</strong><small>{workspace.role}</small></span>
-                  {active && <span className="mail-workspace-current">Current</span>}
-                </Link>
-              );
-            })}
-            <div className="mail-workspace-menu-actions">
-              <Link className="mail-workspace-all" href="/dashboard" onClick={() => setSwitcherOpen(false)}>View all workspaces</Link>
-              <Link className="mail-workspace-all" href={workspaceBaseHref ? workspaceBaseHref + "/settings" : "/settings"} onClick={() => setSwitcherOpen(false)}>Workspace settings</Link>
-              <SignOutButton className="mail-workspace-signout" />
+          {isSwitcherOpen && workspaces.length > 0 && (
+            <div className="mail-profile-menu mail-workspace-menu" role="menu" aria-label="Switch workspace">
+              <strong>Switch workspace</strong>
+              <p>You stay signed in when you switch.</p>
+              {workspaces.map((workspace) => {
+                const active = workspace.id === activeWorkspaceId;
+                return (
+                  <Link
+                    key={workspace.id}
+                    href={"/dashboard/" + workspace.id}
+                    className={active ? "mail-workspace-option active" : "mail-workspace-option"}
+                    role="menuitem"
+                    aria-current={active ? "page" : undefined}
+                    onClick={() => setSwitcherOpen(false)}
+                  >
+                    <WorkspaceAvatar name={workspace.name} logoUrl={workspace.logoUrl} />
+                    <span className="mail-workspace-copy"><strong>{workspace.name}</strong><small>{workspace.role}</small></span>
+                    {active && <span className="mail-workspace-current">Current</span>}
+                  </Link>
+                );
+              })}
+              <div className="mail-workspace-menu-actions">
+                <Link className="mail-workspace-all" href="/dashboard" onClick={() => setSwitcherOpen(false)}>View all workspaces</Link>
+                <Link className="mail-workspace-all" href={workspaceBaseHref ? workspaceBaseHref + "/settings" : "/settings"} onClick={() => setSwitcherOpen(false)}>Workspace settings</Link>
+                <SignOutButton className="mail-workspace-signout" />
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         <p className="workspace-sidebar-note">Workspace mail</p>
       </div>
