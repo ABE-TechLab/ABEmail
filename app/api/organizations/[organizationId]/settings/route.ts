@@ -66,5 +66,11 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     }, { status: 403 });
   }
 
+  // Keep the existing email Brand Profile name aligned with the workspace's canonical name.
+  await supabase
+    .from("organization_brand_profiles")
+    .update({ brand_name: name, updated_by: user.id })
+    .eq("organization_id", organizationId);
+
   return NextResponse.json({ ok: true, organization });
 }

@@ -144,14 +144,25 @@ export async function GET(_request: Request, { params }: RouteContext) {
   const context = await getOrganizationRequestContext(organizationId, "brand profile");
   if ("response" in context) return context.response;
 
-  const { data, error } = await context.supabase
-    .from("organization_brand_profiles")
-    .select(PROFILE_FIELDS)
-    .eq("organization_id", organizationId)
-    .maybeSingle();
+  const [{ data, error }, { data: organization, error: organizationError }] = await Promise.all([
+    context.supabase
+      .from("organization_brand_profiles")
+      .select(PROFILE_FIELDS)
+      .eq("organization_id", organizationId)
+      .maybeSingle(),
+    context.supabase
+      .from("organizations")
+      .select("name")
+      .eq("id", organizationId)
+      .eq("status", "active")
+      .single(),
+  ]);
 
-  if (error) return NextResponse.json({ ok: false, error: "Brand profile could not be loaded." }, { status: 503 });
-  return NextResponse.json({ ok: true, profile: toPublicProfile(data as Record<string, unknown> | null) });
+  if (error || organizationError || !organization) return NextResponse.json({ ok: false, error: "Workspace profile could not be loaded." }, { status: 503 });
+  return NextResponse.json({
+    ok: true,
+    profile: { ...toPublicProfile(data as Record<string, unknown> | null), brandName: organization.name },
+  });
 }
 
 export async function PATCH(request: Request, { params }: RouteContext) {
@@ -186,12 +197,20 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     return NextResponse.json({ ok: false, error: parsed.error ?? "Brand profile is invalid." }, { status: 400 });
   }
 
-  const profile = parsed.data;
+  const { data: organization, error: organizationError } = await context.supabase
+    .from("organizations")
+    .select("name")
+    .eq("id", organizationId)
+    .eq("status", "active")
+    .single();
+  if (organizationError || !organization) return NextResponse.json({ ok: false, error: "Workspace name could not be loaded." }, { status: 503 });
+
+  const profile = { ...parsed.data, brandName: organization.name };
   const { data: saved, error } = await context.supabase
     .from("organization_brand_profiles")
     .upsert({
       organization_id: organizationId,
-      brand_name: profile.brandName,
+      brand_name: organization.name,
       logo_url: profile.logoUrl,
       primary_color: profile.primaryColor,
       accent_color: profile.accentColor,
