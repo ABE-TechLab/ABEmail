@@ -8,6 +8,7 @@ import {
   type EmailDesignContent,
   type EmailDesignBrandProfile,
 } from "@/lib/email-design/render.mjs";
+import { EMAIL_DESIGN_STARTERS, createEmailDesignStarter } from "@/lib/email-design/starters";
 import styles from "./designed-email-manager.module.css";
 import { useTransientNotice } from "@/lib/use-transient-notice";
 
@@ -78,35 +79,7 @@ function createBlock(type: BlockType): EmailDesignBlock {
   }
 }
 
-const STARTERS: { value: string; label: string; subject: string; blocks: EmailDesignBlock[] }[] = [
-  {
-    value: "welcome", label: "Welcome email", subject: "Welcome aboard",
-    blocks: [
-      { id: "welcome-heading", type: "heading", level: 1, text: "Welcome to the team" },
-      { id: "welcome-copy", type: "paragraph", text: "We’re delighted to work with you. Here is what you can expect next." },
-      { id: "welcome-cta", type: "button", label: "Get started", href: "https://example.com/get-started" },
-      { id: "welcome-footer", type: "footer", text: "Have a question? Reply to this email and we’ll be happy to help." },
-    ],
-  },
-  {
-    value: "invoice", label: "Invoice email", subject: "Your invoice is ready",
-    blocks: [
-      { id: "invoice-heading", type: "heading", level: 1, text: "Your invoice is ready" },
-      { id: "invoice-copy", type: "paragraph", text: "Hello, your invoice is ready to review. Please use the secure link below to view the details and payment instructions." },
-      { id: "invoice-cta", type: "button", label: "View invoice", href: "https://example.com/invoice" },
-      { id: "invoice-footer", type: "footer", text: "If you have questions about this invoice, please contact our team." },
-    ],
-  },
-  {
-    value: "follow-up", label: "Customer follow-up", subject: "Following up",
-    blocks: [
-      { id: "follow-heading", type: "heading", level: 1, text: "Just following up" },
-      { id: "follow-copy", type: "paragraph", text: "Hello, I wanted to check in and see whether you had any questions or need any additional information from our side." },
-      { id: "follow-cta", type: "button", label: "Book a conversation", href: "https://example.com/contact" },
-      { id: "follow-footer", type: "footer", text: "Thank you for your time." },
-    ],
-  },
-];
+const STARTERS = EMAIL_DESIGN_STARTERS;
 
 function blockLabel(block: EmailDesignBlock) {
   const item = BLOCK_TYPES.find((type) => type.value === block.type);
@@ -199,16 +172,16 @@ export default function DesignedEmailManager({ organizationId }: { organizationI
   }
 
   function applyStarter(value: string) {
-    const selected = STARTERS.find((item) => item.value === value);
+    const selected = createEmailDesignStarter(value, newId);
     if (!selected) return;
     setSelectedId(null);
     setForm({
       name: selected.label,
       subject: selected.subject,
-      description: "Starter design — customize this message and apply your brand profile.",
-      contentJson: { version: 1, blocks: selected.blocks.map((block) => ({ ...block })) },
+      description: "Starter design — replace the example copy, details, images, and links before saving.",
+      contentJson: { version: 1, blocks: selected.blocks },
     });
-    setNotice("Starter design loaded. Replace the example copy and links before saving.");
+    setNotice("Starter design loaded. Replace the example copy, details, images, and links before saving.");
     setError("");
     setPreviewOpen(true);
   }
@@ -444,6 +417,10 @@ export default function DesignedEmailManager({ organizationId }: { organizationI
 
         {block.type === "row" && (
           <div className={styles.rowColumns}>
+            <div className={styles.blockActions}>
+              <button type="button" disabled={block.columns.length >= 3} onClick={() => edit((current) => current.type === "row" && current.columns.length < 3 ? { ...current, columns: [...current.columns, { id: newId(), blocks: [{ id: newId(), type: "heading", text: "New section", level: 3 }, { id: newId(), type: "paragraph", text: "Add supporting detail." }] }] } : current)}>Add column</button>
+              <button type="button" disabled={block.columns.length <= 2} onClick={() => edit((current) => current.type === "row" && current.columns.length > 2 ? { ...current, columns: current.columns.slice(0, -1) } : current)}>Remove last column</button>
+            </div>
             {block.columns.map((column, columnIndex) => (
               <div className={styles.rowColumn} key={column.id}>
                 <strong>Column {columnIndex + 1}</strong>
@@ -460,6 +437,12 @@ export default function DesignedEmailManager({ organizationId }: { organizationI
         )}
 
         {block.type === "divider" && <p className={styles.blockHint}>A subtle horizontal rule separates sections in the email.</p>}
+        {!nested && (
+          <div className={styles.rowColumns}>
+            <label className={styles.inlineField}><span>Alignment</span><select value={block.align ?? "left"} onChange={(event) => edit((current) => ({ ...current, align: event.target.value as "left" | "center" | "right" }))}><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select></label>
+            <label className={styles.inlineField}><span>Space after (px)</span><select value={block.spacingAfter ?? 16} onChange={(event) => edit((current) => ({ ...current, spacingAfter: Number(event.target.value) }))}><option value={0}>None</option><option value={8}>8</option><option value={16}>16</option><option value={24}>24</option><option value={32}>32</option><option value={48}>48</option><option value={64}>64</option></select></label>
+          </div>
+        )}
       </article>
     );
   }
