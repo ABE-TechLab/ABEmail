@@ -166,8 +166,8 @@ export async function handleResendWebhook(request: NextRequest, tenantOrganizati
   let providerEventRowId = insertedEvent?.id as string | undefined;
   if (insertError?.code === "23505") {
     const duplicateLookup = tenantOrganizationId
-      ? admin.from("provider_events").select("id, status, attempt_count").eq("provider", "resend").eq("organization_id", tenantOrganizationId).eq("provider_event_id", eventId).maybeSingle()
-      : admin.from("provider_events").select("id, status, attempt_count").eq("provider", "resend").is("organization_id", null).eq("provider_event_id", eventId).maybeSingle();
+      ? admin.from("provider_events").select("id, status, attempt_count, received_at").eq("provider", "resend").eq("organization_id", tenantOrganizationId).eq("provider_event_id", eventId).maybeSingle()
+      : admin.from("provider_events").select("id, status, attempt_count, received_at").eq("provider", "resend").is("organization_id", null).eq("provider_event_id", eventId).maybeSingle();
     const { data: existing, error: lookupError } = await duplicateLookup;
 
     if (lookupError) return json({ error: "Webhook deduplication could not be checked." }, 503);
