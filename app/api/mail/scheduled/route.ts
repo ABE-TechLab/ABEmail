@@ -117,8 +117,16 @@ export async function POST(request: NextRequest) {
     if (existingError) return json({ error: "The previous schedule request could not be checked safely." }, 503);
     if (existing) {
       if (existing.request_fingerprint !== requestFingerprint) return json({ error: "This request key was already used for different scheduled email content." }, 409);
-      const { design_content_json, request_fingerprint: _requestFingerprint, ...scheduled } = existing;
-      return json({ ok: true, duplicate: true, scheduled: { ...scheduled, is_designed: Boolean(design_content_json) } });
+      return json({
+        ok: true,
+        duplicate: true,
+        scheduled: {
+          id: existing.id, to_address: existing.to_address, subject: existing.subject,
+          body_text: existing.body_text, scheduled_at: existing.scheduled_at, status: existing.status,
+          created_at: existing.created_at, updated_at: existing.updated_at,
+          is_designed: Boolean(existing.design_content_json),
+        },
+      });
     }
   }
 
@@ -170,8 +178,16 @@ export async function POST(request: NextRequest) {
         .eq("organization_id", organizationId).eq("mailbox_id", mailboxId).eq("user_id", ctx.user.id)
         .eq("client_request_id", clientRequestId).maybeSingle();
       if (existing?.request_fingerprint === requestFingerprint) {
-        const { design_content_json, request_fingerprint: _requestFingerprint, ...scheduled } = existing;
-        return json({ ok: true, duplicate: true, scheduled: { ...scheduled, is_designed: Boolean(design_content_json) } });
+        return json({
+          ok: true,
+          duplicate: true,
+          scheduled: {
+            id: existing.id, to_address: existing.to_address, subject: existing.subject,
+            body_text: existing.body_text, scheduled_at: existing.scheduled_at, status: existing.status,
+            created_at: existing.created_at, updated_at: existing.updated_at,
+            is_designed: Boolean(existing.design_content_json),
+          },
+        });
       }
       if (existing) return json({ error: "This request key was already used for different scheduled email content." }, 409);
     }
