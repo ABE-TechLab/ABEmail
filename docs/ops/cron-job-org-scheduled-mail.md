@@ -17,6 +17,8 @@ Create a cron job in [cron-job.org](https://cron-job.org/) with these settings:
 
 The worker accepts `CRON_SECRET` or `ABEMAIL_SCHEDULED_MAIL_CRON_SECRET`, and checks for an exact `Authorization: Bearer <secret>` header. Prefer the dedicated `ABEMAIL_SCHEDULED_MAIL_CRON_SECRET`.
 
+The same worker handles both plain-text and designed messages. Designed jobs carry validated versioned blocks and a snapshot of the workspace Brand Profile. The worker renders HTML and plain text on the server and stores the rendered payload in the message ledger before provider submission; retries reuse that stored render. The scheduled payload and brand snapshot are immutable after creation. Designed scheduling requires a connected workspace Resend connection and a verified sending-enabled domain.
+
 ## Configure the secret
 
 In the Vercel project that serves `abemail.vercel.app`, add `ABEMAIL_SCHEDULED_MAIL_CRON_SECRET` as a **Sensitive** environment variable targeting **Production** only. Use a randomly generated secret with at least 32 bytes of entropy. Enter the exact same value in cron-job.org's custom `Authorization` header; do not commit it or put it in a URL/query string.
@@ -25,7 +27,7 @@ Redeploy Production after creating/changing the environment variable so the work
 
 ## Verify without sending test mail
 
-Use cron-job.org's **Test run** only after the migration for `scheduled_email_messages` has been applied to the intended production database and the required environment variables are present. Before then, the authenticated request may return a storage/configuration error, and no real delivery test should be attempted.
+Use cron-job.org's **Test run** only after both the base scheduled-mail migration (`20261019034340_scheduled_email_messages.sql`) and the designed-scheduling migration (`20261101090000_designed_email_scheduling.sql`) have been applied to the intended production database and the required environment variables are present. Before then, the authenticated request may return a storage/configuration error, and no real delivery test should be attempted.
 
 A healthy idle run should return HTTP 200 with JSON similar to `{"ok":true,"processed":0,"results":[]}`. A 401 means the Authorization header and Vercel secret do not match. A 503 indicates storage, database, or queue-claim configuration needs attention.
 
