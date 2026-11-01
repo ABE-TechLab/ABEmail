@@ -2800,3 +2800,20 @@ html.dark .mail-appearance-toggle {
 .settings-profile-success { display: flex; align-items: flex-start; gap: 9px; margin: 12px 0; font-size: 11px; line-height: 1.5; color: var(--accent-foreground, #246b3a); animation: mail-toast-enter .2s ease-out both; }
 .settings-profile-success > span { min-width: 0; flex: 1 1 auto; }
 @media (max-width: 760px) { .settings-field-wide { grid-column: auto; } }
+
+
+/* Shared workspace identity and upload controls. */
+.mail-workspace-avatar { overflow: hidden; }
+.mail-workspace-avatar img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.mail-workspace-switcher-wrap { position: relative; }
+.workspace-profile-settings { display: grid; gap: 20px; }
+.settings-brand-logo-field { display: flex; min-width: 0; align-items: center; gap: 16px; padding: 16px; border: 1px solid var(--border, #e2e9e0); border-radius: 12px; background: var(--card, #fff); }
+.settings-brand-logo-preview { display: grid; width: 72px; height: 72px; flex: 0 0 auto; overflow: hidden; place-items: center; border: 1px solid var(--border, #dfe7dd); border-radius: 14px; background: var(--muted, #f5f7f3); color: var(--muted-foreground, #657265); font-size: 24px; font-weight: 750; }
+.settings-brand-logo-preview img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.settings-brand-logo-copy { display: grid; min-width: 0; gap: 6px; }
+.settings-brand-logo-copy > strong { color: var(--foreground, #28352b); font-size: 13px; }
+.settings-brand-logo-copy p, .settings-brand-logo-copy small { margin: 0; color: var(--muted-foreground, #718071); font-size: 11px; line-height: 1.5; }
+.settings-brand-logo-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.settings-brand-logo-upload { position: relative; display: inline-flex; align-items: center; justify-content: center; min-height: 32px; padding: 7px 11px; cursor: pointer; }
+.settings-brand-logo-upload input { position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0; pointer-events: none; }
+@media (max-width: 600px) { .settings-brand-logo-field { align-items: flex-start; padding: 12px; gap: 12px; } .settings-brand-logo-preview { width: 58px; height: 58px; } }
