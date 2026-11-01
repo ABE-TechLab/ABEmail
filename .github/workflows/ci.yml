@@ -36,6 +36,9 @@ jobs:
       - name: Check email design renderer
         run: npm run test:email-design
 
+      - name: Test webhook retry state handling
+        run: npm run test:email-webhooks
+
       - name: Verify workspace navigation contract
         run: npm run check:navigation
 
