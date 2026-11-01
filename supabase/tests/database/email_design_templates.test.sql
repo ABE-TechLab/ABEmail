@@ -47,10 +47,12 @@ insert into public.mailboxes (
 
 select has_column('public', 'scheduled_email_messages', 'design_content_json', 'scheduled messages can persist validated designed-email blocks');
 select has_column('public', 'scheduled_email_messages', 'design_brand_profile_json', 'scheduled designed emails retain a brand-profile snapshot');
+select has_column('public', 'scheduled_email_messages', 'client_request_id', 'scheduled message creation accepts an idempotency key');
+select has_column('public', 'scheduled_email_messages', 'request_fingerprint', 'scheduled request keys are bound to their original payload');
 select lives_ok(
   $valid_designed_schedule$ insert into public.scheduled_email_messages (
     id, organization_id, mailbox_id, user_id, to_address, subject, body_text,
-    design_content_json, design_brand_profile_json, scheduled_at
+    design_content_json, design_brand_profile_json, client_request_id, request_fingerprint, scheduled_at
   ) values (
     '97000000-0000-4000-8000-000000000001',
     '92000000-0000-4000-8000-000000000001',
@@ -61,9 +63,30 @@ select lives_ok(
     'A server-rendered plain-text fallback',
     '{"version":1,"blocks":[{"id":"schedule-heading","type":"heading","text":"Scheduled"}]}'::jsonb,
     '{"brandName":"Tenant A Brand","primaryColor":"#123456"}'::jsonb,
+    '97000000-0000-4000-8000-000000000002',
+    repeat('a', 64),
     now() + interval '1 hour'
   )$valid_designed_schedule$,
   'valid designed scheduled email stores its block data and frozen brand profile'
+);
+select throws_ok(
+  $duplicate_schedule_request$ insert into public.scheduled_email_messages (
+    organization_id, mailbox_id, user_id, to_address, subject, body_text,
+    client_request_id, request_fingerprint, scheduled_at
+  ) values (
+    '92000000-0000-4000-8000-000000000001',
+    '94000000-0000-4000-8000-000000000001',
+    '91000000-0000-4000-8000-000000000001',
+    'recipient@example.net',
+    'Duplicate schedule request',
+    'duplicate',
+    '97000000-0000-4000-8000-000000000002',
+    repeat('b', 64),
+    now() + interval '2 hours'
+  )$duplicate_schedule_request$,
+  '23505',
+  null,
+  'database prevents duplicate scheduled messages for the same request key'
 );
 select throws_ok(
   $invalid_designed_schedule$ insert into public.scheduled_email_messages (
