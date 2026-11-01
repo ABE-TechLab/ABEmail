@@ -45,6 +45,54 @@ insert into public.mailboxes (
   '91000000-0000-4000-8000-000000000001'
 );
 
+select has_column('public', 'scheduled_email_messages', 'design_content_json', 'scheduled messages can persist validated designed-email blocks');
+select has_column('public', 'scheduled_email_messages', 'design_brand_profile_json', 'scheduled designed emails retain a brand-profile snapshot');
+select lives_ok(
+  $valid_designed_schedule$ insert into public.scheduled_email_messages (
+    id, organization_id, mailbox_id, user_id, to_address, subject, body_text,
+    design_content_json, design_brand_profile_json, scheduled_at
+  ) values (
+    '97000000-0000-4000-8000-000000000001',
+    '92000000-0000-4000-8000-000000000001',
+    '94000000-0000-4000-8000-000000000001',
+    '91000000-0000-4000-8000-000000000001',
+    'recipient@example.net',
+    'Designed schedule',
+    'A server-rendered plain-text fallback',
+    '{"version":1,"blocks":[{"id":"schedule-heading","type":"heading","text":"Scheduled"}]}'::jsonb,
+    '{"brandName":"Tenant A Brand","primaryColor":"#123456"}'::jsonb,
+    now() + interval '1 hour'
+  )$valid_designed_schedule$,
+  'valid designed scheduled email stores its block data and frozen brand profile'
+);
+select throws_ok(
+  $invalid_designed_schedule$ insert into public.scheduled_email_messages (
+    organization_id, mailbox_id, user_id, to_address, subject, body_text,
+    design_content_json, design_brand_profile_json, scheduled_at
+  ) values (
+    '92000000-0000-4000-8000-000000000001',
+    '94000000-0000-4000-8000-000000000001',
+    '91000000-0000-4000-8000-000000000001',
+    'recipient@example.net',
+    'Empty designed schedule',
+    '',
+    '{"version":1,"blocks":[]}'::jsonb,
+    '{}'::jsonb,
+    now() + interval '1 hour'
+  )$invalid_designed_schedule$,
+  '23514',
+  null,
+  'database rejects scheduled designed emails without content blocks'
+);
+select throws_ok(
+  $mutate_scheduled_payload$ update public.scheduled_email_messages
+    set subject = 'Changed after scheduling'
+    where id = '97000000-0000-4000-8000-000000000001'$mutate_scheduled_payload$,
+  'P0001',
+  'Scheduled email payload is immutable',
+  'scheduled recipients, subject, design, and brand snapshot cannot change after scheduling'
+);
+
 select has_column('public', 'email_drafts', 'design_content_json', 'email drafts can persist designed-email block content');
 select lives_ok(
   $valid_design_draft$ insert into public.email_drafts (
@@ -96,6 +144,7 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', '91000000-0000-4000-8000-000000000001', true);
 select set_config('request.jwt.claim.role', 'authenticated', true);
 select set_config('request.jwt.claims', '{"sub":"91000000-0000-4000-8000-000000000001","role":"authenticated","email":"design-owner@tenant-a.invalid"}', true);
+select is((select count(*)::integer from public.scheduled_email_messages where id = '97000000-0000-4000-8000-000000000001'), 1, 'authorized mailbox owner can read their designed scheduled message');
 
 select lives_ok(
   $profile_insert$ insert into public.organization_brand_profiles (organization_id, brand_name, logo_url)
