@@ -47,11 +47,20 @@ export default async function WorkspaceLayout({ children, params }: WorkspaceLay
 
   if (workspaceError || !workspaceRows?.some((workspace) => workspace.id === organizationId)) notFound();
 
+  const { data: brandProfileRows } = await supabase
+    .from("organization_brand_profiles")
+    .select("organization_id, logo_url")
+    .in("organization_id", workspaceIds);
+  const logoByOrganization = new Map(
+    (brandProfileRows ?? []).map((profile) => [profile.organization_id, profile.logo_url])
+  );
+
   const workspaces: WorkspaceChoice[] = workspaceRows.map((workspace) => ({
     id: workspace.id,
     name: workspace.name,
     slug: workspace.slug,
     role: membershipRows.find((membership) => membership.organization_id === workspace.id)?.role ?? "member",
+    logoUrl: logoByOrganization.get(workspace.id) ?? null,
   }));
   const organization = workspaceRows.find((workspace) => workspace.id === organizationId)!;
   const base = "/dashboard/" + organizationId;
