@@ -984,7 +984,6 @@ const scheduledLoading = activeView === "Scheduled" && Boolean(mailboxId) && sch
     const scheduleRecipients = to.split(/[;,]/).map((value) => value.trim()).filter(Boolean);
     if (scheduleRecipients.length !== 1) { setNotice("Scheduled messages currently support one recipient at a time."); return; }
     if (!to.trim() || !subject.trim() || (!body.trim() && composeMode !== "branded")) { setNotice("Enter a recipient, subject, and message before scheduling."); return; }
-    if (!scheduledAt || !Number.isFinite(Date.parse(scheduledAt))) { setNotice("Choose a date and time for delivery."); return; }
     let finalDesignContent: EmailDesignContent | null = null;
     let finalBody = "";
     const signature = resolveMailboxSignature(mailPreferences, mailboxId, composeSignatureId);
@@ -1009,11 +1008,17 @@ const scheduledLoading = activeView === "Scheduled" && Boolean(mailboxId) && sch
     }
     if (!finalBody.trim()) { setNotice("Add message content before scheduling."); return; }
     if (!scheduledAt || !Number.isFinite(Date.parse(scheduledAt))) { setNotice("Choose a date and time for delivery."); return; }
+    const stableRequestKey = requestKey ?? crypto.randomUUID();
+    setRequestKey(stableRequestKey);
     setBusy(true); setNotice("");
     try {
-      const response = await fetch("/api/mail/scheduled", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ organizationId, mailboxId, to: to.trim(), subject: subject.trim(), text: finalBody, ...(finalDesignContent ? { designContent: finalDesignContent } : {}), scheduledAt: new Date(scheduledAt).toISOString() }) });
+      const response = await fetch("/api/mail/scheduled", { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": stableRequestKey }, body: JSON.stringify({ organizationId, mailboxId, to: to.trim(), subject: subject.trim(), text: finalBody, ...(finalDesignContent ? { designContent: finalDesignContent } : {}), scheduledAt: new Date(scheduledAt).toISOString() }) });
       const result = await response.json() as { ok?: boolean; error?: string; scheduled?: ScheduledEmail };
-      if (!response.ok || !result.ok || !result.scheduled) { setNotice(result.error || "The message could not be scheduled."); return; }
+      if (!response.ok || !result.ok || !result.scheduled) {
+        if (response.status !== 503) setRequestKey(null);
+        setNotice(result.error || "The message could not be scheduled.");
+        return;
+      }
       draftMutationVersion.current += 1;
       if (draftSaveTimer.current !== null) { window.clearTimeout(draftSaveTimer.current); draftSaveTimer.current = null; }
       await draftSaveQueue.current;
@@ -1836,7 +1841,7 @@ const scheduledLoading = activeView === "Scheduled" && Boolean(mailboxId) && sch
                     <span>Signature</span>
                     <select
                       value={composeSignatureId ?? mailPreferences.mailboxSignatures[mailboxId].defaultSignatureId ?? ""}
-                      onChange={(event) => setComposeSignatureId(event.target.value)}
+                      onChange={(event) => { setComposeSignatureId(event.target.value); setRequestKey(null); }}
                       disabled={busy || !mailPreferences.mailboxSignatures[mailboxId].enabled}
                     >
                       <option value="">No signature</option>
@@ -1866,9 +1871,9 @@ const scheduledLoading = activeView === "Scheduled" && Boolean(mailboxId) && sch
                     )}
                   </section>
                 )}
-                {scheduleMode && <label className="mail-compose-field"><span>Send at</span><input type="datetime-local" required value={scheduledAt} onChange={(event) => setScheduledAt(event.target.value)} disabled={busy} /></label>}
+                {scheduleMode && <label className="mail-compose-field"><span>Send at</span><input type="datetime-local" required value={scheduledAt} onChange={(event) => { setScheduledAt(event.target.value); setRequestKey(null); }} disabled={busy} /></label>}
                 <footer className="mail-compose-footer">
-                  {scheduleMode ? <button type="button" className="mail-primary-action" disabled={busy || uploadingAttachments || !mailboxId || !scheduledAt || pendingAttachments.length > 0 || to.split(/[;,]/).map((value) => value.trim()).filter(Boolean).length !== 1} onClick={() => void scheduleMessage()}>{busy ? "Scheduling…" : "Schedule email"} <span>◷</span></button> : <><button type="submit" className="mail-primary-action" disabled={busy || uploadingAttachments || !mailboxId}>{busy ? "Sending…" : "Send"} <span>↗</span></button><button type="button" className="mail-compose-discard" disabled={busy || uploadingAttachments || pendingAttachments.length > 0 || to.split(/[;,]/).map((value) => value.trim()).filter(Boolean).length !== 1} title={pendingAttachments.length > 0 ? "Remove attachments before scheduling" : "Scheduling currently supports one recipient"} onClick={() => { setScheduleMode(true); const date = new Date(Date.now() + 60 * 60 * 1000); date.setMinutes(date.getMinutes() - date.getTimezoneOffset()); setScheduledAt(date.toISOString().slice(0, 16)); }}>Schedule</button></>}
+                  {scheduleMode ? <button type="button" className="mail-primary-action" disabled={busy || uploadingAttachments || !mailboxId || !scheduledAt || pendingAttachments.length > 0 || to.split(/[;,]/).map((value) => value.trim()).filter(Boolean).length !== 1} onClick={() => void scheduleMessage()}>{busy ? "Scheduling…" : "Schedule email"} <span>◷</span></button> : <><button type="submit" className="mail-primary-action" disabled={busy || uploadingAttachments || !mailboxId}>{busy ? "Sending…" : "Send"} <span>↗</span></button><button type="button" className="mail-compose-discard" disabled={busy || uploadingAttachments || pendingAttachments.length > 0 || to.split(/[;,]/).map((value) => value.trim()).filter(Boolean).length !== 1} title={pendingAttachments.length > 0 ? "Remove attachments before scheduling" : "Scheduling currently supports one recipient"} onClick={() => { setScheduleMode(true); setRequestKey(null); const date = new Date(Date.now() + 60 * 60 * 1000); date.setMinutes(date.getMinutes() - date.getTimezoneOffset()); setScheduledAt(date.toISOString().slice(0, 16)); }}>Schedule</button></>}
                   <button type="button" className="mail-compose-discard" onClick={() => void closeComposer()} disabled={busy}>Close</button>
                 </footer>
               </form>
