@@ -35,6 +35,7 @@ A healthy idle run should return HTTP 200 with JSON similar to `{"ok":true,"proc
 
 - Keep `ABEMAIL_SCHEDULED_MAIL_CRON_SECRET` scoped to Vercel Production only.
 - Do not paste the secret into a URL, repository, issue, or support message.
-- The worker rechecks organization, mailbox, domain, and provider status at execution time. It claims due jobs through the database RPC, enforces provider idempotency, and reuses the stored HTML/plain-text render on retries.
+- The worker rechecks organization, mailbox, domain, and provider status at execution time. Immediately before provider submission it also rechecks that the scheduling user still has active organization membership and either owner/admin authority or an active mailbox `can_send` grant. Revoked access permanently fails the pending job with `SCHEDULED_CREATOR_ACCESS_REVOKED`.
+- It claims due jobs through the database RPC, enforces provider idempotency, persists one delivery row per recipient, derives the message-level status from recipient outcomes, and reuses the stored HTML/plain-text render on retries.
 - If the worker returns 401, compare the cron-job.org Authorization header against the Production-only Vercel variable without disclosing either value. A 503 indicates the queue, database, or provider setup needs investigation.
 - Do not assume that Vercel log absence proves the cron job ran; on the Hobby plan, retained runtime logs are limited. Confirm runs through cron-job.org response history and scheduled-message/provider records.

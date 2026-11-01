@@ -75,6 +75,19 @@ insert into public.email_messages (
    'Tenant B message', 'Test-only tenant B message', 'accepted', 'test-b-team-0001', repeat('b', 64),
    '10000000-0000-4000-8000-000000000002', now(), null);
 
+insert into public.email_message_recipients (
+  organization_id, mailbox_id, message_id, recipient_email, status, last_event_at, last_provider_event_id, delivered_at
+) values
+  ('20000000-0000-4000-8000-000000000001', '31000000-0000-4000-8000-000000000001',
+   '60000000-0000-4000-8000-000000000001', 'delivered@example.net', 'delivered',
+   now() - interval '1 minute', 'evt-test-a-delivered', now() - interval '1 minute'),
+  ('20000000-0000-4000-8000-000000000001', '31000000-0000-4000-8000-000000000001',
+   '60000000-0000-4000-8000-000000000001', 'bounced@example.net', 'bounced',
+   now(), 'evt-test-a-bounced', null),
+  ('20000000-0000-4000-8000-000000000002', '31000000-0000-4000-8000-000000000003',
+   '60000000-0000-4000-8000-000000000003', 'recipient@example.net', 'accepted',
+   null, null, null);
+
 insert into public.email_message_reminders (
   id, organization_id, mailbox_id, message_id, user_id, reminder_at, note
 ) values
@@ -122,6 +135,11 @@ select is((select role from public.organization_memberships where organization_i
 select is((select role from public.organization_memberships where organization_id = '20000000-0000-4000-8000-000000000002' and user_id = '10000000-0000-4000-8000-000000000001'), 'member', 'the same identity can be a member in the second organization');
 select is((select count(*)::integer from public.mailboxes), 3, 'owner sees all own organization mailboxes and only assigned mailboxes in the second');
 select is((select count(*)::integer from public.email_messages), 3, 'mail reads include own organization and explicitly granted cross-organization mailbox only');
+select is((select count(*)::integer from public.email_message_recipients), 3, 'recipient records are visible only for mailboxes the user can read');
+select is((select status from public.email_messages where id = '60000000-0000-4000-8000-000000000001'), 'partially_delivered', 'mixed delivered and bounced recipients aggregate to partially_delivered');
+select ok(has_table_privilege('authenticated', 'public.email_message_recipients', 'select'), 'authenticated role has read-only recipient table access');
+select ok(not has_table_privilege('authenticated', 'public.email_message_recipients', 'insert'), 'authenticated role cannot insert recipient delivery records');
+select ok(not has_table_privilege('anon', 'public.email_message_recipients', 'select'), 'anonymous users cannot read recipient delivery records');
 select is((select count(*)::integer from public.email_message_reminders), 1, 'user sees only their own reminder records across accessible workspaces');
 select is((select count(*)::integer from public.email_message_reminders where id = '80000000-0000-4000-8000-000000000002'), 0, 'user cannot read another members reminder in the same workspace');
 select is((select count(*)::integer from public.email_message_reminders where organization_id = '20000000-0000-4000-8000-000000000002'), 0, 'user cannot read another members reminder in a second workspace');
@@ -247,6 +265,7 @@ with deleted as (
 select is((select count(*)::integer from deleted), 0, 'member cannot delete another tenant contact');
 select is((select count(*)::integer from public.mailboxes), 1, 'member sees only their assigned mailbox');
 select is((select count(*)::integer from public.email_messages), 1, 'member sees only messages in their assigned mailbox');
+select is((select count(*)::integer from public.email_message_recipients), 0, 'member cannot read recipient records from an unassigned mailbox');
 select is((select count(*)::integer from public.email_message_reminders), 1, 'member sees their own reminder on their assigned mailbox');
 select is((select count(*)::integer from public.email_message_reminders where id = '80000000-0000-4000-8000-000000000001'), 0, 'member cannot read the workspace owner reminder');
 select is((select count(*)::integer from public.email_message_reminders where organization_id = '20000000-0000-4000-8000-000000000002'), 0, 'member cannot read reminders from another tenant');

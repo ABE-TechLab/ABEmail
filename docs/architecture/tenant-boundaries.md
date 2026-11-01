@@ -21,6 +21,7 @@ auth.users
                                    │    └── mailboxes
                                    │         ├── mailbox_memberships
                                    │         ├── email_messages
+                                   │         │    ├── email_message_recipients
                                    │         │    └── email_attachments
                                    │         ├── email_drafts
                                    │         └── scheduled_messages
@@ -40,7 +41,8 @@ platform operators ── separate from tenant organization memberships
 - `organization_domains`: normalized domain, organization, provider-domain reference, verification state, permitted sending/receiving modes, and timestamps.
 - `mailboxes`: organization, domain, normalized address, display name, active state, and provider routing reference.
 - `mailbox_memberships`: organization, mailbox, user, capability/role, and status.
-- `email_messages`: organization, mailbox, provider message reference, direction, normalized envelope/header fields, body, state, and timestamps.
+- `email_messages`: organization, mailbox, provider message reference, direction, normalized envelope/header fields, body, aggregate delivery state, and timestamps.
+- `email_message_recipients`: organization, mailbox, parent message, normalized recipient email, recipient-specific delivery state, last provider event/time, and delivery timestamp. Composite foreign keys keep the recipient ledger attached to the same tenant/message/mailbox; reads inherit the parent's mailbox RLS and writes are service-only.
 - `email_attachments`: organization, message, private object path, content type, size, and provider metadata. Keep binary content out of ordinary message rows.
 - `email_drafts`, `scheduled_messages`, `contacts`: organization-scoped records with explicit creator and mailbox ownership where relevant.
 - `provider_events`: provider, provider event ID, event type, processing state, received/processed timestamps, and minimum necessary payload metadata. Unique provider event identity enforces idempotency.

@@ -73,6 +73,7 @@ type EmailMessage = {
   trashed_at: string | null;
   spam_at: string | null;
   snoozed_until: string | null;
+  recipient_statuses: Array<{ recipient_email: string; status: string }>;
 };
 type LiveMailboxProps = {
   organizationId: string;
@@ -1650,6 +1651,19 @@ const scheduledLoading = activeView === "Scheduled" && Boolean(mailboxId) && sch
                       </div>
                       <time>{messageDate(selectedMessage, mailPreferences.timezone, mailPreferences.language)}</time>
                     </div>
+                    {selectedMessage.direction === "outbound" && selectedMessage.recipient_statuses.length > 0 && (
+                      <section className={styles.recipientDeliveryPanel} aria-label="Recipient delivery status">
+                        <strong>Recipient delivery</strong>
+                        <div className={styles.recipientDeliveryList}>
+                          {selectedMessage.recipient_statuses.map((recipient) => (
+                            <div className={styles.recipientDeliveryRow} key={recipient.recipient_email}>
+                              <span>{recipient.recipient_email}</span>
+                              <span className={styles.recipientDeliveryStatus}>{recipient.status.replace(/_/g, " ")}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </section>
+                    )}
                     {selectedMessage.body_html?.trim() ? (
                       <div className="mail-message-body-card">
                         <EmailHtmlViewer

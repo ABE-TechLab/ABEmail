@@ -234,7 +234,7 @@ export async function POST(request: NextRequest) {
     if (existing.request_fingerprint !== fingerprint) {
       return json({ error: "This idempotency key was already used for different message content." }, 409);
     }
-    if (existing.status === "accepted" || existing.status === "delivered" || existing.status === "delayed") {
+    if (existing.status === "accepted" || existing.status === "delivered" || existing.status === "delayed" || existing.status === "partially_delivered") {
       return json({ ok: true, duplicate: true, messageId: existing.id, providerMessageId: existing.provider_message_id }, 200);
     }
     if (existing.status !== "processing") {
@@ -341,6 +341,20 @@ export async function POST(request: NextRequest) {
       attachmentRows = attachmentRows.map((row) => pendingIds.includes(row.id) ? { ...row, message_id: savedMessageId, draft_id: null, expires_at: null } : row);
     }
 
+    const { error: recipientSeedError } = await admin.from("email_message_recipients").upsert(
+      recipients.map((recipientEmail) => ({
+        organization_id: organizationId,
+        mailbox_id: mailboxId,
+        message_id: savedMessageId,
+        recipient_email: recipientEmail,
+        status: "processing",
+      })),
+      { onConflict: "organization_id,message_id,recipient_email", ignoreDuplicates: true },
+    );
+    if (recipientSeedError) {
+      return json({ error: "Recipient delivery tracking could not be prepared. Retry this same message." }, 503);
+    }
+
     const sent = usesWorkspaceKey
       ? await sendResendEmail({
           apiKey: sendApiKey,
@@ -365,7 +379,7 @@ export async function POST(request: NextRequest) {
 
     const { error: updateError } = await admin
       .from("email_messages")
-      .update({ status: "accepted", provider_message_id: sent.id, sent_at: new Date().toISOString() })
+      .update({ provider_message_id: sent.id, sent_at: new Date().toISOString() })
       .eq("id", savedMessageId)
       .eq("organization_id", organizationId);
 
@@ -378,10 +392,33 @@ export async function POST(request: NextRequest) {
       }, 202);
     }
 
+    const { error: recipientAcceptError } = await admin.from("email_message_recipients")
+      .update({ status: "accepted" })
+      .eq("organization_id", organizationId)
+      .eq("message_id", savedMessageId)
+      .eq("status", "processing");
+    if (recipientAcceptError) {
+      return json({
+        ok: true,
+        status: "accepted_by_recipient_tracking_pending",
+        messageId: savedMessageId,
+        providerMessageId: sent.id,
+        note: "Resend accepted the message. Recipient status will be reconciled by its signed delivery webhook.",
+      }, 202);
+    }
+
     return json({ ok: true, status: "accepted", messageId: savedMessageId, providerMessageId: sent.id }, 202);
   } catch (error) {
     if ((error instanceof ResendPilotError || error instanceof ResendProviderError) && error.providerStatus !== null && error.providerStatus < 500) {
-      await admin.from("email_messages").update({ status: "failed" }).eq("id", savedMessageId);
+      const { error: recipientFailureError } = await admin.from("email_message_recipients")
+        .update({ status: "failed", last_event_at: new Date().toISOString() })
+        .eq("organization_id", organizationId)
+        .eq("message_id", savedMessageId)
+        .eq("status", "processing");
+      if (recipientFailureError) {
+        await admin.from("email_messages").update({ status: "failed" })
+          .eq("id", savedMessageId).eq("organization_id", organizationId);
+      }
       if (attachmentIds.length) {
         const { error: detachError } = await admin.from("email_message_attachments")
           .update({

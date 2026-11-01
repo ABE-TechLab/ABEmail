@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { decryptProviderSecret, sendResendEmail, ResendProviderError } from "@/lib/email/resend-provider";
 import { getPilotSendApiKey, OTTAWA_PILOT_ADDRESS, sendPilotEmail, ResendPilotError } from "@/lib/email/resend-pilot";
 import { createHash } from "node:crypto";
+import { canScheduledCreatorSend } from "@/lib/email/scheduled-mail-auth.mjs";
 import { renderEmailDesign, validateEmailDesignContent, type EmailDesignBrandProfile, type EmailDesignContent } from "@/lib/email-design/render.mjs";
 
 export const runtime = "nodejs";
@@ -81,7 +82,7 @@ async function runScheduledWorker(request: NextRequest) {
         .eq("idempotency_key", idempotencyKey).maybeSingle();
       if (existingError) throw new Error("MESSAGE_LEDGER_UNAVAILABLE");
       let messageId: string;
-      if (existing?.status === "accepted" || existing?.status === "delivered" || existing?.status === "delayed") {
+      if (existing?.provider_message_id) {
         await admin.from("scheduled_email_messages").update({ status: "accepted", locked_at: null, sent_message_id: existing.id, provider_message_id: existing.provider_message_id }).eq("id", job.id);
         results.push({ id: job.id, status: "accepted" }); continue;
       }
@@ -106,6 +107,55 @@ async function runScheduledWorker(request: NextRequest) {
         if (saveError || !saved) throw new Error("MESSAGE_LEDGER_WRITE_FAILED");
         messageId = saved.id;
       }
+      const { error: recipientSeedError } = await admin.from("email_message_recipients").upsert([{
+        organization_id: job.organization_id,
+        mailbox_id: job.mailbox_id,
+        message_id: messageId,
+        recipient_email: String(job.to_address).trim().toLowerCase(),
+        status: "processing",
+      }], {
+        onConflict: "organization_id,message_id,recipient_email",
+        ignoreDuplicates: true,
+      });
+      if (recipientSeedError) throw new Error("RECIPIENT_LEDGER_WRITE_FAILED");
+
+      // A scheduled job is not a permanent capability. Re-check the creator's
+      // current tenant membership and mailbox send grant immediately before the
+      // provider call so revoked users' pending messages do not leave ABEmail.
+      const { data: creatorMembership, error: creatorMembershipError } = await admin
+        .from("organization_memberships")
+        .select("role, status")
+        .eq("organization_id", job.organization_id)
+        .eq("user_id", job.user_id)
+        .maybeSingle();
+      if (creatorMembershipError) throw new Error("SCHEDULED_CREATOR_ACCESS_CHECK_FAILED");
+
+      let creatorMailboxGrant: { status: string; can_send: boolean } | null = null;
+      if (creatorMembership?.status === "active" && creatorMembership.role !== "owner" && creatorMembership.role !== "admin") {
+        const { data: grant, error: grantError } = await admin.from("mailbox_memberships")
+          .select("status, can_send")
+          .eq("organization_id", job.organization_id)
+          .eq("mailbox_id", job.mailbox_id)
+          .eq("user_id", job.user_id)
+          .maybeSingle();
+        if (grantError) throw new Error("SCHEDULED_CREATOR_ACCESS_CHECK_FAILED");
+        creatorMailboxGrant = grant;
+      }
+
+      if (!canScheduledCreatorSend(creatorMembership, creatorMailboxGrant)) {
+        const accessError = "SCHEDULED_CREATOR_ACCESS_REVOKED";
+        const { error: recipientFailureError } = await admin.from("email_message_recipients")
+          .update({ status: "failed", last_event_at: new Date().toISOString() })
+          .eq("organization_id", job.organization_id).eq("message_id", messageId).eq("status", "processing");
+        if (recipientFailureError) throw new Error("SCHEDULED_RECIPIENT_REVOCATION_UPDATE_FAILED");
+        const { error: revokeError } = await admin.from("scheduled_email_messages")
+          .update({ status: "failed", locked_at: null, last_error_code: accessError })
+          .eq("id", job.id).eq("organization_id", job.organization_id).eq("status", "processing");
+        if (revokeError) throw new Error("SCHEDULED_ACCESS_REVOCATION_UPDATE_FAILED");
+        results.push({ id: job.id, status: "failed" });
+        continue;
+      }
+
       let sent: { id: string };
       if (workspaceKey) {
         sent = await sendResendEmail({
@@ -117,9 +167,13 @@ async function runScheduledWorker(request: NextRequest) {
         sent = await sendPilotEmail({ apiKey, to: job.to_address, subject: job.subject, text: bodyText, idempotencyKey: job.organization_id + "/" + idempotencyKey });
       } else throw new Error("PROVIDER_CONNECTION_UNAVAILABLE");
       const { error: updateMessageError } = await admin.from("email_messages").update({
-        status: "accepted", provider_message_id: sent.id, sent_at: new Date().toISOString(),
+        provider_message_id: sent.id, sent_at: new Date().toISOString(),
       }).eq("id", messageId).eq("organization_id", job.organization_id);
       if (updateMessageError) throw new Error("MESSAGE_LEDGER_UPDATE_FAILED");
+      const { error: recipientAcceptError } = await admin.from("email_message_recipients")
+        .update({ status: "accepted" })
+        .eq("organization_id", job.organization_id).eq("message_id", messageId).eq("status", "processing");
+      if (recipientAcceptError) throw new Error("RECIPIENT_DELIVERY_STATUS_UPDATE_FAILED");
       const { error: updateJobError } = await admin.from("scheduled_email_messages").update({
         status: "accepted", locked_at: null, provider_message_id: sent.id, sent_message_id: messageId, last_error_code: null,
       }).eq("id", job.id).eq("status", "processing");
@@ -132,6 +186,16 @@ async function runScheduledWorker(request: NextRequest) {
       const retryable = !(error instanceof ResendProviderError || error instanceof ResendPilotError) ||
         error.providerStatus === null || error.providerStatus >= 500 || error.providerStatus === 429;
       const finalFailure = !retryable || Number(job.attempt_count) >= 5;
+      if (finalFailure) {
+        const { data: failedMessage, error: failedMessageError } = await admin.from("email_messages")
+          .select("id").eq("organization_id", job.organization_id).eq("idempotency_key", "scheduled-" + job.id).maybeSingle();
+        if (failedMessageError) throw new Error("FAILED_MESSAGE_LOOKUP_ERROR");
+        if (failedMessage) {
+          await admin.from("email_message_recipients")
+            .update({ status: "failed", last_event_at: new Date().toISOString() })
+            .eq("organization_id", job.organization_id).eq("message_id", failedMessage.id).eq("status", "processing");
+        }
+      }
       await admin.from("scheduled_email_messages").update({
         status: finalFailure ? "failed" : "scheduled", locked_at: null, last_error_code: code,
         scheduled_at: finalFailure ? job.scheduled_at : new Date(Date.now() + Math.min(30, 2 ** Number(job.attempt_count)) * 60_000).toISOString(),

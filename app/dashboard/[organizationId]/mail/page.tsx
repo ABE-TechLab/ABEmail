@@ -87,6 +87,11 @@ export default async function WorkspaceMailPage({ params, searchParams }: MailPa
     received_at: string | null;
     sent_at: string | null;
   };
+  type MailRecipientRow = {
+    message_id: string;
+    recipient_email: string;
+    status: string;
+  };
   type MailStateRow = {
     message_id: string;
     is_read: boolean;
@@ -103,6 +108,7 @@ export default async function WorkspaceMailPage({ params, searchParams }: MailPa
     trashed_at: string | null;
     spam_at: string | null;
     snoozed_until: string | null;
+    recipient_statuses: Array<{ recipient_email: string; status: string }>;
   })[] = [];
   let messagesError = false;
 
@@ -192,6 +198,16 @@ export default async function WorkspaceMailPage({ params, searchParams }: MailPa
       }
 
       let stateRows: MailStateRow[] = [];
+      let recipientRows: MailRecipientRow[] = [];
+      const outboundMessageIds = messageRows.filter((message) => message.direction === "outbound").map((message) => message.id);
+      if (outboundMessageIds.length) {
+        const { data: recipientData, error: recipientError } = await supabase
+          .from("email_message_recipients")
+          .select("message_id, recipient_email, status")
+          .eq("organization_id", organizationId)
+          .in("message_id", outboundMessageIds);
+        if (!recipientError) recipientRows = (recipientData ?? []) as MailRecipientRow[];
+      }
       if (messageRows.length) {
         const { data: persistedState, error: stateError } = await supabase
           .from("email_message_user_state")
@@ -206,6 +222,12 @@ export default async function WorkspaceMailPage({ params, searchParams }: MailPa
       const stateByMessage = new Map<string, MailStateRow>(
         stateRows.map((state) => [state.message_id, state])
       );
+      const recipientStatusByMessage = new Map<string, Array<{ recipient_email: string; status: string }>>();
+      for (const recipient of recipientRows) {
+        const current = recipientStatusByMessage.get(recipient.message_id) ?? [];
+        current.push({ recipient_email: recipient.recipient_email, status: recipient.status });
+        recipientStatusByMessage.set(recipient.message_id, current);
+      }
       messages = messageRows.map((message) => {
         const state = stateByMessage.get(message.id);
         return {
@@ -216,6 +238,7 @@ export default async function WorkspaceMailPage({ params, searchParams }: MailPa
           trashed_at: state?.trashed_at ?? null,
           spam_at: state?.spam_at ?? null,
           snoozed_until: state?.snoozed_until ?? null,
+          recipient_statuses: recipientStatusByMessage.get(message.id) ?? [],
         };
       });
     }
