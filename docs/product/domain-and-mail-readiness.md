@@ -48,6 +48,6 @@ Request current DNS values from the selected provider; do not guess or reuse Was
 - [x] Provision the Ottawa Snow Match organization, verified domain, and two active mailboxes through the guarded pilot setup flow.
 - [x] Deploy tenant-scoped Resend sending, signed inbound/delivery webhooks, idempotency, provider event storage, and verified sender-domain checks.
 - [x] Store inbound/outbound messages and attachments through tenant-scoped application storage and authorization paths.
-- [ ] Isolate Preview and Development from Production. Create dedicated non-production Supabase targets, migrate schema without copying customer mail, then point Preview/Development at those projects and keep live provider credentials Production-only.
+- [x] Keep the existing no-cost Supabase setup. Do not provision a paid Supabase Preview/Development branch. GitHub Actions starts an isolated local Supabase database for migration replay and tenant/authorization tests. Vercel Preview/Development still point at the existing project, so use them for non-destructive build/visual checks only; never run destructive database tests or real customer mail there. Live Resend credentials remain Production-only.
 - [ ] Add reusable organization/platform audit events and durable per-organization usage/quotas before broad customer onboarding.
 - [ ] Complete authenticated desktop/tablet/mobile smoke tests and periodic production provider/webhook health checks.
