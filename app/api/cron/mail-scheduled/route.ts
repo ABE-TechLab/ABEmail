@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { decryptProviderSecret, sendResendEmail, ResendProviderError } from "@/lib/email/resend-provider";
 import { getPilotSendApiKey, OTTAWA_PILOT_ADDRESS, sendPilotEmail, ResendPilotError } from "@/lib/email/resend-pilot";
 import { createHash } from "node:crypto";
+import { renderEmailDesign, validateEmailDesignContent, type EmailDesignBrandProfile, type EmailDesignContent } from "@/lib/email-design/render.mjs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -48,12 +49,35 @@ async function runScheduledWorker(request: NextRequest) {
       if (workspaceKey && (!domain.sending_enabled || !domain.provider_domain_id)) throw new Error("SENDER_DOMAIN_NOT_READY");
 
       const idempotencyKey = "scheduled-" + job.id;
-      const fingerprint = createHash("sha256").update(JSON.stringify({
+      const isDesigned = job.design_content_json !== null && job.design_content_json !== undefined;
+      let designContent: EmailDesignContent | null = null;
+      let bodyText = job.body_text as string;
+      let bodyHtml: string | null = null;
+      if (isDesigned) {
+        const parsed = validateEmailDesignContent(job.design_content_json);
+        if (parsed.error || !parsed.data || parsed.data.blocks.length === 0) throw new Error("SCHEDULED_DESIGN_INVALID");
+        if (!job.design_brand_profile_json || typeof job.design_brand_profile_json !== "object" || Array.isArray(job.design_brand_profile_json)) {
+          throw new Error("SCHEDULED_BRAND_SNAPSHOT_MISSING");
+        }
+        if (!workspaceKey) throw new Error("DESIGNED_SCHEDULE_REQUIRES_WORKSPACE_PROVIDER");
+        designContent = parsed.data;
+        const rendered = renderEmailDesign(designContent, job.design_brand_profile_json as EmailDesignBrandProfile);
+        if (!rendered.text.trim() || rendered.text.length > 80000 || rendered.html.length > 1000000) {
+          throw new Error("SCHEDULED_DESIGN_RENDER_INVALID");
+        }
+        bodyText = rendered.text;
+        bodyHtml = rendered.html;
+      }
+      const fingerprintPayload = isDesigned
+        ? { organizationId: job.organization_id, mailboxId: job.mailbox_id, recipients: [job.to_address], subject: job.subject, designContent, attachmentIds: [] }
+        : { organizationId: job.organization_id, mailboxId: job.mailbox_id, recipients: [job.to_address], subject: job.subject, text: bodyText, attachmentIds: [] };
+      const fingerprint = createHash("sha256").update(JSON.stringify(fingerprintPayload), "utf8").digest("hex");
+      const legacyFingerprint = !isDesigned ? createHash("sha256").update(JSON.stringify({
         organizationId: job.organization_id, mailboxId: job.mailbox_id, to: job.to_address,
         subject: job.subject, text: job.body_text,
-      }), "utf8").digest("hex");
+      }), "utf8").digest("hex") : null;
       const { data: existing, error: existingError } = await admin.from("email_messages")
-        .select("id, status, provider_message_id, request_fingerprint").eq("organization_id", job.organization_id)
+        .select("id, status, provider_message_id, request_fingerprint, body_text, body_html").eq("organization_id", job.organization_id)
         .eq("idempotency_key", idempotencyKey).maybeSingle();
       if (existingError) throw new Error("MESSAGE_LEDGER_UNAVAILABLE");
       let messageId: string;
@@ -61,9 +85,13 @@ async function runScheduledWorker(request: NextRequest) {
         await admin.from("scheduled_email_messages").update({ status: "accepted", locked_at: null, sent_message_id: existing.id, provider_message_id: existing.provider_message_id }).eq("id", job.id);
         results.push({ id: job.id, status: "accepted" }); continue;
       }
-      if (existing && existing.request_fingerprint !== fingerprint) throw new Error("IDEMPOTENCY_CONFLICT");
-      if (existing) messageId = existing.id;
-      else {
+      if (existing && existing.request_fingerprint !== fingerprint && existing.request_fingerprint !== legacyFingerprint) throw new Error("IDEMPOTENCY_CONFLICT");
+      if (existing) {
+        messageId = existing.id;
+        if (typeof existing.body_text === "string") bodyText = existing.body_text;
+        if (typeof existing.body_html === "string") bodyHtml = existing.body_html;
+        if (isDesigned && !bodyHtml) throw new Error("SCHEDULED_DESIGN_RENDER_UNAVAILABLE");
+      } else {
         const { count, error: countError } = await admin.from("email_messages").select("id", { count: "exact", head: true })
           .eq("organization_id", job.organization_id).eq("direction", "outbound")
           .gte("created_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
@@ -72,7 +100,7 @@ async function runScheduledWorker(request: NextRequest) {
         if (countError || (count ?? 0) >= dailyLimit) throw new Error(countError ? "QUOTA_CHECK_FAILED" : "DAILY_SEND_LIMIT_REACHED");
         const { data: saved, error: saveError } = await admin.from("email_messages").insert({
           organization_id: job.organization_id, mailbox_id: job.mailbox_id, provider: "resend", direction: "outbound",
-          from_address: mailbox.address, to_addresses: [job.to_address], subject: job.subject, body_text: job.body_text,
+          from_address: mailbox.address, to_addresses: [job.to_address], subject: job.subject, body_text: bodyText, body_html: bodyHtml,
           status: "processing", idempotency_key: idempotencyKey, request_fingerprint: fingerprint, created_by: job.user_id,
         }).select("id").single();
         if (saveError || !saved) throw new Error("MESSAGE_LEDGER_WRITE_FAILED");
@@ -82,11 +110,11 @@ async function runScheduledWorker(request: NextRequest) {
       if (workspaceKey) {
         sent = await sendResendEmail({
           apiKey, from: (mailbox.display_name || org.slug) + " <" + mailbox.address + ">",
-          to: job.to_address, subject: job.subject, text: job.body_text,
+          to: job.to_address, subject: job.subject, text: bodyText, ...(bodyHtml ? { html: bodyHtml } : {}),
           idempotencyKey: job.organization_id + "/" + idempotencyKey,
         });
       } else if (mailbox.address === OTTAWA_PILOT_ADDRESS) {
-        sent = await sendPilotEmail({ apiKey, to: job.to_address, subject: job.subject, text: job.body_text, idempotencyKey: job.organization_id + "/" + idempotencyKey });
+        sent = await sendPilotEmail({ apiKey, to: job.to_address, subject: job.subject, text: bodyText, idempotencyKey: job.organization_id + "/" + idempotencyKey });
       } else throw new Error("PROVIDER_CONNECTION_UNAVAILABLE");
       const { error: updateMessageError } = await admin.from("email_messages").update({
         status: "accepted", provider_message_id: sent.id, sent_at: new Date().toISOString(),
