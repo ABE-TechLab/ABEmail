@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { getOrganizationRequestContext } from "@/lib/organizations/request-context";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { recordOrganizationAuditEvent } from "@/lib/platform/organization-operations";
 import { validateEmailDesignContent, EMAIL_DESIGN_SCHEMA_VERSION } from "@/lib/email-design/render.mjs";
 
 export const dynamic = "force-dynamic";
@@ -103,5 +105,14 @@ export async function POST(request: Request, { params }: RouteContext) {
     .single();
 
   if (error || !data) return NextResponse.json({ ok: false, error: "Designed email could not be saved." }, { status: 503 });
-  return NextResponse.json({ ok: true, template: publicDesign(data as Record<string, unknown>) }, { status: 201 });
+  const auditAdmin = createAdminClient();
+  if (!auditAdmin) return NextResponse.json({ ok: true, template: publicDesign(data as Record<string, unknown>), auditRecorded: false }, { status: 202 });
+  try {
+    await recordOrganizationAuditEvent(auditAdmin, {
+      organizationId, actorUserId: context.user.id, action: "email_design.created",
+      resourceType: "email_design", resourceId: String(data.id),
+      metadata: { template_id: String(data.id), changed_fields: ["name", "subject", "description", "content_json"] },
+    });
+  } catch { return NextResponse.json({ ok: true, template: publicDesign(data as Record<string, unknown>), auditRecorded: false }, { status: 202 }); }
+  return NextResponse.json({ ok: true, template: publicDesign(data as Record<string, unknown>), auditRecorded: true }, { status: 201 });
 }

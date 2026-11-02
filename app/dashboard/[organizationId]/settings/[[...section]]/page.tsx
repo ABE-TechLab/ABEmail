@@ -21,6 +21,7 @@ const SETTINGS_SECTIONS: SettingsSection[] = [
   "out-of-office",
   "branding",
   "integrations",
+  "operations",
 ];
 
 type WorkspaceSettingsPageProps = {
@@ -59,6 +60,7 @@ export default async function WorkspaceSettingsPage({ params }: WorkspaceSetting
   const { data: organization, error: organizationError } = organizationResult;
 
   if (membershipError || !membership) notFound();
+  if (section === "operations" && membership.role !== "owner" && membership.role !== "admin") notFound();
   if (organizationError || !organization) notFound();
 
   const [mailboxResult, memberResult] = await Promise.all([

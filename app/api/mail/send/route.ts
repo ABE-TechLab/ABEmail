@@ -1,4 +1,9 @@
 import { createHash } from "node:crypto";
+import {
+  recordOrganizationUsageEvent,
+  releaseOrganizationOutboundMessage,
+  reserveOrganizationOutboundMessage,
+} from "@/lib/platform/organization-operations";
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -235,6 +240,22 @@ export async function POST(request: NextRequest) {
       return json({ error: "This idempotency key was already used for different message content." }, 409);
     }
     if (existing.status === "accepted" || existing.status === "delivered" || existing.status === "delayed" || existing.status === "partially_delivered") {
+      try {
+        await recordOrganizationUsageEvent(admin, {
+          organizationId, mailboxId, metric: "outbound_messages_accepted",
+          eventType: "outbound_message_accepted",
+          idempotencyKey: "outbound-accepted:" + existing.id,
+          metadata: { message_id: existing.id, source: "interactive" },
+        });
+        await recordOrganizationUsageEvent(admin, {
+          organizationId, mailboxId, metric: "outbound_recipients_accepted",
+          eventType: "outbound_recipients_accepted", quantity: recipients.length,
+          idempotencyKey: "outbound-recipients-accepted:" + existing.id,
+          metadata: { message_id: existing.id, recipient_count: recipients.length, source: "interactive" },
+        });
+      } catch {
+        return json({ error: "The provider already accepted this message, but its usage record needs reconciliation. Retry the same request key; do not create a new message." }, 503);
+      }
       return json({ ok: true, duplicate: true, messageId: existing.id, providerMessageId: existing.provider_message_id }, 200);
     }
     if (existing.status !== "processing") {
@@ -249,17 +270,6 @@ export async function POST(request: NextRequest) {
       return json({ error: "The original designed email could not be restored for a safe retry. Check the message before creating a new send." }, 409);
     }
   } else {
-    const { count, error: quotaError } = await admin
-      .from("email_messages")
-      .select("id", { count: "exact", head: true })
-      .eq("organization_id", organizationId)
-      .eq("direction", "outbound")
-      .gte("created_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
-
-    if (quotaError) return json({ error: "Workspace sending limits could not be checked." }, 503);
-    const configuredDailyLimit = Number(process.env.ABEMAIL_DEFAULT_DAILY_SEND_LIMIT ?? "250");
-    const dailyLimit = Number.isSafeInteger(configuredDailyLimit) && configuredDailyLimit > 0 ? configuredDailyLimit : 250;
-    if ((count ?? 0) >= dailyLimit) return json({ error: "This workspace has reached its daily sending limit of " + dailyLimit + " messages. Contact the workspace administrator to review its limit." }, 429);
 
     const { data: savedMessage, error: saveError } = await admin
       .from("email_messages")
@@ -288,6 +298,7 @@ export async function POST(request: NextRequest) {
     savedMessageId = savedMessage.id;
   }
 
+  let usageReservationActive = false;
   try {
     // Attachment IDs can refer to this in-flight message on an idempotent retry,
     // or to unexpired uploads created by this user for this mailbox.
@@ -355,6 +366,22 @@ export async function POST(request: NextRequest) {
       return json({ error: "Recipient delivery tracking could not be prepared. Retry this same message." }, 503);
     }
 
+    const reservation = await reserveOrganizationOutboundMessage(admin, organizationId, mailboxId, savedMessageId);
+    if (!reservation.allowed) {
+      await admin.from("email_message_recipients")
+        .update({ status: "failed", last_event_at: new Date().toISOString() })
+        .eq("organization_id", organizationId).eq("message_id", savedMessageId).eq("status", "processing");
+      await admin.from("email_messages")
+        .update({ status: "failed" })
+        .eq("organization_id", organizationId).eq("id", savedMessageId).eq("status", "processing");
+      return json({
+        error: "This workspace has reached its daily sending limit of " + reservation.dailyLimit +
+          " messages. Contact the workspace administrator to review its limit.",
+        quota: { used: reservation.used, limit: reservation.dailyLimit, timezone: "UTC" },
+      }, 429);
+    }
+    usageReservationActive = true;
+
     const sent = usesWorkspaceKey
       ? await sendResendEmail({
           apiKey: sendApiKey,
@@ -392,6 +419,34 @@ export async function POST(request: NextRequest) {
       }, 202);
     }
 
+    try {
+      await recordOrganizationUsageEvent(admin, {
+        organizationId,
+        mailboxId,
+        metric: "outbound_messages_accepted",
+        eventType: "outbound_message_accepted",
+        idempotencyKey: "outbound-accepted:" + savedMessageId,
+        metadata: { message_id: savedMessageId, source: "interactive" },
+      });
+      await recordOrganizationUsageEvent(admin, {
+        organizationId,
+        mailboxId,
+        metric: "outbound_recipients_accepted",
+        eventType: "outbound_recipients_accepted",
+        quantity: recipients.length,
+        idempotencyKey: "outbound-recipients-accepted:" + savedMessageId,
+        metadata: { message_id: savedMessageId, recipient_count: recipients.length, source: "interactive" },
+      });
+    } catch {
+      return json({
+        ok: true,
+        status: "accepted_by_usage_tracking_pending",
+        messageId: savedMessageId,
+        providerMessageId: sent.id,
+        note: "Resend accepted the message. Its usage records need reconciliation; do not retry with a new idempotency key.",
+      }, 202);
+    }
+
     const { error: recipientAcceptError } = await admin.from("email_message_recipients")
       .update({ status: "accepted" })
       .eq("organization_id", organizationId)
@@ -409,7 +464,17 @@ export async function POST(request: NextRequest) {
 
     return json({ ok: true, status: "accepted", messageId: savedMessageId, providerMessageId: sent.id }, 202);
   } catch (error) {
-    if ((error instanceof ResendPilotError || error instanceof ResendProviderError) && error.providerStatus !== null && error.providerStatus < 500) {
+    const definitiveProviderFailure = (error instanceof ResendPilotError || error instanceof ResendProviderError)
+      && error.providerStatus !== null && error.providerStatus < 500 && error.providerStatus !== 429;
+    if (usageReservationActive && definitiveProviderFailure) {
+      try {
+        await releaseOrganizationOutboundMessage(admin, organizationId, savedMessageId);
+        usageReservationActive = false;
+      } catch {
+        return json({ error: "The provider rejected the message, but its usage reservation could not be released. Operator reconciliation is required." }, 503);
+      }
+    }
+    if (definitiveProviderFailure) {
       const { error: recipientFailureError } = await admin.from("email_message_recipients")
         .update({ status: "failed", last_event_at: new Date().toISOString() })
         .eq("organization_id", organizationId)

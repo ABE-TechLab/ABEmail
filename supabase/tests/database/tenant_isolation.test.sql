@@ -355,5 +355,302 @@ select is((select role from public.organization_memberships where organization_i
 select is((select count(*)::integer from public.mailboxes), 1, 'invitation grants only the explicitly assigned mailbox');
 select is((select address from public.mailboxes), 'team@tenant-a.example.com', 'the invited user sees the mailbox assigned by the invitation');
 
+-- Group 1 Task 1.4: shared audit and organization usage accounting.
+-- Synthetic fixtures only; enclosing test transaction is rolled back.
+reset role;
+set local role service_role;
+
+insert into public.organizations (id, name, slug, status, created_by)
+values (
+  '20000000-0000-4000-8000-000000000004',
+  'Usage trigger test', 'usage-trigger-test', 'active',
+  '10000000-0000-4000-8000-000000000001'
+);
+
+select is(
+  (select outbound_messages_per_utc_day from public.organization_usage_limits
+   where organization_id = '20000000-0000-4000-8000-000000000004'),
+  250,
+  'new organization receives its default daily usage limit'
+);
+
+insert into public.organization_audit_events (
+  organization_id, actor_user_id, actor_type, action, resource_type,
+  resource_id, outcome, idempotency_key, metadata
+) values
+  ('20000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001',
+   'user', 'workspace.renamed', 'organization', '20000000-0000-4000-8000-000000000001',
+   'success', 'audit-test-tenant-a', '{"changed_fields":["name"]}'::jsonb),
+  ('20000000-0000-4000-8000-000000000002', '10000000-0000-4000-8000-000000000002',
+   'user', 'workspace.renamed', 'organization', '20000000-0000-4000-8000-000000000002',
+   'success', 'audit-test-tenant-b', '{"changed_fields":["name"]}'::jsonb);
+
+insert into public.organization_usage_events (
+  organization_id, metric, event_type, quantity, period_start,
+  idempotency_key, provider, provider_event_id
+) values
+  ('20000000-0000-4000-8000-000000000001', 'provider_events_processed',
+   'provider_event_processed', 1, (now() at time zone 'UTC')::date,
+   'usage-test-tenant-a', 'resend', 'usage-test-event-a'),
+  ('20000000-0000-4000-8000-000000000002', 'provider_events_processed',
+   'provider_event_processed', 1, (now() at time zone 'UTC')::date,
+   'usage-test-tenant-b', 'resend', 'usage-test-event-b');
+
+insert into public.organization_audit_events (
+  organization_id, actor_user_id, action, resource_type, resource_id, idempotency_key, metadata
+) values (
+  '20000000-0000-4000-8000-000000000001',
+  '10000000-0000-4000-8000-000000000001',
+  'mailbox.updated', 'mailbox', '31000000-0000-4000-8000-000000000001',
+  'audit-test-idempotent', '{"changed_fields":["display_name"]}'::jsonb
+) on conflict (organization_id, idempotency_key) do nothing;
+
+insert into public.organization_audit_events (
+  organization_id, actor_user_id, action, resource_type, resource_id, idempotency_key, metadata
+) values (
+  '20000000-0000-4000-8000-000000000001',
+  '10000000-0000-4000-8000-000000000001',
+  'mailbox.updated', 'mailbox', '31000000-0000-4000-8000-000000000001',
+  'audit-test-idempotent', '{"changed_fields":["display_name"]}'::jsonb
+) on conflict (organization_id, idempotency_key) do nothing;
+
+select is(
+  (select count(*)::integer from public.organization_audit_events
+   where organization_id = '20000000-0000-4000-8000-000000000001'
+     and idempotency_key = 'audit-test-idempotent'),
+  1,
+  'audit idempotency prevents duplicate rows'
+);
+
+update public.organization_usage_limits
+set outbound_messages_per_utc_day = (
+  select coalesce(sum(quantity), 0)::integer + 1
+  from public.organization_usage_events
+  where organization_id = '20000000-0000-4000-8000-000000000001'
+    and metric = 'outbound_message_capacity'
+    and period_start = (now() at time zone 'UTC')::date
+)
+where organization_id = '20000000-0000-4000-8000-000000000001';
+
+select ok(
+  (select allowed from public.reserve_organization_outbound_message(
+    '20000000-0000-4000-8000-000000000001',
+    '31000000-0000-4000-8000-000000000001',
+    'task14-retry'
+  )),
+  'first outbound quota reservation is allowed'
+);
+
+select ok(
+  (select already_reserved from public.reserve_organization_outbound_message(
+    '20000000-0000-4000-8000-000000000001',
+    '31000000-0000-4000-8000-000000000001',
+    'task14-retry'
+  )),
+  'retrying an active reservation is idempotent'
+);
+
+select is(
+  (select count(*)::integer from public.organization_usage_events
+   where organization_id = '20000000-0000-4000-8000-000000000001'
+     and metric = 'outbound_message_capacity'
+     and idempotency_key like 'reserve:task14-retry:%'),
+  1,
+  'active retry does not create a second reservation'
+);
+
+select ok(
+  public.release_organization_outbound_message(
+    '20000000-0000-4000-8000-000000000001', 'task14-retry'
+  ),
+  'definitively unsent attempt releases its quota reservation'
+);
+
+select ok(
+  (select allowed and not already_reserved from public.reserve_organization_outbound_message(
+    '20000000-0000-4000-8000-000000000001',
+    '31000000-0000-4000-8000-000000000001',
+    'task14-retry'
+  )),
+  'the same message can retry after a confirmed unsent failure'
+);
+
+select is(
+  (select count(*)::integer from public.organization_usage_events
+   where organization_id = '20000000-0000-4000-8000-000000000001'
+     and metric = 'outbound_message_capacity'
+     and idempotency_key like 'reserve:task14-retry:%'),
+  2,
+  'retry after release creates a distinct attempt'
+);
+
+select ok(
+  not (select allowed from public.reserve_organization_outbound_message(
+    '20000000-0000-4000-8000-000000000001',
+    '31000000-0000-4000-8000-000000000001',
+    'task14-limit'
+  )),
+  'organization cannot reserve beyond its UTC-day allowance'
+);
+
+select ok(
+  public.release_organization_outbound_message(
+    '20000000-0000-4000-8000-000000000001', 'task14-retry'
+  ),
+  'latest retry reservation can be released once'
+);
+
+select ok(
+  not public.release_organization_outbound_message(
+    '20000000-0000-4000-8000-000000000001', 'task14-retry'
+  ),
+  'duplicate release cannot decrement usage twice'
+);
+
+reset role;
+
+select throws_ok(
+  $update public.organization_audit_events set outcome = 'failure'
+    where idempotency_key = 'audit-test-tenant-a'$,
+  'P0001', 'This table is append-only; UPDATE is not permitted',
+  'audit rows cannot be updated by privileged database roles'
+);
+
+select throws_ok(
+  $delete from public.organization_audit_events where idempotency_key = 'audit-test-tenant-a'$,
+  'P0001', 'This table is append-only; DELETE is not permitted',
+  'audit rows cannot be deleted by privileged database roles'
+);
+
+select throws_ok(
+  $update public.organization_usage_events set quantity = 2
+    where idempotency_key = 'usage-test-tenant-a'$,
+  'P0001', 'This table is append-only; UPDATE is not permitted',
+  'usage rows cannot be updated by privileged database roles'
+);
+
+select throws_ok(
+  $delete from public.organization_usage_events where idempotency_key = 'usage-test-tenant-a'$,
+  'P0001', 'This table is append-only; DELETE is not permitted',
+  'usage rows cannot be deleted by privileged database roles'
+);
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001', true);
+select set_config('request.jwt.claim.role', 'authenticated', true);
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000001","role":"authenticated","email":"alice@tenant-a.invalid"}',
+  true
+);
+
+select is(
+  (select count(*)::integer from public.organization_audit_events
+   where organization_id = '20000000-0000-4000-8000-000000000001'),
+  2,
+  'owner can read audit events in own organization'
+);
+
+select is(
+  (select count(*)::integer from public.organization_audit_events
+   where organization_id = '20000000-0000-4000-8000-000000000002'),
+  0,
+  'owner cannot read another organization audit events'
+);
+
+select is(
+  (select count(*)::integer from public.organization_usage_events
+   where organization_id = '20000000-0000-4000-8000-000000000001'
+     and idempotency_key = 'usage-test-tenant-a'),
+  1,
+  'owner can read usage events in own organization'
+);
+
+select is(
+  (select count(*)::integer from public.organization_usage_events
+   where organization_id = '20000000-0000-4000-8000-000000000002'
+     and idempotency_key = 'usage-test-tenant-b'),
+  0,
+  'owner cannot read another organization usage events'
+);
+
+select is(
+  (select count(*)::integer from public.organization_usage_limits
+   where organization_id = '20000000-0000-4000-8000-000000000001'),
+  1,
+  'owner can view own workspace usage limit'
+);
+
+select is(
+  (select count(*)::integer from public.organization_usage_limits
+   where organization_id = '20000000-0000-4000-8000-000000000002'),
+  0,
+  'owner cannot view another workspace usage limit'
+);
+
+select ok(
+  not has_table_privilege('authenticated', 'public.organization_audit_events', 'insert'),
+  'authenticated clients cannot write audit events'
+);
+
+select ok(
+  not has_table_privilege('authenticated', 'public.organization_usage_events', 'insert'),
+  'authenticated clients cannot write usage events'
+);
+
+select ok(
+  not has_table_privilege('service_role', 'public.organization_audit_events', 'update'),
+  'service role cannot update audit events'
+);
+
+select ok(
+  not has_table_privilege('service_role', 'public.organization_usage_events', 'delete'),
+  'service role cannot delete usage events'
+);
+
+select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000003', true);
+select set_config('request.jwt.claim.role', 'authenticated', true);
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"10000000-0000-4000-8000-000000000003","role":"authenticated","email":"carol@tenant-a.invalid"}',
+  true
+);
+
+select is(
+  (select count(*)::integer from public.organization_audit_events
+   where organization_id = '20000000-0000-4000-8000-000000000001'),
+  0,
+  'ordinary workspace member cannot read admin-only audit events'
+);
+
+select is(
+  (select count(*)::integer from public.organization_usage_events
+   where organization_id = '20000000-0000-4000-8000-000000000001'),
+  0,
+  'ordinary workspace member cannot read admin-only usage events'
+);
+
+select is(
+  (select count(*)::integer from public.organization_usage_limits
+   where organization_id = '20000000-0000-4000-8000-000000000001'),
+  0,
+  'ordinary workspace member cannot read admin-only usage limits'
+);
+
+select throws_ok(
+  $insert into public.organization_audit_events (organization_id, action, resource_type)
+    values ('20000000-0000-4000-8000-000000000001', 'unauthorized.write', 'organization')$,
+  '42501', null,
+  'authenticated clients cannot insert audit events'
+);
+
+select throws_ok(
+  $insert into public.organization_usage_events (organization_id, metric, event_type, quantity, idempotency_key)
+    values ('20000000-0000-4000-8000-000000000001', 'inbound_messages_received', 'unauthorized.write', 1, 'authenticated-usage-forbidden')$,
+  '42501', null,
+  'authenticated clients cannot insert usage events'
+);
+
+
 select * from finish();
 rollback;

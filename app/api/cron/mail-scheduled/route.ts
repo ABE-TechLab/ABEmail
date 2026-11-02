@@ -3,6 +3,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { decryptProviderSecret, sendResendEmail, ResendProviderError } from "@/lib/email/resend-provider";
 import { getPilotSendApiKey, OTTAWA_PILOT_ADDRESS, sendPilotEmail, ResendPilotError } from "@/lib/email/resend-pilot";
 import { createHash } from "node:crypto";
+import {
+  recordOrganizationUsageEvent,
+  releaseOrganizationOutboundMessage,
+  reserveOrganizationOutboundMessage,
+} from "@/lib/platform/organization-operations";
 import { canScheduledCreatorSend } from "@/lib/email/scheduled-mail-auth.mjs";
 import { renderEmailDesign, validateEmailDesignContent, type EmailDesignBrandProfile, type EmailDesignContent } from "@/lib/email-design/render.mjs";
 
@@ -21,6 +26,9 @@ async function runScheduledWorker(request: NextRequest) {
   if (error) return json({ error: "Scheduled mail queue could not be claimed." }, 503);
   const results: { id: string; status: string }[] = [];
   for (const job of jobs ?? []) {
+    let usageReservationActive = false;
+    let providerSubmissionStarted = false;
+    let messageIdForQuota: string | null = null;
     try {
       const { data: org, error: orgError } = await admin.from("organizations").select("slug, status")
         .eq("id", job.organization_id).maybeSingle();
@@ -83,6 +91,18 @@ async function runScheduledWorker(request: NextRequest) {
       if (existingError) throw new Error("MESSAGE_LEDGER_UNAVAILABLE");
       let messageId: string;
       if (existing?.provider_message_id) {
+        await recordOrganizationUsageEvent(admin, {
+          organizationId: job.organization_id, mailboxId: job.mailbox_id,
+          metric: "outbound_messages_accepted", eventType: "outbound_message_accepted",
+          idempotencyKey: "outbound-accepted:" + existing.id,
+          metadata: { message_id: existing.id, source: "scheduled" },
+        });
+        await recordOrganizationUsageEvent(admin, {
+          organizationId: job.organization_id, mailboxId: job.mailbox_id,
+          metric: "outbound_recipients_accepted", eventType: "outbound_recipients_accepted",
+          idempotencyKey: "outbound-recipients-accepted:" + existing.id,
+          metadata: { message_id: existing.id, recipient_count: 1, source: "scheduled" },
+        });
         await admin.from("scheduled_email_messages").update({ status: "accepted", locked_at: null, sent_message_id: existing.id, provider_message_id: existing.provider_message_id }).eq("id", job.id);
         results.push({ id: job.id, status: "accepted" }); continue;
       }
@@ -93,12 +113,7 @@ async function runScheduledWorker(request: NextRequest) {
         if (typeof existing.body_html === "string") bodyHtml = existing.body_html;
         if (isDesigned && !bodyHtml) throw new Error("SCHEDULED_DESIGN_RENDER_UNAVAILABLE");
       } else {
-        const { count, error: countError } = await admin.from("email_messages").select("id", { count: "exact", head: true })
-          .eq("organization_id", job.organization_id).eq("direction", "outbound")
-          .gte("created_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
-        const dailyLimitValue = Number(process.env.ABEMAIL_DEFAULT_DAILY_SEND_LIMIT ?? "250");
-        const dailyLimit = Number.isSafeInteger(dailyLimitValue) && dailyLimitValue > 0 ? dailyLimitValue : 250;
-        if (countError || (count ?? 0) >= dailyLimit) throw new Error(countError ? "QUOTA_CHECK_FAILED" : "DAILY_SEND_LIMIT_REACHED");
+
         const { data: saved, error: saveError } = await admin.from("email_messages").insert({
           organization_id: job.organization_id, mailbox_id: job.mailbox_id, provider: "resend", direction: "outbound",
           from_address: mailbox.address, to_addresses: [job.to_address], subject: job.subject, body_text: bodyText, body_html: bodyHtml,
@@ -107,6 +122,7 @@ async function runScheduledWorker(request: NextRequest) {
         if (saveError || !saved) throw new Error("MESSAGE_LEDGER_WRITE_FAILED");
         messageId = saved.id;
       }
+      messageIdForQuota = messageId;
       const { error: recipientSeedError } = await admin.from("email_message_recipients").upsert([{
         organization_id: job.organization_id,
         mailbox_id: job.mailbox_id,
@@ -118,6 +134,20 @@ async function runScheduledWorker(request: NextRequest) {
         ignoreDuplicates: true,
       });
       if (recipientSeedError) throw new Error("RECIPIENT_LEDGER_WRITE_FAILED");
+
+      const reservation = await reserveOrganizationOutboundMessage(admin, job.organization_id, job.mailbox_id, messageId);
+      if (!reservation.allowed) {
+        await admin.from("email_message_recipients")
+          .update({ status: "failed", last_event_at: new Date().toISOString() })
+          .eq("organization_id", job.organization_id).eq("message_id", messageId).eq("status", "processing");
+        await admin.from("email_messages").update({ status: "failed" })
+          .eq("organization_id", job.organization_id).eq("id", messageId).eq("status", "processing");
+        await admin.from("scheduled_email_messages").update({ status: "failed", locked_at: null, last_error_code: "DAILY_SEND_LIMIT_REACHED" })
+          .eq("id", job.id).eq("organization_id", job.organization_id).eq("status", "processing");
+        results.push({ id: job.id, status: "failed" });
+        continue;
+      }
+      usageReservationActive = true;
 
       // A scheduled job is not a permanent capability. Re-check the creator's
       // current tenant membership and mailbox send grant immediately before the
@@ -156,6 +186,7 @@ async function runScheduledWorker(request: NextRequest) {
         continue;
       }
 
+      providerSubmissionStarted = true;
       let sent: { id: string };
       if (workspaceKey) {
         sent = await sendResendEmail({
@@ -170,6 +201,18 @@ async function runScheduledWorker(request: NextRequest) {
         provider_message_id: sent.id, sent_at: new Date().toISOString(),
       }).eq("id", messageId).eq("organization_id", job.organization_id);
       if (updateMessageError) throw new Error("MESSAGE_LEDGER_UPDATE_FAILED");
+      await recordOrganizationUsageEvent(admin, {
+        organizationId: job.organization_id, mailboxId: job.mailbox_id,
+        metric: "outbound_messages_accepted", eventType: "outbound_message_accepted",
+        idempotencyKey: "outbound-accepted:" + messageId,
+        metadata: { message_id: messageId, schedule_id: job.id, source: "scheduled" },
+      });
+      await recordOrganizationUsageEvent(admin, {
+        organizationId: job.organization_id, mailboxId: job.mailbox_id,
+        metric: "outbound_recipients_accepted", eventType: "outbound_recipients_accepted",
+        idempotencyKey: "outbound-recipients-accepted:" + messageId,
+        metadata: { message_id: messageId, schedule_id: job.id, recipient_count: 1, source: "scheduled" },
+      });
       const { error: recipientAcceptError } = await admin.from("email_message_recipients")
         .update({ status: "accepted" })
         .eq("organization_id", job.organization_id).eq("message_id", messageId).eq("status", "processing");
@@ -180,7 +223,20 @@ async function runScheduledWorker(request: NextRequest) {
       if (updateJobError) throw new Error("SCHEDULE_STATUS_UPDATE_FAILED");
       results.push({ id: job.id, status: "accepted" });
     } catch (error) {
-      const code = error instanceof ResendProviderError || error instanceof ResendPilotError
+      const definitiveProviderFailure = (error instanceof ResendProviderError || error instanceof ResendPilotError)
+        && error.providerStatus !== null && error.providerStatus < 500 && error.providerStatus !== 429;
+      let reservationReleaseFailed = false;
+      if (usageReservationActive && messageIdForQuota && (!providerSubmissionStarted || definitiveProviderFailure)) {
+        try {
+          await releaseOrganizationOutboundMessage(admin, job.organization_id, messageIdForQuota);
+          usageReservationActive = false;
+        } catch {
+          reservationReleaseFailed = true;
+        }
+      }
+      const code = reservationReleaseFailed
+        ? "USAGE_RESERVATION_RELEASE_FAILED"
+        : error instanceof ResendProviderError || error instanceof ResendPilotError
         ? error.code
         : error instanceof Error ? error.message.slice(0, 100) : "SCHEDULED_SEND_FAILED";
       const retryable = !(error instanceof ResendProviderError || error instanceof ResendPilotError) ||

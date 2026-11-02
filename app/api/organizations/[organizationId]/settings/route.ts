@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { recordOrganizationAuditEvent } from "@/lib/platform/organization-operations";
 
 export const dynamic = "force-dynamic";
 
@@ -72,5 +74,16 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     .update({ brand_name: name, updated_by: user.id })
     .eq("organization_id", organizationId);
 
-  return NextResponse.json({ ok: true, organization });
+  const auditAdmin = createAdminClient();
+  if (!auditAdmin) return NextResponse.json({ ok: true, organization, auditRecorded: false }, { status: 202 });
+  try {
+    await recordOrganizationAuditEvent(auditAdmin, {
+      organizationId, actorUserId: user.id, action: "workspace.renamed",
+      resourceType: "organization", resourceId: organizationId,
+      metadata: { changed_fields: ["name"] },
+    });
+  } catch {
+    return NextResponse.json({ ok: true, organization, auditRecorded: false }, { status: 202 });
+  }
+  return NextResponse.json({ ok: true, organization, auditRecorded: true });
 }

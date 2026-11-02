@@ -7,6 +7,7 @@ import { useAppearanceMode, type AppearanceMode } from "@/components/appearance-
 import { useDesignTheme } from "@/components/design-theme-provider";
 import { DESIGN_THEMES, type DesignThemeId } from "@/lib/design-system";
 import BrandProfileEditor from "@/components/brand-profile-editor";
+import OrganizationOperationsPanel from "@/components/organization-operations-panel";
 import { useTransientNotice } from "@/lib/use-transient-notice";
 
 export type WorkspaceSettingsContext = {
@@ -128,6 +129,7 @@ const SECTION_INFO: Record<string, { title: string; description: string }> = {
   "out-of-office": { title: "Out-of-office", description: "Configure automatic replies while you are away." },
   branding: { title: "Workspace profile", description: "Manage your business identity and workspace-wide regional preferences." },
   integrations: { title: "Integrations", description: "Manage external services connected to this workspace." },
+  operations: { title: "Operations", description: "Review organization usage, outbound limits and administrative audit activity." },
 };
 
 const SETTINGS_NAV_GROUPS = [
@@ -139,6 +141,7 @@ const SETTINGS_NAV_GROUPS = [
       { id: "notifications", label: "Notifications", icon: "♧" },
       { id: "team", label: "Team & access", icon: "♙" },
       { id: "security", label: "Security", icon: "◇" },
+      { id: "operations", label: "Operations", icon: "O" },
     ],
   },
   {
@@ -793,7 +796,7 @@ export default function WorkspaceSettingsPanel({
               {SETTINGS_NAV_GROUPS.map((group) => (
                 <div className="settings-nav-group" key={group.heading}>
                   <p>{group.heading}</p>
-                  {group.items.map((item) => {
+                  {group.items.filter((item) => item.id !== "operations" || canManageWorkspace).map((item) => {
                     const href = settingsBase + (item.id === "general" ? "" : "/" + item.id);
                     const active = section === item.id;
                     return (
@@ -1069,6 +1072,8 @@ export default function WorkspaceSettingsPanel({
               </div>}
 
               {section === "branding" && <div className="workspace-profile-settings"><p className="settings-muted">Workspace identity now lives in Workspace Profile.</p><Link href={settingsBase} className="mail-secondary-action">Open Workspace Profile</Link></div>}
+
+              {section === "operations" && canManageWorkspace && <OrganizationOperationsPanel organizationId={organizationId} />}
 
               {section === "integrations" && <div>
                 <div className="settings-section-summary"><div><strong>Connected services</strong><p>Provider setup and future calendar/CRM integrations for this workspace.</p></div></div>

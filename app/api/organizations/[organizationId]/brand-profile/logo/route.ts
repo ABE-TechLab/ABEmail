@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getOrganizationRequestContext } from "@/lib/organizations/request-context";
+import { recordOrganizationAuditEvent } from "@/lib/platform/organization-operations";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -98,7 +99,14 @@ export async function POST(request: Request, { params }: RouteContext) {
 
   const previousPath = getOwnedStoragePath(currentProfile?.logo_url ?? null, organizationId);
   if (previousPath && previousPath !== path) await admin.storage.from(BUCKET).remove([previousPath]);
-  return json({ ok: true, logoUrl });
+  try {
+    await recordOrganizationAuditEvent(admin, {
+      organizationId, actorUserId: context.user.id, action: "brand_logo.uploaded",
+      resourceType: "brand_profile", resourceId: organizationId,
+      metadata: { logo_action: "uploaded" },
+    });
+  } catch { return json({ ok: true, logoUrl, auditRecorded: false }, 202); }
+  return json({ ok: true, logoUrl, auditRecorded: true });
 }
 
 export async function DELETE(_request: Request, { params }: RouteContext) {
@@ -115,5 +123,12 @@ export async function DELETE(_request: Request, { params }: RouteContext) {
     .update({ logo_url: null, updated_by: context.user.id }).eq("organization_id", organizationId);
   if (updateError) return json({ ok: false, error: "The workspace logo could not be removed." }, 503);
   if (path) await admin.storage.from(BUCKET).remove([path]);
-  return json({ ok: true });
+  try {
+    await recordOrganizationAuditEvent(admin, {
+      organizationId, actorUserId: context.user.id, action: "brand_logo.removed",
+      resourceType: "brand_profile", resourceId: organizationId,
+      metadata: { logo_action: "removed" },
+    });
+  } catch { return json({ ok: true, auditRecorded: false }, 202); }
+  return json({ ok: true, auditRecorded: true });
 }
