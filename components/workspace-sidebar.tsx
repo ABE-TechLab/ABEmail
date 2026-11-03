@@ -4,7 +4,8 @@ import Link from "next/link";
 import Image from "next/image";
 import SignOutButton from "@/components/auth/sign-out-button";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 
 const mailboxLinks = [
   { view: "Inbox", href: "/", label: "Inbox", icon: "▤" },
@@ -83,6 +84,8 @@ export default function WorkspaceSidebar({
   const [collapsed, setCollapsed] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const switcherRef = useRef<HTMLDivElement>(null);
+  const switcherMenuRef = useRef<HTMLDivElement>(null);
+  const [switcherMenuPosition, setSwitcherMenuPosition] = useState<CSSProperties | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [navigationCounts, setMailboxCounts] = useState<MailboxSidebarCounts>({
     inboxUnread: 0,
@@ -185,6 +188,7 @@ export default function WorkspaceSidebar({
       if (event.key === "Escape") {
         setMobileOpen(false);
         setSwitcherOpen(false);
+        setSwitcherMenuPosition(null);
       }
     };
     const initialViewportTimer = window.setTimeout(closeForViewport, 0);
@@ -198,16 +202,102 @@ export default function WorkspaceSidebar({
   }, []);
 
   useEffect(() => {
+    if (!switcherOpen || !mobileOpen) return;
+
+    const updateMenuPosition = () => {
+      const trigger = switcherRef.current?.querySelector<HTMLElement>(".mail-workspace-switcher");
+      const bounds = trigger?.getBoundingClientRect();
+      if (!bounds) return;
+
+      if (window.innerWidth <= 620) {
+        setSwitcherMenuPosition({
+          position: "fixed",
+          zIndex: 120,
+          left: 12,
+          right: 12,
+          bottom: 12,
+          width: "auto",
+          maxHeight: "min(70dvh, 520px)",
+        });
+        return;
+      }
+
+      const width = Math.min(280, window.innerWidth - 24);
+      const left = Math.max(12, Math.min(bounds.right + 12, window.innerWidth - width - 12));
+      setSwitcherMenuPosition({
+        position: "fixed",
+        zIndex: 120,
+        left,
+        right: "auto",
+        bottom: 12,
+        width,
+        maxHeight: "min(70dvh, 520px)",
+      });
+    };
+
+    const initialPositionFrame = window.requestAnimationFrame(updateMenuPosition);
+    window.addEventListener("resize", updateMenuPosition);
+    window.addEventListener("scroll", updateMenuPosition, true);
+    return () => {
+      window.cancelAnimationFrame(initialPositionFrame);
+      window.removeEventListener("resize", updateMenuPosition);
+      window.removeEventListener("scroll", updateMenuPosition, true);
+    };
+  }, [mobileOpen, switcherOpen]);
+
+  useEffect(() => {
     if (!switcherOpen) return;
     const closeOnOutsidePointer = (event: PointerEvent) => {
-      const root = switcherRef.current;
-      if (root && event.target instanceof Node && !root.contains(event.target)) setSwitcherOpen(false);
+      const target = event.target;
+      const insideSwitcher = target instanceof Node && Boolean(switcherRef.current?.contains(target));
+      const insideMenu = target instanceof Node && Boolean(switcherMenuRef.current?.contains(target));
+      if (!insideSwitcher && !insideMenu) {
+        setSwitcherOpen(false);
+        setSwitcherMenuPosition(null);
+      }
     };
     document.addEventListener("pointerdown", closeOnOutsidePointer, true);
     return () => document.removeEventListener("pointerdown", closeOnOutsidePointer, true);
   }, [switcherOpen]);
 
   const isSwitcherOpen = switcherOpen;
+  const workspaceMenu = isSwitcherOpen && workspaces.length > 0 ? (
+    <div
+      ref={switcherMenuRef}
+      className={"mail-profile-menu mail-workspace-menu" + (mobileOpen ? " mail-workspace-menu-portaled" : "")}
+      role="menu"
+      aria-label="Switch workspace"
+      style={mobileOpen ? switcherMenuPosition ?? { visibility: "hidden" } : undefined}
+    >
+      <strong>Switch workspace</strong>
+      <p>You stay signed in when you switch.</p>
+      {workspaces.map((workspace) => {
+        const active = workspace.id === activeWorkspaceId;
+        return (
+          <Link
+            key={workspace.id}
+            href={"/dashboard/" + workspace.id}
+            className={active ? "mail-workspace-option active" : "mail-workspace-option"}
+            role="menuitem"
+            aria-current={active ? "page" : undefined}
+            onClick={() => {
+              setSwitcherOpen(false);
+              setMobileOpen(false);
+            }}
+          >
+            <WorkspaceAvatar name={workspace.name} logoUrl={workspace.logoUrl} />
+            <span className="mail-workspace-copy"><strong>{workspace.name}</strong><small>{workspace.role}</small></span>
+            {active && <span className="mail-workspace-current">Current</span>}
+          </Link>
+        );
+      })}
+      <div className="mail-workspace-menu-actions">
+        <Link className="mail-workspace-all" href="/dashboard" onClick={() => { setSwitcherOpen(false); setMobileOpen(false); }}>View all workspaces</Link>
+        <Link className="mail-workspace-all" href={workspaceBaseHref ? workspaceBaseHref + "/settings" : "/settings"} onClick={() => { setSwitcherOpen(false); setMobileOpen(false); }}>Workspace settings</Link>
+        <SignOutButton className="mail-workspace-signout" />
+      </div>
+    </div>
+  ) : null;
 
   return (
     <>
@@ -238,7 +328,18 @@ export default function WorkspaceSidebar({
           tabIndex={-1}
         />
       )}
-      <aside className={"mail-sidebar" + (collapsed ? " is-collapsed" : "") + (mobileOpen ? " mobile-open" : "")} data-collapsed={collapsed}>
+      <aside
+        className={"mail-sidebar" + (collapsed ? " is-collapsed" : "") + (mobileOpen ? " mobile-open" : "")}
+        data-collapsed={collapsed}
+        onClickCapture={(event) => {
+          if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+          if (event.target instanceof Element && event.target.closest("a[href]")) {
+            setMobileOpen(false);
+            setSwitcherOpen(false);
+            setSwitcherMenuPosition(null);
+          }
+        }}
+      >
       <div className="mail-sidebar-brand-row">
         <Link className="mail-brand" href={homeHref} aria-label="ABEmail inbox" title="ABEmail">
           <span className="mail-brand-mark" aria-hidden="true">
@@ -292,6 +393,7 @@ export default function WorkspaceSidebar({
               event.preventDefault();
               window.dispatchEvent(new Event("abemail:compose"));
               setMobileOpen(false);
+              setSwitcherOpen(false);
             }
           }}
         >
@@ -334,6 +436,7 @@ export default function WorkspaceSidebar({
                   event.preventDefault();
                   router.push(itemHref, { scroll: false });
                   setMobileOpen(false);
+                  setSwitcherOpen(false);
                 }}
               >
                 <span className="mail-nav-icon" aria-hidden="true">{item.icon}</span>
@@ -361,6 +464,10 @@ export default function WorkspaceSidebar({
                   href={scopedHref}
                   aria-current={active ? "page" : undefined}
                   title={item.label}
+                  onClick={() => {
+                    setMobileOpen(false);
+                    setSwitcherOpen(false);
+                  }}
                 >
                   <span className="mail-nav-icon" aria-hidden="true">{item.icon}</span>
                   <span>{item.label}</span>
@@ -378,7 +485,10 @@ export default function WorkspaceSidebar({
           <button
             className="mail-workspace-switcher"
             type="button"
-            onClick={() => setSwitcherOpen((current) => !current)}
+            onClick={() => {
+              setSwitcherMenuPosition(null);
+              setSwitcherOpen((current) => !current);
+            }}
             aria-expanded={isSwitcherOpen}
             aria-label={"Current workspace: " + workspaceName + ". Switch workspace"}
             aria-haspopup="menu"
@@ -389,33 +499,12 @@ export default function WorkspaceSidebar({
             <span className="mail-chevron">⌄</span>
           </button>
 
-          {isSwitcherOpen && workspaces.length > 0 && (
-            <div className="mail-profile-menu mail-workspace-menu" role="menu" aria-label="Switch workspace">
-              <strong>Switch workspace</strong>
-              <p>You stay signed in when you switch.</p>
-              {workspaces.map((workspace) => {
-                const active = workspace.id === activeWorkspaceId;
-                return (
-                  <Link
-                    key={workspace.id}
-                    href={"/dashboard/" + workspace.id}
-                    className={active ? "mail-workspace-option active" : "mail-workspace-option"}
-                    role="menuitem"
-                    aria-current={active ? "page" : undefined}
-                    onClick={() => setSwitcherOpen(false)}
-                  >
-                    <WorkspaceAvatar name={workspace.name} logoUrl={workspace.logoUrl} />
-                    <span className="mail-workspace-copy"><strong>{workspace.name}</strong><small>{workspace.role}</small></span>
-                    {active && <span className="mail-workspace-current">Current</span>}
-                  </Link>
-                );
-              })}
-              <div className="mail-workspace-menu-actions">
-                <Link className="mail-workspace-all" href="/dashboard" onClick={() => setSwitcherOpen(false)}>View all workspaces</Link>
-                <Link className="mail-workspace-all" href={workspaceBaseHref ? workspaceBaseHref + "/settings" : "/settings"} onClick={() => setSwitcherOpen(false)}>Workspace settings</Link>
-                <SignOutButton className="mail-workspace-signout" />
-              </div>
-            </div>
+          {workspaceMenu && (
+            mobileOpen
+              ? (switcherMenuPosition && typeof document !== "undefined"
+                  ? createPortal(workspaceMenu, document.body)
+                  : null)
+              : workspaceMenu
           )}
         </div>
 
