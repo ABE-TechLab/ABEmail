@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { CONTACT_FIELDS } from "@/lib/contacts/types";
 import { getContactRequestContext } from "@/lib/contacts/request-context";
 import { parseContactInput } from "@/lib/contacts/validation";
+import { getGravatarAvatarUrl, isSafeSenderAvatarUrl } from "@/lib/email/sender-avatar.mjs";
 
 export const dynamic = "force-dynamic";
 
@@ -45,7 +46,35 @@ export async function GET(request: Request, { params }: RouteContext) {
     return NextResponse.json({ ok: false, error: "Contacts could not be loaded." }, { status: 503 });
   }
 
-  return NextResponse.json({ ok: true, contacts: data ?? [], count: count ?? data?.length ?? 0 });
+  const contactRows = data ?? [];
+  const senderAvatarByEmail = new Map<string, string>();
+  if (contactRows.length) {
+    const emails = contactRows.map((contact) => contact.email.toLowerCase());
+    const { data: recentMessages } = await context.supabase
+      .from("email_messages")
+      .select("from_address, sender_avatar_url, received_at")
+      .eq("organization_id", organizationId)
+      .eq("direction", "inbound")
+      .in("from_address", emails)
+      .order("received_at", { ascending: false })
+      .limit(1000);
+
+    for (const message of recentMessages ?? []) {
+      const email = message.from_address.toLowerCase();
+      if (senderAvatarByEmail.has(email)) continue;
+      const avatarUrl = isSafeSenderAvatarUrl(message.sender_avatar_url);
+      if (avatarUrl) senderAvatarByEmail.set(email, avatarUrl);
+    }
+  }
+
+  return NextResponse.json({
+    ok: true,
+    contacts: contactRows.map((contact) => ({
+      ...contact,
+      avatar_url: senderAvatarByEmail.get(contact.email.toLowerCase()) ?? getGravatarAvatarUrl(contact.email),
+    })),
+    count: count ?? contactRows.length,
+  });
 }
 
 export async function POST(request: Request, { params }: RouteContext) {

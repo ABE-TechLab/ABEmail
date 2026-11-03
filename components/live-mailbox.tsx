@@ -97,6 +97,119 @@ function SenderAvatar({
   );
 }
 
+function ContactIdentityCard({
+  organizationId,
+  email,
+  avatarUrl,
+  triggerLabel,
+}: {
+  organizationId: string;
+  email: string;
+  avatarUrl: string | null;
+  triggerLabel?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [feedback, setFeedback] = useState("");
+  const [resolvedAvatarUrl, setResolvedAvatarUrl] = useState(avatarUrl);
+  const normalizedEmail = email.trim().toLowerCase();
+
+  useEffect(() => {
+    if (!open) return;
+    const controller = new AbortController();
+    void fetch("/api/organizations/" + organizationId + "/contacts/senders?email=" + encodeURIComponent(normalizedEmail), {
+      cache: "no-store",
+      signal: controller.signal,
+    }).then(async (response) => {
+      const payload = await response.json() as { ok?: boolean; avatar_url?: string | null };
+      if (response.ok && payload.ok) setResolvedAvatarUrl(payload.avatar_url ?? avatarUrl);
+    }).catch(() => undefined);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      controller.abort();
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [avatarUrl, email, open, organizationId, normalizedEmail]);
+
+  async function addToContacts() {
+    if (saving || saved || !normalizedEmail) return;
+    setSaving(true);
+    setFeedback("");
+    try {
+      const response = await fetch("/api/organizations/" + organizationId + "/contacts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: normalizedEmail,
+          email: normalizedEmail,
+          company: null,
+          role: null,
+          phone: null,
+          notes: null,
+          tags: [],
+        }),
+      });
+      const payload = await response.json() as { ok?: boolean; error?: string };
+      if (response.status === 409) {
+        setSaved(true);
+        setFeedback("This email address is already saved in Contacts.");
+      } else if (!response.ok || !payload.ok) {
+        setFeedback(payload.error || "This address could not be added.");
+      } else {
+        setSaved(true);
+        setFeedback("Added to Contacts.");
+      }
+    } catch {
+      setFeedback("The Contacts service could not be reached. Try again.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        className={styles.contactIdentityTrigger}
+        aria-label={"Open contact card for " + normalizedEmail}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        onClick={() => { setResolvedAvatarUrl(avatarUrl); setOpen((current) => !current); setFeedback(""); }}
+      >
+        {triggerLabel ?? normalizedEmail}
+      </button>
+      {open && (
+        <div className={styles.contactCardBackdrop} onClick={() => setOpen(false)}>
+          <section
+            className={styles.contactCard}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Email contact card"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button type="button" className={styles.contactCardClose} aria-label="Close contact card" onClick={() => setOpen(false)}>×</button>
+            <SenderAvatar
+              src={resolvedAvatarUrl}
+              fallbackText={normalizedEmail}
+              className="mail-avatar mail-avatar-large tone-slate"
+            />
+            <p className="mail-overline">EMAIL ADDRESS</p>
+            <strong className={styles.contactCardEmail}>{normalizedEmail}</strong>
+            <button type="button" className="mail-primary-action" disabled={saving || saved} onClick={() => void addToContacts()}>
+              {saving ? "Saving…" : saved ? "Saved to Contacts" : "＋ Add to contacts"}
+            </button>
+            {feedback && <p className={styles.contactCardFeedback} role="status">{feedback}</p>}
+          </section>
+        </div>
+      )}
+    </>
+  );
+}
+
 type LiveMailboxProps = {
   organizationId: string;
   organizationName: string;
@@ -1675,8 +1788,19 @@ const scheduledLoading = activeView === "Scheduled" && Boolean(mailboxId) && sch
                         className="mail-avatar mail-reader-avatar tone-slate"
                       />
                       <div className="mail-sender-info">
-                        <strong>{selectedMessage.direction === "inbound" ? selectedMessage.from_address : organizationName}</strong>
-                        <span>To {selectedMessage.to_addresses.join(", ")}</span>
+                        {selectedMessage.direction === "inbound"
+                          ? <ContactIdentityCard key={selectedMessage.from_address} organizationId={organizationId} email={selectedMessage.from_address} avatarUrl={selectedMessage.sender_avatar_url} />
+                          : <strong>{organizationName}</strong>}
+                        <span>
+                          To {selectedMessage.to_addresses.map((address, index) => (
+                            <span key={address}>
+                              {index > 0 ? ", " : ""}
+                              {selectedMessage.direction === "outbound"
+                                ? <ContactIdentityCard organizationId={organizationId} email={address} avatarUrl={null} />
+                                : address}
+                            </span>
+                          ))}
+                        </span>
                         <small>{selectedMessage.direction === "inbound" ? "Received by" : "Sent from"} {selectedMailbox?.address ?? ""}</small>
                       </div>
                       <time>{messageDate(selectedMessage, mailPreferences.timezone, mailPreferences.language)}</time>
