@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { getOrganizationRequestContext } from "@/lib/organizations/request-context";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { recordOrganizationAuditEvent } from "@/lib/platform/organization-operations";
 
 export const dynamic = "force-dynamic";
 
@@ -228,5 +230,14 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     .single();
 
   if (error || !saved) return NextResponse.json({ ok: false, error: "Brand profile could not be saved." }, { status: 503 });
-  return NextResponse.json({ ok: true, profile: toPublicProfile(saved as Record<string, unknown>) });
+  const auditAdmin = createAdminClient();
+  if (!auditAdmin) return NextResponse.json({ ok: true, profile: toPublicProfile(saved as Record<string, unknown>), auditRecorded: false }, { status: 202 });
+  try {
+    await recordOrganizationAuditEvent(auditAdmin, {
+      organizationId, actorUserId: context.user.id, action: "brand_profile.updated",
+      resourceType: "brand_profile", resourceId: organizationId,
+      metadata: { changed_fields: ["brand_name", "primary_color", "accent_color", "background_color", "text_color", "font_family", "website_url", "phone", "address", "default_footer_text", "social_links"] },
+    });
+  } catch { return NextResponse.json({ ok: true, profile: toPublicProfile(saved as Record<string, unknown>), auditRecorded: false }, { status: 202 }); }
+  return NextResponse.json({ ok: true, profile: toPublicProfile(saved as Record<string, unknown>), auditRecorded: true });
 }

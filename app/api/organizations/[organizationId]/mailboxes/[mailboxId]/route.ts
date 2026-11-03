@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { recordOrganizationAuditEvent } from "@/lib/platform/organization-operations";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -156,7 +157,15 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     return json({ error: "The mailbox changes could not be saved." }, 503);
   }
 
-  return json({ ok: true, mailbox: updated, note: addressChanged
+  try {
+    const changedFields = Object.keys(input).map((key) => key === "localPart" ? "local_part" : key === "domainId" ? "domain_id" : "display_name");
+    await recordOrganizationAuditEvent(auth.admin, {
+      organizationId, actorUserId: auth.user.id, action: "mailbox.updated",
+      resourceType: "mailbox", resourceId: mailboxId,
+      metadata: { mailbox_id: mailboxId, domain_id: updated.domain_id, changed_fields: changedFields },
+    });
+  } catch { return json({ ok: true, mailbox: updated, auditRecorded: false }, 202); }
+  return json({ ok: true, mailbox: updated, auditRecorded: true, note: addressChanged
     ? "Mailbox updated. The previous address is no longer assigned to this mailbox; notify contacts that use it."
     : "Mailbox details updated." });
 }

@@ -14,6 +14,7 @@ import { decryptProviderSecret, ResendProviderError } from "@/lib/email/resend-p
 import { classifyProviderEventDuplicate } from "@/lib/email/resend-webhook-state.mjs";
 import { verifyAndParseResendWebhook } from "@/lib/email/resend-webhook-security.mjs";
 import { processResendRecipientDeliveryEvent } from "@/lib/email/resend-delivery-state.mjs";
+import { recordOrganizationUsageEvent } from "@/lib/platform/organization-operations";
 
 
 type ProviderEvent = {
@@ -305,6 +306,14 @@ export async function handleResendWebhook(request: NextRequest, tenantOrganizati
           }
 
           if (!storedMessageId) throw new ResendPilotError("INBOUND_MESSAGE_STORE_FAILED");
+          await recordOrganizationUsageEvent(admin, {
+            organizationId: mailbox.organization_id,
+            mailboxId: mailbox.id,
+            metric: "inbound_messages_received",
+            eventType: "inbound_message_received",
+            idempotencyKey: "inbound-message-received:" + storedMessageId,
+            metadata: { message_id: storedMessageId, source: "resend_webhook" },
+          });
           if (received.attachments.length) {
             await persistReceivedAttachments(admin, apiKey, emailId, received.attachments, mailbox.organization_id, mailbox.id, storedMessageId);
           }
@@ -446,12 +455,26 @@ export async function handleResendWebhook(request: NextRequest, tenantOrganizati
       }
     }
 
+    const usageOrganizationId = tenantOrganizationId ? (resolvedOrganizationId ?? tenantOrganizationId) : resolvedOrganizationId;
+    if (usageOrganizationId) {
+      await recordOrganizationUsageEvent(admin, {
+        organizationId: usageOrganizationId,
+        mailboxId: resolvedMailboxId,
+        metric: "provider_events_processed",
+        eventType: "provider_event_processed",
+        idempotencyKey: "provider-event-processed:" + eventId,
+        provider: "resend",
+        providerEventId: eventId,
+        metadata: { source: "resend_webhook" },
+      });
+    }
+
     const { error: completeError } = await admin
       .from("provider_events")
       .update({
         status: "processed",
         processed_at: new Date().toISOString(),
-        organization_id: tenantOrganizationId ? (resolvedOrganizationId ?? tenantOrganizationId) : null,
+        organization_id: usageOrganizationId ?? null,
         mailbox_id: resolvedMailboxId,
         last_error_code: resolvedWarningCode,
       })

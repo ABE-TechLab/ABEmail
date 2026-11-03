@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { domainToASCII } from "node:url";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { recordOrganizationAuditEvent } from "@/lib/platform/organization-operations";
 import { getPilotReceiveApiKey } from "@/lib/email/resend-pilot";
 import {
   createResendDomain,
@@ -198,7 +199,14 @@ export async function POST(request: NextRequest, context: RouteContext) {
         .select("id, domain, status, verified_at, provider_domain_id, dns_records, sending_enabled, receiving_enabled, last_checked_at, last_error_code")
         .single();
       if (updateError || !updated) return json({ error: "Resend has the domain, but ABEmail could not synchronize its DNS setup." }, 503);
-      return json({ ok: true, domain: domainPayload(updated), alreadyAdded: true });
+      try {
+        await recordOrganizationAuditEvent(auth.admin, {
+          organizationId, actorUserId: auth.user.id, action: "domain.synchronized",
+          resourceType: "domain", resourceId: updated.id,
+          metadata: { domain_id: updated.id, provider: "resend", verification_status: status },
+        });
+      } catch { return json({ ok: true, domain: domainPayload(updated), alreadyAdded: true, auditRecorded: false }, 202); }
+      return json({ ok: true, domain: domainPayload(updated), alreadyAdded: true, auditRecorded: true });
     }
 
     const localStatus = toLocalStatus(providerDomain);
@@ -224,7 +232,14 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return json({ error: "Resend has the domain, but ABEmail could not save the workspace domain." }, 503);
     }
 
-    return json({ ok: true, domain: domainPayload(inserted) }, 201);
+    try {
+      await recordOrganizationAuditEvent(auth.admin, {
+        organizationId, actorUserId: auth.user.id, action: "domain.added",
+        resourceType: "domain", resourceId: inserted.id,
+        metadata: { domain_id: inserted.id, provider: "resend", verification_status: localStatus },
+      });
+    } catch { return json({ ok: true, domain: domainPayload(inserted), auditRecorded: false }, 202); }
+    return json({ ok: true, domain: domainPayload(inserted), auditRecorded: true }, 201);
   } catch (error) {
     const code = error instanceof ResendProviderError ? error.code : "RESEND_DOMAIN_SETUP_FAILED";
     const status = error instanceof ResendProviderError && error.providerStatus === 401 ? 401

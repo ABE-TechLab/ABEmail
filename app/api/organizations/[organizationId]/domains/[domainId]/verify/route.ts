@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { recordOrganizationAuditEvent } from "@/lib/platform/organization-operations";
 import { getPilotReceiveApiKey } from "@/lib/email/resend-pilot";
 import {
   decryptProviderSecret,
@@ -124,6 +125,13 @@ export async function POST(request: NextRequest, context: RouteContext) {
       .single();
 
     if (updateError || !updated) return json({ error: "Resend returned a status, but ABEmail could not save it." }, 503);
+    try {
+      await recordOrganizationAuditEvent(auth.admin, {
+        organizationId, actorUserId: auth.user.id, action: "domain.verification_checked",
+        resourceType: "domain", resourceId: updated.id,
+        metadata: { domain_id: updated.id, provider: "resend", verification_status: updated.status },
+      });
+    } catch { return json({ ok: true, verified, domain: { id: updated.id, status: updated.status }, auditRecorded: false }, 202); }
 
     return json({
       ok: true,

@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { recordOrganizationAuditEvent } from "@/lib/platform/organization-operations";
 
 export const dynamic = "force-dynamic";
 
@@ -63,5 +64,12 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     .is("revoked_at", null);
 
   if (updateError) return json({ error: "The invitation could not be revoked." }, 503);
-  return json({ ok: true, revoked: true });
+  try {
+    await recordOrganizationAuditEvent(admin, {
+      organizationId, actorUserId: user.id, action: "membership.invitation_revoked",
+      resourceType: "invitation", resourceId: invitationId,
+      metadata: { invitation_id: invitationId },
+    });
+  } catch { return json({ ok: true, revoked: true, auditRecorded: false }, 202); }
+  return json({ ok: true, revoked: true, auditRecorded: true });
 }

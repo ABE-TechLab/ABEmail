@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { getOrganizationRequestContext } from "@/lib/organizations/request-context";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { recordOrganizationAuditEvent } from "@/lib/platform/organization-operations";
 import { validateEmailDesignContent, EMAIL_DESIGN_SCHEMA_VERSION } from "@/lib/email-design/render.mjs";
 
 export const dynamic = "force-dynamic";
@@ -77,7 +79,16 @@ export async function PATCH(request: Request, { params }: RouteContext) {
 
   if (error) return NextResponse.json({ ok: false, error: "Designed email could not be updated." }, { status: 503 });
   if (!data) return NextResponse.json({ ok: false, error: "Design not found or you do not have permission to edit it." }, { status: 404 });
-  return NextResponse.json({ ok: true, template: publicDesign(data as Record<string, unknown>) });
+  const auditAdmin = createAdminClient();
+  if (!auditAdmin) return NextResponse.json({ ok: true, template: publicDesign(data as Record<string, unknown>), auditRecorded: false }, { status: 202 });
+  try {
+    await recordOrganizationAuditEvent(auditAdmin, {
+      organizationId, actorUserId: context.user.id, action: "email_design.updated",
+      resourceType: "email_design", resourceId: templateId,
+      metadata: { template_id: templateId, changed_fields: ["name", "subject", "description", "content_json"] },
+    });
+  } catch { return NextResponse.json({ ok: true, template: publicDesign(data as Record<string, unknown>), auditRecorded: false }, { status: 202 }); }
+  return NextResponse.json({ ok: true, template: publicDesign(data as Record<string, unknown>), auditRecorded: true });
 }
 
 export async function DELETE(_request: Request, { params }: RouteContext) {
@@ -97,5 +108,14 @@ export async function DELETE(_request: Request, { params }: RouteContext) {
 
   if (error) return NextResponse.json({ ok: false, error: "Designed email could not be deleted." }, { status: 503 });
   if (!data) return NextResponse.json({ ok: false, error: "Design not found or you do not have permission to delete it." }, { status: 404 });
-  return NextResponse.json({ ok: true, id: data.id });
+  const auditAdmin = createAdminClient();
+  if (!auditAdmin) return NextResponse.json({ ok: true, id: data.id, auditRecorded: false }, { status: 202 });
+  try {
+    await recordOrganizationAuditEvent(auditAdmin, {
+      organizationId, actorUserId: context.user.id, action: "email_design.deleted",
+      resourceType: "email_design", resourceId: templateId,
+      metadata: { template_id: templateId },
+    });
+  } catch { return NextResponse.json({ ok: true, id: data.id, auditRecorded: false }, { status: 202 }); }
+  return NextResponse.json({ ok: true, id: data.id, auditRecorded: true });
 }

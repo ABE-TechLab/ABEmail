@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { recordOrganizationAuditEvent } from "@/lib/platform/organization-operations";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -164,5 +165,12 @@ export async function POST(request: NextRequest, context: RouteContext) {
     return json({ error: "The mailbox was created, but owner access could not be assigned. The mailbox has been rolled back; retry once access is reviewed." }, 503);
   }
 
-  return json({ ok: true, mailbox: inserted, note: "Mailbox created. Resend will route incoming mail through the configured webhook once DNS receiving records are active." }, 201);
+  try {
+    await recordOrganizationAuditEvent(auth.admin, {
+      organizationId, actorUserId: auth.user.id, action: "mailbox.created",
+      resourceType: "mailbox", resourceId: inserted.id,
+      metadata: { mailbox_id: inserted.id, domain_id: inserted.domain_id, to_status: inserted.status },
+    });
+  } catch { return json({ ok: true, mailbox: inserted, auditRecorded: false }, 202); }
+  return json({ ok: true, mailbox: inserted, auditRecorded: true, note: "Mailbox created. Resend will route incoming mail through the configured webhook once DNS receiving records are active." }, 201);
 }

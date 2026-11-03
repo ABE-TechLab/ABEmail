@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { recordOrganizationAuditEvent } from "@/lib/platform/organization-operations";
 import {
   decryptProviderSecret,
   encryptProviderSecret,
@@ -241,6 +242,14 @@ export async function POST(request: NextRequest, context: RouteContext) {
         .eq("organization_id", organizationId);
     }
 
+    try {
+      await recordOrganizationAuditEvent(auth.admin, {
+        organizationId, actorUserId: auth.user.id, action: "provider.connected",
+        resourceType: "provider_connection", resourceId: organizationId,
+        metadata: { provider: "resend", connection_status: "connected" },
+      });
+    } catch { return json({ ok: true, connected: true, provider: "resend", status: "connected", auditRecorded: false }, 202); }
+
     return json({
       ok: true,
       connected: true,
@@ -328,5 +337,12 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     .delete()
     .eq("organization_id", organizationId);
   if (deleteError) return json({ error: "Resend could not be disconnected from ABEmail." }, 503);
-  return json({ ok: true, disconnected: true });
+  try {
+    await recordOrganizationAuditEvent(auth.admin, {
+      organizationId, actorUserId: auth.user.id, action: "provider.disconnected",
+      resourceType: "provider_connection", resourceId: organizationId,
+      metadata: { provider: "resend", connection_status: "disconnected" },
+    });
+  } catch { return json({ ok: true, disconnected: true, auditRecorded: false }, 202); }
+  return json({ ok: true, disconnected: true, auditRecorded: true });
 }

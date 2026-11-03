@@ -16,7 +16,8 @@
     "test:email-webhooks": "node --test lib/email/resend-webhook-state.test.mjs",
     "test:email-webhook-integration": "node --test lib/email/resend-webhook-integration.test.mjs",
     "test:scheduled-mail-auth": "node --test lib/email/scheduled-mail-auth.test.mjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:platform-operations": "node --test lib/platform/operation-event-safety.test.mjs"
   },
   "dependencies": {
     "next": "16.2.12",

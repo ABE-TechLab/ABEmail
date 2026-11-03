@@ -2,6 +2,7 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { recordOrganizationAuditEvent } from "@/lib/platform/organization-operations";
 import { decryptProviderSecret, ResendProviderError, sendResendEmail } from "@/lib/email/resend-provider";
 
 export const runtime = "nodejs";
@@ -298,6 +299,15 @@ export async function POST(request: NextRequest, context: RouteContext) {
   ].join("\n");
 
   try {
+    try {
+      await recordOrganizationAuditEvent(auth.admin, {
+        organizationId, actorUserId: auth.user.id, action: "membership.invitation_created",
+        resourceType: "invitation", resourceId: invitation.id,
+        metadata: { invitation_id: invitation.id, role, mailbox_count: effectiveMailboxIds.length, provider: "resend" },
+      });
+    } catch {
+      return json({ ok: true, invitation: { id: invitation.id, role, expiresAt: invitation.expires_at }, emailStatus: "not_submitted", auditRecorded: false }, 503);
+    }
     const sent = await sendResendEmail({
       apiKey,
       from: (mailbox.display_name || auth.organization.name) + " <" + mailbox.address + ">",
