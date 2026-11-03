@@ -78,6 +78,14 @@ for (const label of requiredSidebarLabels) {
 assert(!/\bSoon\b|Coming soon|mail-feature-pill/.test(sidebar), "The global sidebar must not bring back disabled/Soon placeholder labels.");
 assert(sidebar.includes("const currentMailboxView = mailboxLinks.find"), "Mailbox active state must derive from the current route query.");
 assert(sidebar.includes("href={composeHref}"), "Compose must remain a route-driven control in the shared sidebar.");
+assert(sidebar.includes("onClickCapture=") && sidebar.includes('target.closest("a[href]")'),
+  "Selecting any sidebar destination must close the compact navigation drawer.");
+assert(sidebar.includes("createPortal(workspaceMenu, document.body)") && sidebar.includes("switcherMenuRef.current?.contains(target)"),
+  "The compact workspace switcher must escape the drawer clipping boundary and keep its outside-click behavior.");
+assert(globalStyles.includes(".mail-profile-menu.mail-workspace-menu-portaled"),
+  "The portaled workspace switcher must have its own overlay stacking and scroll constraints.");
+assert(globalStyles.includes(".mail-compose-button { width: 42px; height: 42px; }"),
+  "The compact mobile Compose control must retain the standard 42px target size.");
 assert(sidebar.includes("router.push(itemHref, { scroll: false })"),
   "Mailbox navigation must use the App Router so workspace pages transition to the mounted mailbox route.");
 assert(!sidebar.includes("window.history.pushState("),

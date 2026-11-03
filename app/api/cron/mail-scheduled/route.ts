@@ -10,6 +10,8 @@ import {
 } from "@/lib/platform/organization-operations";
 import { canScheduledCreatorSend } from "@/lib/email/scheduled-mail-auth.mjs";
 import { renderEmailDesign, validateEmailDesignContent, type EmailDesignBrandProfile, type EmailDesignContent } from "@/lib/email-design/render.mjs";
+import { createSenderAvatarHeaders, isSafeSenderAvatarUrl } from "@/lib/email/sender-avatar.mjs";
+import { getOrganizationSenderAvatarUrl } from "@/lib/email/sender-avatar-server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -29,6 +31,7 @@ async function runScheduledWorker(request: NextRequest) {
     let usageReservationActive = false;
     let providerSubmissionStarted = false;
     let messageIdForQuota: string | null = null;
+    let senderAvatarUrl: string | null = null;
     try {
       const { data: org, error: orgError } = await admin.from("organizations").select("slug, status")
         .eq("id", job.organization_id).maybeSingle();
@@ -47,6 +50,7 @@ async function runScheduledWorker(request: NextRequest) {
         await admin.from("scheduled_email_messages").update({ status: "failed", locked_at: null, last_error_code: "SENDER_DOMAIN_NOT_READY" }).eq("id", job.id);
         results.push({ id: job.id, status: "failed" }); continue;
       }
+      senderAvatarUrl = await getOrganizationSenderAvatarUrl(admin, job.organization_id);
       const { data: connection, error: connectionError } = await admin.from("organization_provider_connections")
         .select("api_key_ciphertext, status").eq("organization_id", job.organization_id).maybeSingle();
       if (connectionError || (connection && connection.status !== "connected")) throw new Error("PROVIDER_CONNECTION_UNAVAILABLE");
@@ -86,10 +90,11 @@ async function runScheduledWorker(request: NextRequest) {
         subject: job.subject, text: job.body_text,
       }), "utf8").digest("hex") : null;
       const { data: existing, error: existingError } = await admin.from("email_messages")
-        .select("id, status, provider_message_id, request_fingerprint, body_text, body_html").eq("organization_id", job.organization_id)
+        .select("id, status, provider_message_id, request_fingerprint, body_text, body_html, sender_avatar_url").eq("organization_id", job.organization_id)
         .eq("idempotency_key", idempotencyKey).maybeSingle();
       if (existingError) throw new Error("MESSAGE_LEDGER_UNAVAILABLE");
       let messageId: string;
+      if (existing) senderAvatarUrl = isSafeSenderAvatarUrl(existing.sender_avatar_url) ?? senderAvatarUrl;
       if (existing?.provider_message_id) {
         await recordOrganizationUsageEvent(admin, {
           organizationId: job.organization_id, mailboxId: job.mailbox_id,
@@ -111,12 +116,19 @@ async function runScheduledWorker(request: NextRequest) {
         messageId = existing.id;
         if (typeof existing.body_text === "string") bodyText = existing.body_text;
         if (typeof existing.body_html === "string") bodyHtml = existing.body_html;
+        if (!existing.sender_avatar_url && senderAvatarUrl) {
+          const { error: avatarSnapshotError } = await admin.from("email_messages")
+            .update({ sender_avatar_url: senderAvatarUrl })
+            .eq("id", existing.id).eq("organization_id", job.organization_id).is("sender_avatar_url", null);
+          if (avatarSnapshotError) throw new Error("SCHEDULED_SENDER_AVATAR_SNAPSHOT_FAILED");
+        }
         if (isDesigned && !bodyHtml) throw new Error("SCHEDULED_DESIGN_RENDER_UNAVAILABLE");
       } else {
 
         const { data: saved, error: saveError } = await admin.from("email_messages").insert({
           organization_id: job.organization_id, mailbox_id: job.mailbox_id, provider: "resend", direction: "outbound",
-          from_address: mailbox.address, to_addresses: [job.to_address], subject: job.subject, body_text: bodyText, body_html: bodyHtml,
+          from_address: mailbox.address, sender_avatar_url: senderAvatarUrl,
+          to_addresses: [job.to_address], subject: job.subject, body_text: bodyText, body_html: bodyHtml,
           status: "processing", idempotency_key: idempotencyKey, request_fingerprint: fingerprint, created_by: job.user_id,
         }).select("id").single();
         if (saveError || !saved) throw new Error("MESSAGE_LEDGER_WRITE_FAILED");
@@ -192,10 +204,13 @@ async function runScheduledWorker(request: NextRequest) {
         sent = await sendResendEmail({
           apiKey, from: (mailbox.display_name || org.slug) + " <" + mailbox.address + ">",
           to: job.to_address, subject: job.subject, text: bodyText, ...(bodyHtml ? { html: bodyHtml } : {}),
+          headers: createSenderAvatarHeaders(mailbox.address, senderAvatarUrl),
           idempotencyKey: job.organization_id + "/" + idempotencyKey,
         });
       } else if (mailbox.address === OTTAWA_PILOT_ADDRESS) {
-        sent = await sendPilotEmail({ apiKey, to: job.to_address, subject: job.subject, text: bodyText, idempotencyKey: job.organization_id + "/" + idempotencyKey });
+        sent = await sendPilotEmail({ apiKey, to: job.to_address, subject: job.subject, text: bodyText,
+          headers: createSenderAvatarHeaders(mailbox.address, senderAvatarUrl),
+          idempotencyKey: job.organization_id + "/" + idempotencyKey });
       } else throw new Error("PROVIDER_CONNECTION_UNAVAILABLE");
       const { error: updateMessageError } = await admin.from("email_messages").update({
         provider_message_id: sent.id, sent_at: new Date().toISOString(),

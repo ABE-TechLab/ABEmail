@@ -36,6 +36,9 @@ jobs:
       - name: Test platform audit and usage metadata safety
         run: npm run test:platform-operations
 
+      - name: Test sender avatar metadata and privacy
+        run: npm run test:sender-avatar
+
       - name: Check email design renderer
         run: npm run test:email-design
 

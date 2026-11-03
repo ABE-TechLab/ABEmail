@@ -211,6 +211,7 @@ export async function sendResendEmail(input: {
   text: string;
   html?: string;
   attachments?: ResendAttachmentInput[];
+  headers?: Record<string, string>;
   idempotencyKey: string;
 }): Promise<{ id: string }> {
   let response: Response;
@@ -229,6 +230,7 @@ export async function sendResendEmail(input: {
         subject: input.subject,
         text: input.text,
         ...(input.html ? { html: input.html } : {}),
+        ...(input.headers && Object.keys(input.headers).length ? { headers: input.headers } : {}),
         ...(input.attachments?.length ? {
           attachments: input.attachments.map((attachment) => ({
             filename: attachment.filename,
