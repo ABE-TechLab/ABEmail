@@ -217,8 +217,7 @@ select throws_ok(
   $$update public.email_templates set user_id = '10000000-0000-4000-8000-000000000003' where id = '70000000-0000-4000-8000-000000000001'$$,
   'P0001',
   null,
-  'template owner cannot be reassigned'
-);
+  'template owner cannot be reassigned');
 
 select ok(not has_table_privilege('authenticated', 'private.user_login_aliases', 'select'), 'login aliases are not directly readable through the Data API');
 
@@ -437,8 +436,7 @@ select ok(
     '20000000-0000-4000-8000-000000000001',
     '31000000-0000-4000-8000-000000000001',
     'task14-retry'
-  )),
-  'first outbound quota reservation is allowed'
+  )),  'first outbound quota reservation is allowed'
 );
 
 select ok(
@@ -636,15 +634,15 @@ select is(
 );
 
 select throws_ok(
-  $insert into public.organization_audit_events (organization_id, action, resource_type)
-    values ('20000000-0000-4000-8000-000000000001', 'unauthorized.write', 'organization')$,
+  'insert into public.organization_audit_events (organization_id, action, resource_type)
+    values (''20000000-0000-4000-8000-000000000001'', ''unauthorized.write'', ''organization'')',
   '42501', null,
   'authenticated clients cannot insert audit events'
 );
 
 select throws_ok(
-  $insert into public.organization_usage_events (organization_id, metric, event_type, quantity, idempotency_key)
-    values ('20000000-0000-4000-8000-000000000001', 'inbound_messages_received', 'unauthorized.write', 1, 'authenticated-usage-forbidden')$,
+  'insert into public.organization_usage_events (organization_id, metric, event_type, quantity, idempotency_key)
+    values (''20000000-0000-4000-8000-000000000001'', ''inbound_messages_received'', ''unauthorized.write'', 1, ''authenticated-usage-forbidden'')',
   '42501', null,
   'authenticated clients cannot insert usage events'
 );
