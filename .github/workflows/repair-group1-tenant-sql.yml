@@ -1,0 +1,82 @@
+name: Repair Group 1.4 tenant SQL and verify
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+
+jobs:
+  repair-and-test:
+    if: github.event.pull_request.head.ref == 'feat/group1-platform-audit-usage' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Check out feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Repair pgTAP statement quoting
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require("node:fs");
+          const path = "supabase/tests/database/tenant_isolation.test.sql";
+          let sql = fs.readFileSync(path, "utf8");
+          const replacements = [
+            [
+              "  $update public.organization_audit_events set outcome = 'failure'\n    where idempotency_key = 'audit-test-tenant-a'$,",
+              "  'update public.organization_audit_events set outcome = ''failure'' where idempotency_key = ''audit-test-tenant-a''',"
+            ],
+            [
+              "  $delete from public.organization_audit_events where idempotency_key = 'audit-test-tenant-a'$,",
+              "  'delete from public.organization_audit_events where idempotency_key = ''audit-test-tenant-a''',"
+            ],
+            [
+              "  $update public.organization_usage_events set quantity = 2\n    where idempotency_key = 'usage-test-tenant-a'$,",
+              "  'update public.organization_usage_events set quantity = 2 where idempotency_key = ''usage-test-tenant-a''',"
+            ],
+            [
+              "  $delete from public.organization_usage_events where idempotency_key = 'usage-test-tenant-a'$,",
+              "  'delete from public.organization_usage_events where idempotency_key = ''usage-test-tenant-a''',"
+            ]
+          ];
+          for (const [before, after] of replacements) {
+            const count = sql.split(before).length - 1;
+            if (count === 1) sql = sql.replace(before, after);
+            else if (count !== 0) throw new Error("Unexpected duplicate pgTAP assertion text");
+          }
+          if (sql.includes("$update public.organization_audit_events") ||
+              sql.includes("$delete from public.organization_audit_events") ||
+              sql.includes("$update public.organization_usage_events") ||
+              sql.includes("$delete from public.organization_usage_events")) {
+            throw new Error("Malformed pgTAP statement remains");
+          }
+          fs.writeFileSync(path, sql);
+          NODE
+
+          git config user.name "ABE TechLab"
+          git config user.email "abetechlab@gmail.com"
+          git add supabase/tests/database/tenant_isolation.test.sql
+          if ! git diff --cached --quiet; then
+            git commit -m "fix: correct pgTAP audit and usage assertions"
+            git push origin "HEAD:feat/group1-platform-audit-usage"
+          else
+            echo "Tenant SQL file already contains the corrected pgTAP assertions."
+          fi
+
+      - name: Set up Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.120.0
+
+      - name: Start isolated local database
+        run: supabase db start
+
+      - name: Run tenant isolation and authorization tests
+        run: supabase test db
