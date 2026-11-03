@@ -510,27 +510,25 @@ select ok(
 reset role;
 
 select throws_ok(
-  $update public.organization_audit_events set outcome = 'failure'
-    where idempotency_key = 'audit-test-tenant-a'$,
+  'update public.organization_audit_events set outcome = ''failure'' where idempotency_key = ''audit-test-tenant-a''',
   'P0001', 'This table is append-only; UPDATE is not permitted',
   'audit rows cannot be updated by privileged database roles'
 );
 
 select throws_ok(
-  $delete from public.organization_audit_events where idempotency_key = 'audit-test-tenant-a'$,
+  'delete from public.organization_audit_events where idempotency_key = ''audit-test-tenant-a''',
   'P0001', 'This table is append-only; DELETE is not permitted',
   'audit rows cannot be deleted by privileged database roles'
 );
 
 select throws_ok(
-  $update public.organization_usage_events set quantity = 2
-    where idempotency_key = 'usage-test-tenant-a'$,
+  'update public.organization_usage_events set quantity = 2 where idempotency_key = ''usage-test-tenant-a''',
   'P0001', 'This table is append-only; UPDATE is not permitted',
   'usage rows cannot be updated by privileged database roles'
 );
 
 select throws_ok(
-  $delete from public.organization_usage_events where idempotency_key = 'usage-test-tenant-a'$,
+  'delete from public.organization_usage_events where idempotency_key = ''usage-test-tenant-a''',
   'P0001', 'This table is append-only; DELETE is not permitted',
   'usage rows cannot be deleted by privileged database roles'
 );
