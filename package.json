@@ -17,7 +17,8 @@
     "test:email-webhook-integration": "node --test lib/email/resend-webhook-integration.test.mjs",
     "test:scheduled-mail-auth": "node --test lib/email/scheduled-mail-auth.test.mjs",
     "typecheck": "tsc --noEmit",
-    "test:platform-operations": "node --test lib/platform/operation-event-safety.test.mjs"
+    "test:platform-operations": "node --test lib/platform/operation-event-safety.test.mjs",
+    "test:sender-avatar": "node --test lib/email/sender-avatar.test.mjs"
   },
   "dependencies": {
     "next": "16.2.12",

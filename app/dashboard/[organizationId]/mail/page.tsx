@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getGravatarAvatarUrl, isSafeSenderAvatarUrl } from "@/lib/email/sender-avatar.mjs";
 import LiveMailbox from "@/components/live-mailbox";
 
 export const metadata: Metadata = { title: "Workspace inbox | ABEmail" };
@@ -76,6 +77,7 @@ export default async function WorkspaceMailPage({ params, searchParams }: MailPa
     mailbox_id: string;
     direction: "inbound" | "outbound";
     from_address: string;
+    sender_avatar_url: string | null;
     to_addresses: string[];
     cc_addresses: string[];
     reply_to_addresses: string[];
@@ -111,11 +113,15 @@ export default async function WorkspaceMailPage({ params, searchParams }: MailPa
     recipient_statuses: Array<{ recipient_email: string; status: string }>;
   })[] = [];
   let messagesError = false;
+  const { data: senderBrandProfile } = mailboxes.length
+    ? await supabase.from("organization_brand_profiles").select("logo_url").eq("organization_id", organizationId).maybeSingle()
+    : { data: null };
+  const workspaceSenderAvatar = isSafeSenderAvatarUrl(senderBrandProfile?.logo_url);
 
   if (mailboxes.length) {
     const { data, error } = await supabase
       .from("email_messages")
-      .select("id, mailbox_id, direction, from_address, to_addresses, cc_addresses, reply_to_addresses, subject, body_text, body_html, status, created_at, received_at, sent_at")
+      .select("id, mailbox_id, direction, from_address, sender_avatar_url, to_addresses, cc_addresses, reply_to_addresses, subject, body_text, body_html, status, created_at, received_at, sent_at")
       .eq("organization_id", organizationId)
       .in("mailbox_id", mailboxes.map((mailbox) => mailbox.id))
       .order("created_at", { ascending: false })
@@ -131,7 +137,7 @@ export default async function WorkspaceMailPage({ params, searchParams }: MailPa
       if (initialMessageId && !messageRows.some((message) => message.id === initialMessageId)) {
         const { data: linkedMessage, error: linkedMessageError } = await supabase
           .from("email_messages")
-          .select("id, mailbox_id, direction, from_address, to_addresses, cc_addresses, reply_to_addresses, subject, body_text, body_html, status, created_at, received_at, sent_at")
+          .select("id, mailbox_id, direction, from_address, sender_avatar_url, to_addresses, cc_addresses, reply_to_addresses, subject, body_text, body_html, status, created_at, received_at, sent_at")
           .eq("organization_id", organizationId)
           .in("mailbox_id", mailboxes.map((mailbox) => mailbox.id))
           .eq("id", initialMessageId)
@@ -181,7 +187,7 @@ export default async function WorkspaceMailPage({ params, searchParams }: MailPa
           if (extraIds.length) {
             const { data: retainedRows, error: retainedError } = await supabase
               .from("email_messages")
-              .select("id, mailbox_id, direction, from_address, to_addresses, cc_addresses, reply_to_addresses, subject, body_text, body_html, status, created_at, received_at, sent_at")
+              .select("id, mailbox_id, direction, from_address, sender_avatar_url, to_addresses, cc_addresses, reply_to_addresses, subject, body_text, body_html, status, created_at, received_at, sent_at")
               .eq("organization_id", organizationId)
               .in("mailbox_id", mailboxes.map((mailbox) => mailbox.id))
               .in("id", extraIds);
@@ -232,6 +238,9 @@ export default async function WorkspaceMailPage({ params, searchParams }: MailPa
         const state = stateByMessage.get(message.id);
         return {
           ...message,
+          sender_avatar_url: isSafeSenderAvatarUrl(message.sender_avatar_url)
+            ?? (message.direction === "outbound" ? workspaceSenderAvatar : null)
+            ?? getGravatarAvatarUrl(message.from_address),
           is_read: state?.is_read ?? message.direction === "outbound",
           is_starred: state?.is_starred ?? false,
           archived_at: state?.archived_at ?? null,

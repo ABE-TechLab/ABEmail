@@ -15,6 +15,8 @@ import {
 } from "@/lib/email/resend-pilot";
 import { decryptProviderSecret, ResendProviderError, sendResendEmail } from "@/lib/email/resend-provider";
 import { renderEmailDesign, validateEmailDesignContent, type EmailDesignBrandProfile, type EmailDesignContent } from "@/lib/email-design/render.mjs";
+import { createSenderAvatarHeaders, isSafeSenderAvatarUrl } from "@/lib/email/sender-avatar.mjs";
+import { getOrganizationSenderAvatarUrl } from "@/lib/email/sender-avatar-server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -220,6 +222,8 @@ export async function POST(request: NextRequest) {
     html = rendered.html;
   }
 
+  let senderAvatarUrl = await getOrganizationSenderAvatarUrl(admin, organizationId);
+
   const fingerprint = createHash("sha256")
     .update(JSON.stringify(designContent
       ? { organizationId, mailboxId, recipients, subject, designContent, attachmentIds }
@@ -228,7 +232,7 @@ export async function POST(request: NextRequest) {
 
   const { data: existing, error: existingError } = await admin
     .from("email_messages")
-    .select("id, request_fingerprint, status, provider_message_id, body_text, body_html")
+    .select("id, request_fingerprint, status, provider_message_id, body_text, body_html, sender_avatar_url")
     .eq("organization_id", organizationId)
     .eq("idempotency_key", idempotencyKey)
     .maybeSingle();
@@ -236,8 +240,15 @@ export async function POST(request: NextRequest) {
   if (existingError) return json({ error: "Message idempotency could not be checked." }, 503);
   let savedMessageId: string;
   if (existing) {
+    senderAvatarUrl = isSafeSenderAvatarUrl(existing.sender_avatar_url) ?? senderAvatarUrl;
     if (existing.request_fingerprint !== fingerprint) {
       return json({ error: "This idempotency key was already used for different message content." }, 409);
+    }
+    if (!existing.sender_avatar_url && senderAvatarUrl) {
+      const { error: avatarSnapshotError } = await admin.from("email_messages")
+        .update({ sender_avatar_url: senderAvatarUrl })
+        .eq("id", existing.id).eq("organization_id", organizationId).is("sender_avatar_url", null);
+      if (avatarSnapshotError) return json({ error: "Sender identity could not be saved for a safe retry." }, 503);
     }
     if (existing.status === "accepted" || existing.status === "delivered" || existing.status === "delayed" || existing.status === "partially_delivered") {
       try {
@@ -279,6 +290,7 @@ export async function POST(request: NextRequest) {
         provider: "resend",
         direction: "outbound",
         from_address: mailbox.address,
+        sender_avatar_url: senderAvatarUrl,
         to_addresses: recipients,
         subject,
         body_text: text,
@@ -391,6 +403,7 @@ export async function POST(request: NextRequest) {
           text,
           ...(html ? { html } : {}),
           attachments: providerAttachments,
+          headers: createSenderAvatarHeaders(mailbox.address, senderAvatarUrl),
           idempotencyKey: organizationId + "/" + idempotencyKey,
         })
       : mailbox.address === OTTAWA_PILOT_ADDRESS
@@ -400,6 +413,7 @@ export async function POST(request: NextRequest) {
             subject,
             text,
             attachments: providerAttachments,
+            headers: createSenderAvatarHeaders(mailbox.address, senderAvatarUrl),
             idempotencyKey: organizationId + "/" + idempotencyKey,
           })
         : (() => { throw new ResendProviderError("RESEND_WORKSPACE_KEY_REQUIRED"); })();

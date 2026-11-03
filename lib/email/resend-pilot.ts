@@ -83,6 +83,7 @@ export async function sendPilotEmail(input: {
   text: string;
   attachments?: Array<{ filename: string; contentType: string; content: string }>;
   idempotencyKey: string;
+  headers?: Record<string, string>;
 }): Promise<{ id: string }> {
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
@@ -97,6 +98,7 @@ export async function sendPilotEmail(input: {
       to: Array.isArray(input.to) ? input.to : [input.to],
       subject: input.subject,
       text: input.text,
+      ...(input.headers && Object.keys(input.headers).length ? { headers: input.headers } : {}),
       ...(input.attachments?.length ? {
         attachments: input.attachments.map((attachment) => ({
           filename: attachment.filename,
@@ -141,6 +143,7 @@ export async function fetchReceivedEmail(apiKey: string, emailId: string): Promi
   subject?: string;
   text?: string | null;
   html?: string | null;
+  headers: Record<string, string>;
   attachments: ReceivedEmailAttachment[];
 }> {
   if (!/^[a-zA-Z0-9_-]{6,200}$/.test(emailId)) {
@@ -170,6 +173,16 @@ export async function fetchReceivedEmail(apiKey: string, emailId: string): Promi
   const record = ("data" in payload && typeof payload.data === "object" && payload.data !== null)
     ? payload.data as Record<string, unknown>
     : payload as Record<string, unknown>;
+  const inboundHeaders: Record<string, string> = {};
+  if (typeof record.headers === "object" && record.headers !== null && !Array.isArray(record.headers)) {
+    for (const [name, value] of Object.entries(record.headers as Record<string, unknown>)) {
+      const normalized = name.toLowerCase();
+      if ((normalized === "x-abemail-sender-avatar" || normalized === "x-abemail-sender-avatar-signature")
+          && typeof value === "string" && value.length <= 3000) {
+        inboundHeaders[name] = value;
+      }
+    }
+  }
   const attachments = Array.isArray(record.attachments) ? record.attachments.flatMap((item) => {
     if (typeof item !== "object" || item === null) return [];
     const attachment = item as Record<string, unknown>;
@@ -191,6 +204,7 @@ export async function fetchReceivedEmail(apiKey: string, emailId: string): Promi
     subject: typeof record.subject === "string" ? record.subject.slice(0, 998) : "",
     text: typeof record.text === "string" ? record.text.slice(0, 500000) : null,
     html: typeof record.html === "string" ? record.html.slice(0, 500000) : null,
+    headers: inboundHeaders,
     attachments,
   };
 }

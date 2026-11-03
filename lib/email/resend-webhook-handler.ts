@@ -15,6 +15,7 @@ import { classifyProviderEventDuplicate } from "@/lib/email/resend-webhook-state
 import { verifyAndParseResendWebhook } from "@/lib/email/resend-webhook-security.mjs";
 import { processResendRecipientDeliveryEvent } from "@/lib/email/resend-delivery-state.mjs";
 import { recordOrganizationUsageEvent } from "@/lib/platform/organization-operations";
+import { verifySenderAvatarHeaders } from "@/lib/email/sender-avatar.mjs";
 
 
 type ProviderEvent = {
@@ -225,6 +226,7 @@ export async function handleResendWebhook(request: NextRequest, tenantOrganizati
 
       const envelopeRecipients = toAddressList(event.data?.to);
       const received = await fetchReceivedEmail(apiKey, emailId);
+      const senderAvatarUrl = verifySenderAvatarHeaders(received.headers, received.from ?? event.data?.from);
       const recipientCandidates = Array.from(new Set([
         ...envelopeRecipients,
         ...toAddressList(received.to),
@@ -266,7 +268,7 @@ export async function handleResendWebhook(request: NextRequest, tenantOrganizati
 
           const { data: existingMessage, error: existingMessageError } = await admin
             .from("email_messages")
-            .select("id")
+            .select("id, sender_avatar_url")
             .eq("provider", "resend")
             .eq("provider_message_id", received.id ?? emailId)
             .eq("mailbox_id", mailbox.id)
@@ -274,6 +276,13 @@ export async function handleResendWebhook(request: NextRequest, tenantOrganizati
 
           if (existingMessageError) throw new ResendPilotError("INBOUND_DEDUPLICATION_FAILED");
           let storedMessageId: string | null = existingMessage?.id ?? null;
+          if (existingMessage && senderAvatarUrl && !existingMessage.sender_avatar_url) {
+            const { error: avatarUpdateError } = await admin.from("email_messages")
+              .update({ sender_avatar_url: senderAvatarUrl })
+              .eq("id", existingMessage.id).eq("organization_id", mailbox.organization_id)
+              .is("sender_avatar_url", null);
+            if (avatarUpdateError) throw new ResendPilotError("INBOUND_SENDER_AVATAR_UPDATE_FAILED");
+          }
           if (!existingMessage) {
             const { data: savedMessage, error: messageError } = await admin.from("email_messages").insert({
               organization_id: mailbox.organization_id,
@@ -282,6 +291,7 @@ export async function handleResendWebhook(request: NextRequest, tenantOrganizati
               provider_message_id: received.id ?? emailId,
               direction: "inbound",
               from_address: normalizeAddress(received.from ?? event.data?.from ?? "unknown@invalid"),
+              sender_avatar_url: senderAvatarUrl,
               to_addresses: toAddresses.length ? toAddresses : recipients,
               cc_addresses: ccAddresses,
               reply_to_addresses: replyToAddresses,

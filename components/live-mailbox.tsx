@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import AppearanceToggle from "@/components/appearance-toggle";
 import styles from "./live-mailbox.module.css";
 import type { Contact } from "@/lib/contacts/types";
@@ -57,6 +58,7 @@ type EmailMessage = {
   mailbox_id: string;
   direction: "inbound" | "outbound";
   from_address: string;
+  sender_avatar_url: string | null;
   to_addresses: string[];
   cc_addresses: string[];
   reply_to_addresses: string[];
@@ -75,6 +77,26 @@ type EmailMessage = {
   snoozed_until: string | null;
   recipient_statuses: Array<{ recipient_email: string; status: string }>;
 };
+function SenderAvatar({
+  src,
+  fallbackText,
+  className,
+}: {
+  src: string | null;
+  fallbackText: string;
+  className: string;
+}) {
+  const [failedSource, setFailedSource] = useState<string | null>(null);
+  const showImage = Boolean(src && failedSource !== src);
+  return (
+    <span className={className + (showImage ? " mail-avatar-image" : "")} aria-hidden="true">
+      {showImage && src
+        ? <Image src={src} alt="" width={64} height={64} unoptimized referrerPolicy="no-referrer" onError={() => setFailedSource(src)} />
+        : initials(fallbackText)}
+    </span>
+  );
+}
+
 type LiveMailboxProps = {
   organizationId: string;
   organizationName: string;
@@ -1493,7 +1515,11 @@ const scheduledLoading = activeView === "Scheduled" && Boolean(mailboxId) && sch
                       type="button"
                       aria-label={"Open " + (message.subject || "message") + (message.is_read ? "" : ", unread")}
                     >
-                      <span className="mail-avatar tone-slate">{initials(message.direction === "inbound" ? message.from_address : organizationName)}</span>
+                      <SenderAvatar
+                        src={message.sender_avatar_url}
+                        fallbackText={message.direction === "inbound" ? message.from_address : organizationName}
+                        className="mail-avatar tone-slate"
+                      />
                       <span className="mail-message-copy">
                         <span className="mail-message-row-top">
                           <span className="mail-message-sender">
@@ -1643,7 +1669,11 @@ const scheduledLoading = activeView === "Scheduled" && Boolean(mailboxId) && sch
                       </div>
                     </div>
                     <div className="mail-message-meta mail-reader-meta">
-                      <span className="mail-avatar mail-reader-avatar tone-slate">{initials(selectedMessage.direction === "inbound" ? selectedMessage.from_address : organizationName)}</span>
+                      <SenderAvatar
+                        src={selectedMessage.sender_avatar_url}
+                        fallbackText={selectedMessage.direction === "inbound" ? selectedMessage.from_address : organizationName}
+                        className="mail-avatar mail-reader-avatar tone-slate"
+                      />
                       <div className="mail-sender-info">
                         <strong>{selectedMessage.direction === "inbound" ? selectedMessage.from_address : organizationName}</strong>
                         <span>To {selectedMessage.to_addresses.join(", ")}</span>
