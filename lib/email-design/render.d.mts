@@ -16,7 +16,6 @@ export type EmailDesignContent = { version: 1; blocks: EmailDesignBlock[] };
 
 export type EmailDesignBrandProfile = {
   brandName?: string;
-  logoUrl?: string | null;
   primaryColor?: string;
   accentColor?: string;
   backgroundColor?: string;

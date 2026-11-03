@@ -193,13 +193,12 @@ export async function POST(request: NextRequest) {
     }
     const { data: brandRow, error: brandError } = await admin
       .from("organization_brand_profiles")
-      .select("brand_name, logo_url, primary_color, accent_color, background_color, text_color, font_family, website_url, phone, address, default_footer_text, social_links")
+      .select("brand_name, primary_color, accent_color, background_color, text_color, font_family, website_url, phone, address, default_footer_text, social_links")
       .eq("organization_id", organizationId)
       .maybeSingle();
     if (brandError) return json({ error: "The workspace brand profile could not be loaded." }, 503);
     const brandProfile: EmailDesignBrandProfile = brandRow ? ({
       brandName: brandRow.brand_name,
-      logoUrl: brandRow.logo_url,
       primaryColor: brandRow.primary_color,
       accentColor: brandRow.accent_color,
       backgroundColor: brandRow.background_color,
