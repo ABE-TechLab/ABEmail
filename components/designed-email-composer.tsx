@@ -21,7 +21,7 @@ type ApiResponse = {
   ok?: boolean;
   error?: string;
   templates?: DesignedTemplate[];
-  profile?: EmailDesignBrandProfile;
+  profile?: EmailDesignBrandProfile & { logoUrl?: string | null };
 };
 type Change = { content: EmailDesignContent | null; text: string; subject?: string };
 type Props = {
@@ -46,7 +46,7 @@ const BLOCKS: { value: SimpleBlockType; label: string }[] = [
   { value: "paragraph", label: "Paragraph" },
   { value: "button", label: "Button" },
   { value: "image", label: "Image" },
-  { value: "logo", label: "Logo" },
+  { value: "logo", label: "Template logo" },
   { value: "divider", label: "Divider" },
   { value: "spacer", label: "Spacing" },
   { value: "contact", label: "Contact details" },
@@ -109,8 +109,10 @@ export default function DesignedEmailComposer({ organizationId, value, disabled 
       if (!designResponse.ok || !designPayload.ok) throw new Error(designPayload.error || "Designed templates could not be loaded.");
       if (!brandResponse.ok || !brandPayload.ok) throw new Error(brandPayload.error || "Brand profile could not be loaded.");
       if (active) {
+        const templateBrand = { ...(brandPayload.profile ?? {}) };
+        delete templateBrand.logoUrl;
         setTemplates(designPayload.templates ?? []);
-        setBrand({ ...EMPTY_BRAND, ...(brandPayload.profile ?? {}) });
+        setBrand({ ...EMPTY_BRAND, ...templateBrand });
         setLoadError("");
       }
     }).catch((cause: unknown) => {
@@ -299,7 +301,7 @@ export default function DesignedEmailComposer({ organizationId, value, disabled 
         {textField("Alternative text", block.alt ?? "", (next) => updateBlock(index, (current) => current.type === "image" ? { ...current, alt: next } : current))}
       </>}
       {block.type === "logo" && <>
-        {textField("Logo URL (optional)", block.src ?? "", (next) => updateBlock(index, (current) => current.type === "logo" ? { ...current, src: next || null } : current))}
+        {textField("Template logo URL (HTTPS)", block.src ?? "", (next) => updateBlock(index, (current) => current.type === "logo" ? { ...current, src: next || null } : current))}
         {textField("Alternative text", block.alt ?? "", (next) => updateBlock(index, (current) => current.type === "logo" ? { ...current, alt: next } : current))}
       </>}
       {block.type === "spacer" && <label className={styles.field}><span>Height</span><select value={block.height ?? 24} disabled={disabled} onChange={(event) => updateBlock(index, (current) => current.type === "spacer" ? { ...current, height: Number(event.target.value) } : current)}><option value={8}>Small</option><option value={24}>Medium</option><option value={48}>Large</option><option value={80}>Extra large</option></select></label>}

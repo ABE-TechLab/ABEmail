@@ -22,11 +22,11 @@ type DesignTemplate = {
   updatedAt: string;
 };
 type DesignForm = { name: string; subject: string; description: string; contentJson: EmailDesignContent };
-type ApiPayload = { ok?: boolean; error?: string; templates?: DesignTemplate[]; template?: DesignTemplate[] | DesignTemplate; count?: number; profile?: EmailDesignBrandProfile };
+type ApiPayload = { ok?: boolean; error?: string; templates?: DesignTemplate[]; template?: DesignTemplate[] | DesignTemplate; count?: number; profile?: EmailDesignBrandProfile & { logoUrl?: string | null } };
 type BlockType = "logo" | "heading" | "paragraph" | "image" | "button" | "divider" | "spacer" | "row" | "social" | "footer" | "contact";
 
 const BLOCK_TYPES: { value: BlockType; label: string }[] = [
-  { value: "logo", label: "Brand logo" },
+  { value: "logo", label: "Template logo" },
   { value: "heading", label: "Heading" },
   { value: "paragraph", label: "Text paragraph" },
   { value: "image", label: "Image" },
@@ -42,7 +42,6 @@ const BLOCK_TYPES: { value: BlockType; label: string }[] = [
 const EMPTY_CONTENT: EmailDesignContent = { version: 1, blocks: [] };
 const DEFAULT_BRAND: EmailDesignBrandProfile = {
   brandName: "",
-  logoUrl: null,
   primaryColor: "#2B2B2B",
   accentColor: "#D7F36A",
   backgroundColor: "#F3F4F6",
@@ -146,7 +145,11 @@ export default function DesignedEmailManager({ organizationId }: { organizationI
       .then(async (response) => {
         const payload = await response.json() as ApiPayload;
         if (!response.ok || !payload.ok) throw new Error(payload.error || "Brand profile could not be loaded.");
-        if (active) setBrand({ ...DEFAULT_BRAND, ...(payload.profile ?? {}) });
+        if (active) {
+          const templateBrand = { ...(payload.profile ?? {}) };
+          delete templateBrand.logoUrl;
+          setBrand({ ...DEFAULT_BRAND, ...templateBrand });
+        }
       })
       .catch(() => { if (active) setBrand(DEFAULT_BRAND); })
       .finally(() => { if (active) setBrandLoading(false); });
@@ -441,7 +444,7 @@ export default function DesignedEmailManager({ organizationId }: { organizationI
 
         {block.type === "logo" && (
           <>
-            {textField("Logo URL (optional)", block.src ?? "", (value) => edit((current) => current.type === "logo" ? { ...current, src: value || null } : current), { placeholder: "https://…" })}
+            {textField("Template logo URL (HTTPS)", block.src ?? "", (value) => edit((current) => current.type === "logo" ? { ...current, src: value || null } : current), { placeholder: "https://…" })}
             {textField("Alternative text", block.alt ?? "", (value) => edit((current) => current.type === "logo" ? { ...current, alt: value } : current), { maxLength: 250 })}
             <label className={styles.inlineField}><span>Width (px)</span><input type="number" min={48} max={320} value={block.width} onChange={(event) => edit((current) => current.type === "logo" ? { ...current, width: Number(event.target.value) } : current)} /></label>
           </>
@@ -620,7 +623,7 @@ export default function DesignedEmailManager({ organizationId }: { organizationI
 
           {error && <p className={styles.error} role="alert">{error}</p>}
           {notice && <div className={styles.notice} role="status"><span>{notice}</span><button type="button" className="mail-notice-dismiss" aria-label="Dismiss notice" onClick={() => setNotice("")}>×</button></div>}
-          <p className={styles.helper}>Brand defaults {brandLoading ? "are loading." : "are applied to the preview."} Save and send will validate every block on the server.</p>
+          <p className={styles.helper}>Workspace style defaults {brandLoading ? "are loading." : "are applied to the preview."} The logo comes only from this template’s Logo block. Save and send validate every block on the server.</p>
         </form>
 
         <section className={styles.previewPanel} aria-label="Email preview">

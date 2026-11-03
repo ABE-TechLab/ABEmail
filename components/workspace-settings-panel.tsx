@@ -839,7 +839,7 @@ export default function WorkspaceSettingsPanel({
                 <section aria-labelledby="workspace-profile-identity-heading">
                   <div className="settings-section-summary"><div><strong id="workspace-profile-identity-heading">Business identity</strong><p>One company logo and brand profile shared by every mailbox in this workspace.</p></div></div>
                   <BrandProfileEditor organizationId={organizationId} organizationName={displayName} canManage={canManageWorkspace} />
-                  <div className="settings-form-footer"><span>The workspace logo and brand defaults are reused by designed email templates.</span><Link href={base + "/templates"} className="mail-secondary-action">Open Templates</Link></div>
+                  <div className="settings-form-footer"><span>The workspace logo is used for sender identity. Each designed email has its own Logo block and image.</span><Link href={base + "/templates"} className="mail-secondary-action">Open Templates</Link></div>
                 </section>
               </div>}
 
