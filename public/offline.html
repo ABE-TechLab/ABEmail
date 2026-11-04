@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0C2E34">
+  <title>You're offline · ABEmail</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px; background: #0C2E34; color: #fff; font: 16px/1.6 system-ui, sans-serif; }
+    main { width: min(440px, 100%); padding: 30px; border: 1px solid #31545a; border-radius: 18px; background: #103940; }
+    .mark { display: grid; width: 54px; height: 54px; place-items: center; margin-bottom: 24px; border-radius: 14px; background: #0C2E34; }
+    .mark img { display: block; width: 46px; height: 46px; }
+    h1 { margin: 0 0 10px; font-size: 25px; letter-spacing: -.5px; }
+    p { margin: 0 0 18px; color: #d5e3df; }
+    strong { color: #72E3AD; }
+    button { min-height: 42px; padding: 0 15px; border: 1px solid #72E3AD; border-radius: 8px; background: #72E3AD; color: #0C2E34; font: inherit; font-weight: 700; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="mark"><img src="/branding/abemail-symbol-dark.svg" alt=""></div>
+    <h1>You're offline</h1>
+    <p>Connect to the internet to open your mailbox, view private workspace data, or send and schedule email. <strong>Private ABEmail data is not saved for offline use.</strong></p>
+    <button type="button" onclick="window.location.reload()">Try again</button>
+  </main>
+</body>
+</html>

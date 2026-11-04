@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { AppearanceProvider, type AppearanceMode } from "@/components/appearance-provider";
 import { DesignThemeProvider } from "@/components/design-theme-provider";
 import { DEFAULT_DESIGN_THEME, isDesignThemeId } from "@/lib/design-system";
+import PwaRegistration from "@/components/pwa-registration";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -18,13 +19,25 @@ export const metadata: Metadata = {
     index: false,
     follow: false,
   },
+  icons: {
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml", sizes: "any" },
+      { url: "/icons/icon-192.png", type: "image/png", sizes: "192x192" },
+    ],
+    apple: [{ url: "/icons/apple-touch-icon.png", type: "image/png", sizes: "180x180" }],
+  },
+  appleWebApp: {
+    capable: true,
+    title: "ABEmail",
+    statusBarStyle: "black-translucent",
+  },
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   colorScheme: "light dark",
-  themeColor: "#101713",
+  themeColor: "#0C2E34",
 };
 
 export default async function RootLayout({
@@ -49,6 +62,7 @@ export default async function RootLayout({
       className={initialMode === "dark" ? "dark" : undefined}
     >
       <body>
+        <PwaRegistration />
         <DesignThemeProvider initialTheme={initialTheme}>
           <AppearanceProvider initialMode={initialMode}>{children}</AppearanceProvider>
         </DesignThemeProvider>

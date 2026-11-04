@@ -54,6 +54,9 @@ jobs:
       - name: Verify workspace navigation contract
         run: npm run check:navigation
 
+      - name: Verify PWA static-cache security policy
+        run: npm run test:pwa-policy
+
       - name: Type-check
         run: npm run typecheck
 
