@@ -346,7 +346,7 @@ h1 {
 }
 .mail-brand { display: inline-flex; width: fit-content; align-items: center; gap: 9px; margin: 0 8px 28px; color: #1c2a20; font-family: "Manrope", sans-serif; font-size: 20px; font-weight: 800; letter-spacing: -.7px; text-decoration: none; }
 .mail-brand > span:last-child > span { color: var(--mail-green); }
-.mail-brand-mark { display: inline-grid; width: 34px; height: 34px; flex: 0 0 auto; place-items: center; overflow: hidden; border-radius: 10px; background: var(--mail-green); color: #fff; }
+.mail-brand-mark { display: inline-grid; width: 34px; height: 34px; flex: 0 0 auto; place-items: center; overflow: hidden; border-radius: 10px; background: #0C2E34; color: #fff; }
 .mail-brand-symbol { display: block; width: 30px; height: 30px; }
 .mail-compose-button { display: flex; height: 43px; align-items: center; justify-content: center; gap: 9px; margin: 0 3px 29px; border: 0; border-radius: 9px; background: var(--mail-green); color: #fff; font-weight: 700; box-shadow: 0 3px 8px rgba(35, 100, 60, .12); transition: background .15s ease, transform .15s ease; }
 .mail-compose-button:hover { background: var(--mail-green-dark); transform: translateY(-1px); }
@@ -2834,3 +2834,42 @@ html.dark .mail-appearance-toggle {
 .settings-brand-logo-upload { position: relative; display: inline-flex; align-items: center; justify-content: center; min-height: 32px; padding: 7px 11px; cursor: pointer; }
 .settings-brand-logo-upload input { position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0; pointer-events: none; }
 @media (max-width: 600px) { .settings-brand-logo-field { align-items: flex-start; padding: 12px; gap: 12px; } .settings-brand-logo-preview { width: 58px; height: 58px; } }
+
+
+/* PWA connectivity feedback — private mailbox data is never available offline. */
+.pwa-offline-notice {
+  position: fixed;
+  z-index: 2000;
+  right: 16px;
+  bottom: 16px;
+  left: 16px;
+  display: flex;
+  max-width: 620px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0 auto;
+  padding: 12px 14px;
+  border: 1px solid #31545a;
+  border-radius: 12px;
+  background: #0C2E34;
+  color: #fff;
+  box-shadow: 0 8px 30px rgb(0 0 0 / 22%);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.pwa-offline-notice strong { color: #72E3AD; }
+.pwa-offline-notice button {
+  flex: 0 0 auto;
+  padding: 7px 10px;
+  border: 1px solid rgb(255 255 255 / 30%);
+  border-radius: 7px;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+}
+.pwa-offline-notice button:hover { background: rgb(255 255 255 / 10%); }
+@media (max-width: 520px) {
+  .pwa-offline-notice { align-items: flex-start; flex-direction: column; gap: 8px; }
+}
